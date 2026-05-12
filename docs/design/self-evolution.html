@@ -1,0 +1,213 @@
+<h2>Agent 自进化系统 — "越用越聪明"的永久学习机制</h2>
+<p class="subtitle">从每次分析/训练任务中提炼经验，沉淀为可复用的知识资产</p>
+
+<div class="section">
+  <h3>自进化系统的三层架构</h3>
+  <div class="mockup">
+    <div class="mockup-header">经验提取 → 模式识别 → 永久沉淀</div>
+    <div class="mockup-body">
+      <div style="font-family:system-ui;font-size:11px;color:#cdd6f4;line-height:1.7;">
+
+        <!-- Layer 1 -->
+        <div style="background:linear-gradient(135deg,#0a1628,#111530);border:1px solid #89b4fa;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="font-weight:700;color:#89b4fa;margin-bottom:8px;">🔬 第一层：任务结束 → 自动经验提取</div>
+          <div style="font-size:10px;color:#a6adc8;">
+            每次分析/训练任务完成后，Agent 自动调用 <code style="background:#1e1e2e;padding:1px 4px;border-radius:2px;">extract_lessons()</code> 进行事后复盘：
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;">
+              <span style="color:#fab387;font-weight:600;">✅ 成功经验</span><br>
+              <span style="color:#585b70;">"用中位数填充 Age 列效果好于均值，因为 Age 分布右偏"</span><br>
+              <span style="color:#585b70;">"先做 log 变换再做标准化，提升了模型收敛速度"</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;">
+              <span style="color:#f38ba8;font-weight:600;">⚠️ 失败教训</span><br>
+              <span style="color:#585b70;">"直接删除缺失行导致样本量不足，应该先评估缺失比例"</span><br>
+              <span style="color:#585b70;">"未检查特征量纲导致 KMeans 聚类结果被量级大的特征主导"</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;">
+              <span style="color:#89b4fa;font-weight:600;">🔍 发现模式</span><br>
+              <span style="color:#585b70;">"当缺失率 > 40% 且非关键列，删除比填充更合理"</span><br>
+              <span style="color:#585b70;">"XGBoost 在此类表格数据上持续优于随机森林"</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Layer 2 -->
+        <div style="background:linear-gradient(135deg,#141020,#1e1528);border:1px solid #cba6f7;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="font-weight:700;color:#cba6f7;margin-bottom:8px;">🧬 第二层：跨任务模式聚合 → 经验升华为规则</div>
+          <div style="font-size:10px;color:#a6adc8;">
+            定期（或积累 N 条经验后），Agent 调用 <code style="background:#1e1e2e;padding:1px 4px;border-radius:2px;">consolidate_lessons()</code> 进行跨任务归纳：
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <div style="flex:2;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;">
+              <div style="color:#cba6f7;font-weight:600;margin-bottom:4px;">聚合引擎工作流：</div>
+              <span style="color:#585b70;">1. 按领域聚类：金融数据 / 时序数据 / 文本数据 / 图像数据</span><br>
+              <span style="color:#585b70;">2. 按操作类型聚类：缺失值处理 / 特征工程 / 模型选择 / 超参调优</span><br>
+              <span style="color:#585b70;">3. 冲突检测：当两条经验矛盾时，标记由人工裁定</span><br>
+              <span style="color:#585b70;">4. 置信度评估：出现 ≥3 次 → 高置信规则；1-2 次 → 低置信建议</span><br>
+              <span style="color:#585b70;">5. 时效性衰减：旧规则长时间未被触发，权重缓慢下降</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;border:1px solid #a6e3a1;">
+              <div style="color:#a6e3a1;font-weight:600;margin-bottom:4px;">输出：自动规则</div>
+              <span style="color:#a6adc8;">"当数据包含 ≥3 个高基数分类变量时 → 优先尝试 CatBoost"</span><br>
+              <span style="color:#585b70;">置信度：⭐⭐⭐</span><br>
+              <span style="color:#585b70;">来源：3 个项目中 5/5 验证</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Layer 3 -->
+        <div style="background:linear-gradient(135deg,#0a1620,#0d1a1a);border:1px solid #a6e3a1;border-radius:8px;padding:12px;">
+          <div style="font-weight:700;color:#a6e3a1;margin-bottom:8px;">💎 第三层：知识永久沉淀 → 提升未来任务效率</div>
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;">
+              <span style="color:#f9e2af;font-weight:600;">→ 更新 Agent Schema</span><br>
+              <span style="color:#585b70;">高置信规则写入 tools.yaml 的 "前置检查" 步骤，新任务自动加载</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;">
+              <span style="color:#f9e2af;font-weight:600;">→ 新增默认工具</span><br>
+              <span style="color:#585b70;">重复 ≥5 次的自定义代码片段 → 封装为新的预置 Skill</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;">
+              <span style="color:#f9e2af;font-weight:600;">→ 优化提示词</span><br>
+              <span style="color:#585b70;">长期未被使用的工具描述 → 精简；高频场景 → 补充示例</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:9px;">
+              <span style="color:#f9e2af;font-weight:600;">→ 团队共享</span><br>
+              <span style="color:#585b70;">沉淀的规则可跨项目/跨用户共享，形成团队知识资产</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>经验知识库的数据结构</h3>
+  <div class="mockup">
+    <div class="mockup-header">evolution/ 目录结构</div>
+    <div class="mockup-body">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#a6adc8;line-height:1.8;">
+
+        <span style="color:#585b70;">evolution/</span><br>
+        <span style="color:#585b70;">├── </span><span style="color:#f9e2af;">lessons/</span><span style="color:#585b70;">                    # 每条经验一个 .md 文件</span><br>
+        <span style="color:#585b70;">│   ├── </span><span style="color:#a6e3a1;">2026-05-12-missing-value-median.md</span><br>
+        <span style="color:#585b70;">│   ├── </span><span style="color:#a6e3a1;">2026-05-13-xgboost-vs-rf-tabular.md</span><br>
+        <span style="color:#585b70;">│   └── </span><span style="color:#a6e3a1;">2026-05-14-feature-scaling-before-kmeans.md</span><br>
+        <span style="color:#585b70;">├── </span><span style="color:#f9e2af;">rules/</span><span style="color:#585b70;">                      # 升华后的规则</span><br>
+        <span style="color:#585b70;">│   ├── </span><span style="color:#cba6f7;">high-confidence/</span><span style="color:#585b70;">          # ≥3 次验证，自动应用</span><br>
+        <span style="color:#585b70;">│   ├── </span><span style="color:#fab387;">medium-confidence/</span><span style="color:#585b70;">        # 1-2 次验证，建议参考</span><br>
+        <span style="color:#585b70;">│   └── </span><span style="color:#f38ba8;">conflicts/</span><span style="color:#585b70;">               # 矛盾经验，待人工裁定</span><br>
+        <span style="color:#585b70;">├── </span><span style="color:#f9e2af;">patterns/</span><span style="color:#585b70;">                    # 数据模式库</span><br>
+        <span style="color:#585b70;">│   ├── </span><span style="color:#a6e3a1;">high-cardinality-categorical.md</span><br>
+        <span style="color:#585b70;">│   └── </span><span style="color:#a6e3a1;">time-series-seasonality.md</span><br>
+        <span style="color:#585b70;">├── </span><span style="color:#a6e3a1;">consolidation-log.md</span><span style="color:#585b70;">         # 聚合操作记录</span><br>
+        <span style="color:#585b70;">└── </span><span style="color:#a6e3a1;">evolution.md</span><span style="color:#585b70;">                 # 进化历程总览</span>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>单条经验的 YAML Frontmatter 结构</h3>
+  <div style="background:#0d0d14;border:1px solid #313244;border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#a6adc8;line-height:1.7;">
+    <span style="color:#6c7086;">---</span><br>
+    <span style="color:#89b4fa;">type</span>: <span style="color:#f9e2af;">lesson</span><br>
+    <span style="color:#89b4fa;">id</span>: <span style="color:#f9e2af;">2026-05-12-missing-value-median</span><br>
+    <span style="color:#89b4fa;">created</span>: <span style="color:#f9e2af;">2026-05-12T10:32:00Z</span><br>
+    <span style="color:#89b4fa;">domain</span>: <span style="color:#f9e2af;">[数据清洗, 缺失值处理]</span><br>
+    <span style="color:#89b4fa;">dataset_type</span>: <span style="color:#f9e2af;">[表格数据, 销售数据]</span><br>
+    <span style="color:#89b4fa;">quality</span>: <span style="color:#f9e2af;">success</span><br>
+    <span style="color:#89b4fa;">confidence</span>: <span style="color:#f9e2af;">3</span><br>
+    <span style="color:#89b4fa;">sources</span>: <span style="color:#f9e2af;">[sales_2024.csv, session_24]</span><br>
+    <span style="color:#89b4fa;">trigger_condition</span>: <span style="color:#f9e2af;">"数值列 | 缺失率 < 10% | 分布偏度 > 1.5"</span><br>
+    <span style="color:#89b4fa;">action</span>: <span style="color:#f9e2af;">"优先使用中位数填充，而非均值"</span><br>
+    <span style="color:#89b4fa;">rationale</span>: <span style="color:#f9e2af;">"右偏分布下中位数比均值更鲁棒，不引入新的偏差"</span><br>
+    <span style="color:#89b4fa;">evidence</span>: <span style="color:#f9e2af;">"对比填充前后的 KS 统计量，中位数保持分布形状更好"</span><br>
+    <span style="color:#89b4fa;">linked_lessons</span>: <span style="color:#f9e2af;">[outlier-iqr-method, robust-scaling]</span><br>
+    <span style="color:#89b4fa;">times_validated</span>: <span style="color:#f9e2af;">5</span><br>
+    <span style="color:#89b4fa;">times_contradicted</span>: <span style="color:#f9e2af;">0</span><br>
+    <span style="color:#6c7086;">---</span><br><br>
+    <span style="color:#585b70;"># 经验：右偏数据优先使用中位数填充缺失值</span><br><br>
+    <span style="color:#a6adc8;">## 场景</span><br>
+    <span style="color:#a6adc8;">对 sales_2024.csv 的 Age 列（缺失率 2.3%，偏度 2.1）进行缺失值填充。</span><br><br>
+    <span style="color:#a6adc8;">## 过程</span><br>
+    <span style="color:#a6adc8;">先尝试均值填充 → KS 统计量显著变化 (p < 0.01) → 改用中位数填充 → 分布保持。</span><br><br>
+    <span style="color:#a6adc8;">## 结论</span><br>
+    <span style="color:#a6adc8;">对于偏度 > 1.5 的数值列，中位数填充比均值填充更好地保持了原始分布形状。</span>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Agent 如何利用进化后的知识</h3>
+  <div class="mockup">
+    <div class="mockup-header">任务启动时的知识注入流程</div>
+    <div class="mockup-body">
+      <div style="font-family:system-ui;font-size:11px;line-height:1.8;color:#a6adc8;">
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="background:#89b4fa;color:#0a0a0f;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;">1</span>
+          <span style="color:#cdd6f4;">新任务进来 → 系统加载当前 Agent 的 Harness Schema</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;margin-left:28px;">
+          <span style="background:#cba6f7;color:#0a0a0f;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;">2</span>
+          <span>扫描 evolution/rules/ → 匹配当前任务特征</span>
+        </div>
+
+        <div style="margin-left:48px;font-size:10px;color:#585b70;margin-bottom:4px;">
+          高置信规则自动注入到 System Prompt 中<br>
+          中置信规则以 "参考建议" 形式注入<br>
+          冲突规则暂不注入，标记待审核
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;margin-left:28px;">
+          <span style="background:#a6e3a1;color:#0a0a0f;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;">3</span>
+          <span>Agent 执行任务，行为被进化知识引导</span>
+        </div>
+
+        <div style="margin-left:48px;font-size:10px;color:#585b70;margin-bottom:4px;">
+          例如：遇到 "数值列+缺失+偏度>1.5" → 自动推荐中位数填充<br>
+          而不是每次都从零开始生成通用代码
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-left:28px;">
+          <span style="background:#fab387;color:#0a0a0f;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;">4</span>
+          <span>任务完成后 → 本轮结果回写 evolution/，形成闭环</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>与标准 Agent 的关键区别</h3>
+  <div style="display:flex;gap:12px;">
+    <div style="flex:1;background:#1a1025;border:1px solid #f38ba8;border-radius:8px;padding:14px;">
+      <div style="font-weight:700;color:#f38ba8;margin-bottom:8px;">❌ 普通 Agent</div>
+      <div style="font-size:10px;color:#a6adc8;line-height:1.7;">
+        每次任务从零开始<br>
+        只依赖系统提示词<br>
+        经验随会话消失<br>
+        重复犯同样的错误<br>
+        团队之间不共享
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;font-size:20px;color:#585b70;">→</div>
+    <div style="flex:1;background:#0a1620;border:2px solid #a6e3a1;border-radius:8px;padding:14px;">
+      <div style="font-weight:700;color:#a6e3a1;margin-bottom:8px;">✅ 自进化 Agent</div>
+      <div style="font-size:10px;color:#a6adc8;line-height:1.7;">
+        从历史任务加载匹配经验<br>
+        进化后的规则注入提示词<br>
+        经验永久沉淀为文件资产<br>
+        失败模式被标记和规避<br>
+        规则可跨项目/跨用户共享
+      </div>
+    </div>
+  </div>
+</div>

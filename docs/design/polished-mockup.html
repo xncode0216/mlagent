@@ -1,0 +1,246 @@
+<h2>MLAgent 平台 — 完整界面预览</h2>
+<p class="subtitle">Dark Precision 风格 · 数据科学 AI IDE 工作台</p>
+
+<div class="mockup">
+  <div class="mockup-header">工作台全局视图 — sales_analysis 项目</div>
+  <div class="mockup-body">
+
+<style>
+  .ide { font-family: system-ui,-apple-system,sans-serif; background:#0a0a0f; border-radius:8px; overflow:hidden; }
+  .ide-bar { background:#0a0a0f; padding:6px 12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #1e1e2e; font-size:11px; }
+  .ide-bar-item { padding:4px 10px; border-radius:4px; color:#6c7086; }
+  .ide-bar-item.active { background:#11111b; color:#cdd6f4; }
+  .ide-main { display:flex; height:420px; }
+  .ide-sidebar { width:200px; background:#08080d; border-right:1px solid #1e1e2e; display:flex; flex-direction:column; }
+  .ide-sidebar-header { padding:10px 14px; font-size:10px; font-weight:700; color:#6c7086; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #14141f; display:flex; justify-content:space-between; align-items:center; }
+  .ide-file { padding:5px 14px; font-size:11px; color:#a6adc8; display:flex; align-items:center; gap:6px; cursor:pointer; border-left:2px solid transparent; }
+  .ide-file:hover { background:#11111b; }
+  .ide-file.active { background:#11111b; color:#cdd6f4; border-left-color:#89b4fa; }
+  .ide-file .ext { color:#6c7086; font-size:9px; margin-left:auto; }
+  .ide-folder { padding:5px 10px 3px 14px; font-size:10px; font-weight:600; color:#89b4fa; display:flex; align-items:center; gap:4px; }
+  .ide-folder-section { padding:12px 14px 2px 14px; font-size:9px; font-weight:700; color:#585b70; text-transform:uppercase; letter-spacing:.8px; }
+  .ide-center { flex:1; display:flex; flex-direction:column; background:#0d0d14; border-right:1px solid #1e1e2e; }
+  .ide-chat-area { flex:1; overflow:hidden; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .ide-msg { max-width:100%; padding:10px 14px; border-radius:8px; font-size:12px; line-height:1.5; }
+  .ide-msg.agent { background:#11111b; border:1px solid #1e1e2e; color:#cdd6f4; }
+  .ide-msg.user { background:transparent; border:1px solid #313244; color:#cdd6f4; align-self:flex-end; }
+  .ide-msg-actions { display:flex; gap:4px; margin-top:6px; }
+  .ide-badge { padding:3px 8px; border-radius:4px; font-size:10px; background:#1e1e2e; color:#89b4fa; border:1px solid #313244; }
+  .ide-input-wrap { padding:12px 16px; border-top:1px solid #1e1e2e; }
+  .ide-input { background:#11111b; border:1px solid #313244; border-radius:8px; padding:10px 14px; font-size:12px; color:#cdd6f4; width:100%; display:flex; justify-content:space-between; align-items:center; }
+  .ide-input-hint { color:#585b70; }
+  .ide-input-actions { color:#6c7086; font-size:10px; }
+  .ide-right { width:280px; background:#08080d; display:flex; flex-direction:column; }
+  .ide-right-tabs { display:flex; border-bottom:1px solid #14141f; padding:0 10px; gap:0;font-size:10px; }
+  .ide-right-tab { padding:8px 12px; color:#6c7086; cursor:pointer; border-bottom:1px solid transparent; }
+  .ide-right-tab.active { color:#89b4fa; border-bottom-color:#89b4fa; }
+  .ide-right-content { flex:1; padding:12px; overflow:hidden; }
+  .ide-right-chart { background:#0d0d14; border-radius:6px; height:160px; display:flex; align-items:center; justify-content:center; color:#6c7086; font-size:11px; border:1px dashed #1e1e2e; }
+  .ide-right-code { margin-top:8px; background:#0d0d14; border-radius:6px; padding:10px; font-family:'JetBrains Mono',monospace; font-size:10px; color:#a6e3a1; border:1px solid #1e1e2e; line-height:1.4; }
+  .ide-status { background:#08080d; border-top:1px solid #1e1e2e; padding:4px 14px; font-size:10px; color:#585b70; display:flex; gap:14px; align-items:center; }
+  .ide-status .dot { width:6px; height:6px; border-radius:50%; background:#a6e3a1; display:inline-block; margin-right:4px; }
+  .ide-status-right { margin-left:auto; color:#6c7086; }
+  .highlight-num { color:#fab387; font-weight:600; }
+  .highlight-str { color:#a6e3a1; }
+  .highlight-func { color:#89b4fa; }
+  .highlight-ml { color:#cba6f7; }
+</style>
+
+<div class="ide">
+  <!-- Top tabs -->
+  <div class="ide-bar">
+    <span class="ide-bar-item active">📊 sales_analysis</span>
+    <span class="ide-bar-item">📋 data_preview.csv</span>
+    <span class="ide-bar-item">📝 eda_report</span>
+    <span style="margin-left:auto;font-size:10px;color:#585b70;">+</span>
+  </div>
+
+  <!-- Main 3-column -->
+  <div class="ide-main">
+    <!-- Left sidebar -->
+    <div class="ide-sidebar">
+      <div class="ide-sidebar-header">📁 工作目录
+        <span style="display:flex;gap:4px;">
+          <span style="cursor:pointer;">+</span>
+          <span style="cursor:pointer;">⟳</span>
+        </span>
+      </div>
+      <div class="ide-folder">▾ 📂 data/</div>
+      <div class="ide-file active">📄 sales_2024.csv <span class="ext">12K×15</span></div>
+      <div class="ide-file">📄 customers.xlsx <span class="ext">3.2K×8</span></div>
+      <div class="ide-file">📄 products.parquet <span class="ext">856×22</span></div>
+      <div class="ide-folder">▸ 📂 notebooks/</div>
+      <div class="ide-file">📓 eda_analysis.py</div>
+      <div class="ide-file">📓 feature_engineering.py</div>
+      <div class="ide-folder">▸ 📂 results/</div>
+      <div class="ide-file">🖼️ missing_heatmap.png</div>
+      <div class="ide-file">🖼️ corr_matrix.html</div>
+      <div class="ide-file">📄 cleaned_data.csv</div>
+      <div class="ide-folder">▸ 📂 models/</div>
+      <div class="ide-file">🧠 xgboost_v1.pkl</div>
+      <div class="ide-folder-section">智能体</div>
+      <div class="ide-file" style="color:#89b4fa;">📊 数据分析 Agent</div>
+      <div class="ide-file" style="color:#cba6f7;">🧠 ML 训练 Agent</div>
+      <div class="ide-folder-section">数据源</div>
+      <div class="ide-file" style="color:#6c7086;">🔗 已加载数据集</div>
+    </div>
+
+    <!-- Center chat -->
+    <div class="ide-center">
+      <div class="ide-chat-area">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11px;font-weight:600;color:#cdd6f4;">💬 数据分析对话</span>
+          <span style="font-size:10px;color:#6c7086;">🔄 自动执行 · 会话 #24</span>
+        </div>
+
+        <div class="ide-msg agent">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <span style="background:#1e1e2e;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;color:#89b4fa;">🤖 Data Agent</span>
+            <span style="font-size:9px;color:#585b70;">⏱ 10:32:15 · 2.3s</span>
+          </div>
+          已加载 <span style="color:#cdd6f4;font-weight:600;">sales_2024.csv</span>，共 <span class="highlight-num">12,000 行 × 15 列</span>。<br>
+          数据类型：<span class="highlight-num">8</span> 数值列、<span class="highlight-num">4</span> 分类列、<span class="highlight-num">3</span> 日期列<br><br>
+          检测到 <span style="color:#fab387;">⚠ 3 列缺失值</span>：
+          <span style="color:#fab387;">Age (2.3%)</span>、
+          <span style="color:#fab387;">Income (0.8%)</span>、
+          <span style="color:#fab387;">Region (5.1%)</span>
+          <div class="ide-msg-actions">
+            <span class="ide-badge">📊 查看热力图</span>
+            <span class="ide-badge">&lt;/&gt; 查看源码</span>
+            <span class="ide-badge">📋 数据预览</span>
+            <span class="ide-badge">📥 导出报告</span>
+          </div>
+        </div>
+
+        <div class="ide-msg user" style="width:fit-content; max-width:85%;">
+          <div style="font-size:10px;color:#6c7086;margin-bottom:2px;">👤 你</div>
+          用中位数填充 Age 和 Income，用众数填充 Region。然后帮我画出缺失值处理前后的分布对比图。
+        </div>
+
+        <div class="ide-msg agent">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <span style="background:#1e1e2e;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;color:#89b4fa;">🤖 Data Agent</span>
+            <span style="font-size:9px;color:#585b70;">⏱ 10:32:28 · 4.1s</span>
+          </div>
+          ✅ 缺失值填充完成。<br><br>
+          <code style="background:#0d0d14;padding:2px 5px;border-radius:3px;font-size:10px;color:#a6e3a1;">df['Age'].fillna(df['Age'].median(), inplace=True)</code><br>
+          <code style="background:#0d0d14;padding:2px 5px;border-radius:3px;font-size:10px;color:#a6e3a1;">df['Income'].fillna(df['Income'].median(), inplace=True)</code><br>
+          <code style="background:#0d0d14;padding:2px 5px;border-radius:3px;font-size:10px;color:#a6e3a1;">df['Region'].fillna(df['Region'].mode()[0], inplace=True)</code>
+          <div class="ide-msg-actions">
+            <span class="ide-badge">📊 查看对比图</span>
+            <span class="ide-badge">&lt;/&gt; 查看源码</span>
+            <span class="ide-badge" style="border-color:#cba6f7;color:#cba6f7;">🧠 开始ML建模 →</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ide-input-wrap">
+        <div class="ide-input">
+          <span class="ide-input-hint">输入分析需求，使用 @ 引用数据文件...</span>
+          <span class="ide-input-actions">@文件 · 🎤 · 📎 · Ctrl+Enter</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panels -->
+    <div class="ide-right">
+      <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #14141f;">
+        <span style="font-size:10px;font-weight:600;color:#cdd6f4;">📊 结果面板</span>
+        <span style="font-size:9px;color:#585b70;">✕</span>
+      </div>
+      <div class="ide-right-tabs">
+        <span class="ide-right-tab active">📊 图表</span>
+        <span class="ide-right-tab">&lt;/&gt; 代码</span>
+        <span class="ide-right-tab">📋 数据</span>
+        <span class="ide-right-tab">📝 日志</span>
+      </div>
+      <div class="ide-right-content">
+        <div class="ide-right-chart">
+          <div style="text-align:center;">
+            <span style="display:block;font-size:28px;margin-bottom:4px;">📊</span>
+            <span>缺失值分布热力图</span>
+            <span style="display:block;font-size:9px;color:#585b70;margin-top:4px;">seaborn.heatmap()</span>
+          </div>
+        </div>
+        <div class="ide-right-code">
+          <span style="color:#6c7086;"># 缺失值处理</span><br>
+          <span style="color:#cba6f7;">import</span> seaborn <span style="color:#cba6f7;">as</span> sns<br>
+          <span style="color:#cba6f7;">import</span> matplotlib.pyplot <span style="color:#cba6f7;">as</span> plt<br>
+          <br>
+          fig, axes = plt.subplots(<span class="highlight-num">1</span>,<span class="highlight-num">2</span>)<br>
+          sns.heatmap(df.isnull(),<br>
+          &nbsp;&nbsp;cbar=<span style="color:#cba6f7;">False</span>, ax=axes[<span class="highlight-num">0</span>])
+        </div>
+        <div style="display:flex;gap:4px;margin-top:8px;">
+          <span style="flex:1;text-align:center;background:#89b4fa;color:#0a0a0f;padding:6px;border-radius:4px;font-size:10px;font-weight:600;">📥 导出图表</span>
+          <span style="flex:1;text-align:center;background:#1e1e2e;color:#cdd6f4;padding:6px;border-radius:4px;font-size:10px;">📋 复制代码</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="ide-status">
+    <span><span class="dot"></span> Python 3.11.8</span>
+    <span>📦 sklearn 1.5 · xgboost 2.0 · pytorch 2.3</span>
+    <span>🖥️ CPU · MEM 45%</span>
+    <span>💾 磁盘 128G / 512G</span>
+    <span class="ide-status-right">⏱ 会话 12min · 行数 1,247</span>
+  </div>
+</div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3>交互状态细节</h3>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;background:#11111b;padding:12px;border-radius:8px;border:1px solid #1e1e2e;">
+      <p style="font-weight:600;color:#cdd6f4;font-size:13px;margin:0;">Agent 思考中</p>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#89b4fa;animation:pulse 1s infinite;"></div>
+        <span style="font-size:11px;color:#6c7086;">正在执行 missing_values_analysis...</span>
+      </div>
+      <div style="background:#0d0d14;border-radius:4px;padding:6px 8px;margin-top:6px;font-family:monospace;font-size:10px;color:#585b70;">
+        $ python eda.py --detect-missing --visualize
+      </div>
+    </div>
+    <div style="flex:1;min-width:200px;background:#11111b;padding:12px;border-radius:8px;border:1px solid #1e1e2e;">
+      <p style="font-weight:600;color:#cdd6f4;font-size:13px;margin:0;">ML 训练进度</p>
+      <div style="margin-top:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#a6adc8;"><span>XGBoost 训练中</span><span>Epoch 42/100</span></div>
+        <div style="background:#1e1e2e;border-radius:3px;height:4px;margin-top:4px;overflow:hidden;">
+          <div style="background:linear-gradient(90deg,#89b4fa,#cba6f7);height:100%;width:42%;border-radius:3px;"></div>
+        </div>
+        <div style="font-size:10px;color:#585b70;margin-top:4px;">train_acc: 0.874 · val_acc: 0.831 · lr: 0.01</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3>ML 模型搭建流程入口</h3>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;background:linear-gradient(135deg,#11111b,#1a1025);padding:14px;border-radius:8px;border:1px solid #313244;">
+      <span style="font-size:20px;">🎯</span>
+      <p style="font-weight:600;color:#cdd6f4;margin:4px 0;">自动 ML</p>
+      <p style="font-size:11px;color:#6c7086;">Agent 自动选择模型、调参、评估对比</p>
+      <span style="font-size:10px;background:#1e1e2e;color:#cba6f7;padding:3px 8px;border-radius:3px;">推荐入口</span>
+    </div>
+    <div style="flex:1;min-width:200px;background:#11111b;padding:14px;border-radius:8px;border:1px solid #1e1e2e;">
+      <span style="font-size:20px;">🧩</span>
+      <p style="font-weight:600;color:#cdd6f4;margin:4px 0;">自定义流程</p>
+      <p style="font-size:11px;color:#6c7086;">用户指定模型类型、参数范围、验证策略</p>
+    </div>
+    <div style="flex:1;min-width:200px;background:#11111b;padding:14px;border-radius:8px;border:1px solid #1e1e2e;">
+      <span style="font-size:20px;">🔬</span>
+      <p style="font-weight:600;color:#cdd6f4;margin:4px 0;">实验对比</p>
+      <p style="font-size:11px;color:#6c7086;">并行训练多模型，对比指标、导出最佳模型</p>
+    </div>
+    <div style="flex:1;min-width:200px;background:#11111b;padding:14px;border-radius:8px;border:1px solid #1e1e2e;">
+      <span style="font-size:20px;">🚀</span>
+      <p style="font-weight:600;color:#cdd6f4;margin:4px 0;">部署导出</p>
+      <p style="font-size:11px;color:#6c7086;">导出 ONNX/PMML，生成预测脚本</p>
+    </div>
+  </div>
+</div>

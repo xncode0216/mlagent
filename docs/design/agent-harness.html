@@ -1,0 +1,292 @@
+<h2>Agent 引擎 v2 — 融合 LLM Wiki Harness 设计模式</h2>
+<p class="subtitle">从 nashsu/llm_wiki 汲取的核心机制 · 自进化 · 思维链 · 图谱驱动</p>
+
+<div class="section">
+  <h3>从 llm_wiki 继承的 8 大设计模式</h3>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:180px;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+      <span style="font-size:16px;">🧬</span>
+      <p style="font-weight:600;color:#cdd6f4;font-size:11px;">1. Harness/Schema 驱动</p>
+      <p style="font-size:9px;color:#585b70;">每个 Agent 由 YAML 配置定义行为边界、工具集、工作流</p>
+    </div>
+    <div style="flex:1;min-width:180px;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+      <span style="font-size:16px;">✂️</span>
+      <p style="font-weight:600;color:#cdd6f4;font-size:11px;">2. 两步思维链</p>
+      <p style="font-size:9px;color:#585b70;">分析 → 执行：先规划再行动，提升质量和可控性</p>
+    </div>
+    <div style="flex:1;min-width:180px;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+      <span style="font-size:16px;">🎯</span>
+      <p style="font-weight:600;color:#cdd6f4;font-size:11px;">3. Purpose 意图驱动</p>
+      <p style="font-size:9px;color:#585b70;">每个项目/会话有明确的目标定义，Agent 始终对齐目标</p>
+    </div>
+    <div style="flex:1;min-width:180px;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+      <span style="font-size:16px;">🔄</span>
+      <p style="font-weight:600;color:#cdd6f4;font-size:11px;">4. 自进化（Lint）</p>
+      <p style="font-size:9px;color:#585b70;">定期自我审查：矛盾检测、优化建议、知识空白发现</p>
+    </div>
+    <div style="flex:1;min-width:180px;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+      <span style="font-size:16px;">🕸️</span>
+      <p style="font-weight:600;color:#cdd6f4;font-size:11px;">5. 图谱关联模型</p>
+      <p style="font-size:9px;color:#585b70;">多维信号计算数据/模型/特征之间的关联度</p>
+    </div>
+    <div style="flex:1;min-width:180px;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+      <span style="font-size:16px;">📦</span>
+      <p style="font-weight:600;color:#cdd6f4;font-size:11px;">6. 增量缓存 & 队列</p>
+      <p style="font-size:9px;color:#585b70;">SHA256 跳过未变更分析，持久化任务队列崩溃恢复</p>
+    </div>
+    <div style="flex:1;min-width:180px;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+      <span style="font-size:16px;">🔗</span>
+      <p style="font-weight:600;color:#cdd6f4;font-size:11px;">7. 来源可追溯</p>
+      <p style="font-size:9px;color:#585b70;">每个分析输出链回原始数据和代码，可复现</p>
+    </div>
+    <div style="flex:1;min-width:180px;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+      <span style="font-size:16px;">🤝</span>
+      <p style="font-weight:600;color:#cdd6f4;font-size:11px;">8. 人机共进化</p>
+      <p style="font-size:9px;color:#585b70;">用户反馈驱动 Schema 优化，Agent 越用越精准</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心升级 1：Harness 驱动的 Agent 自进化系统</h3>
+  <div class="mockup">
+    <div class="mockup-header">Agent Schema → 自进化循环</div>
+    <div class="mockup-body">
+      <div style="font-family:system-ui;font-size:11px;color:#cdd6f4;line-height:1.7;">
+
+        <div style="background:linear-gradient(135deg,#0a1628,#111530);border:2px solid #89b4fa;border-radius:8px;padding:14px;margin-bottom:10px;">
+          <div style="font-weight:700;color:#89b4fa;margin-bottom:8px;">📋 Schema 层（每个 Agent 的 Harness 配置）</div>
+          <div style="display:flex;gap:10px;">
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:10px;">
+              <span style="color:#f9e2af;">purpose.md</span><br>
+              <span style="color:#585b70;">Agent 存在目的、核心问题、分析范围</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:10px;">
+              <span style="color:#f9e2af;">schema.md</span><br>
+              <span style="color:#585b70;">工作流规则、输出格式、工具使用协议</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:10px;">
+              <span style="color:#f9e2af;">tools.yaml</span><br>
+              <span style="color:#585b70;">工具注册表、参数 Schema、调用策略</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;font-size:10px;">
+              <span style="color:#f9e2af;">evolution.md</span><br>
+              <span style="color:#585b70;">进化历史：哪些改动、为什么、效果如何</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align:center;font-size:18px;color:#585b70;margin:4px 0;">🔄</div>
+
+        <div style="background:linear-gradient(135deg,#141020,#1e1528);border:2px solid #cba6f7;border-radius:8px;padding:14px;">
+          <div style="font-weight:700;color:#cba6f7;margin-bottom:8px;">🧬 自进化循环（每次分析会话后触发）</div>
+          <div style="display:flex;gap:8px;font-size:10px;">
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;text-align:center;">
+              <span style="color:#89b4fa;">📊 收集信号</span><br>
+              <span style="color:#585b70;">工具命中率 · 用户修正 · 代码执行成功率 · 用户评分</span>
+            </div>
+            <div style="color:#6c7086;display:flex;align-items:center;">→</div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;text-align:center;">
+              <span style="color:#fab387;">🔍 Lint 自审</span><br>
+              <span style="color:#585b70;">低效工具检测 · 提示词盲区 · 重复任务模式发现</span>
+            </div>
+            <div style="color:#6c7086;display:flex;align-items:center;">→</div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;text-align:center;">
+              <span style="color:#cba6f7;">💡 生成建议</span><br>
+              <span style="color:#585b70;">新增工具候选 · Schema 优化 · 提示词调整</span>
+            </div>
+            <div style="color:#6c7086;display:flex;align-items:center;">→</div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;text-align:center;">
+              <span style="color:#a6e3a1;">✅ 人工审核</span><br>
+              <span style="color:#585b70;">用户确认/拒绝建议 → 更新 Schema → 记录 evolution.md</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心升级 2：两步思维链分析流程</h3>
+  <div class="mockup">
+    <div class="mockup-header">数据分析 Two-Step：分析 → 执行（替代单步代码生成）</div>
+    <div class="mockup-body">
+      <div style="font-family:system-ui;font-size:11px;line-height:1.8;">
+
+        <div style="display:flex;gap:12px;">
+          <!-- Step 1: Analysis -->
+          <div style="flex:1;background:#11111b;border:1px solid #89b4fa;border-radius:8px;padding:12px;">
+            <div style="font-weight:700;color:#89b4fa;margin-bottom:8px;">🔬 第一步：分析规划</div>
+            <div style="font-size:10px;color:#a6adc8;">
+              <span style="color:#585b70;">输入：</span>用户消息 + 数据结构 + Schema + purpose.md<br><br>
+              <span style="color:#585b70;">LLM 分析输出：</span><br>
+              · 数据特征识别（列类型、分布、异常）<br>
+              · 与历史分析的关联（增量缓存命中）<br>
+              · 推荐操作序列（工具清单 + 代码）<br>
+              · 预测结果形态<br>
+              · 潜在风险和注意事项<br><br>
+              <span style="color:#a6e3a1;">→ 展示分析计划给用户确认</span>
+            </div>
+          </div>
+          <!-- Arrow -->
+          <div style="display:flex;align-items:center;color:#585b70;font-size:20px;">▶</div>
+          <!-- Step 2: Execute -->
+          <div style="flex:1;background:#11111b;border:1px solid #a6e3a1;border-radius:8px;padding:12px;">
+            <div style="font-weight:700;color:#a6e3a1;margin-bottom:8px;">⚡ 第二步：批量执行</div>
+            <div style="font-size:10px;color:#a6adc8;">
+              <span style="color:#585b70;">执行引擎：</span><br>
+              · 工具调用优先（毫秒级）<br>
+              · 代码在 Kernel 中执行<br>
+              · 并行执行无依赖操作<br>
+              · 实时流式进度反馈<br><br>
+              <span style="color:#585b70;">输出组装：</span><br>
+              · 图表 + 表格 + 代码 + 解释<br>
+              · 每个输出标记来源（数据列、方法）<br>
+              · 自动生成 index.md 条目<br>
+              · 追加 log.md 操作记录<br><br>
+              <span style="color:#a6e3a1;">→ SHA256 缓存本次分析结果</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心升级 3：数据/模型关联图谱</h3>
+  <div class="mockup">
+    <div class="mockup-header">将 llm_wiki 图谱模型迁移到数据科学领域</div>
+    <div class="mockup-body">
+      <div style="font-family:system-ui;font-size:11px;color:#cdd6f4;line-height:1.7;">
+
+        <div style="display:flex;gap:12px;margin-bottom:10px;">
+          <div style="flex:1;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+            <div style="font-weight:600;color:#89b4fa;font-size:11px;margin-bottom:6px;">📊 数据关联图谱</div>
+            <div style="font-size:9px;color:#585b70;">
+              节点 = 数据列 / 特征 / 数据集<br>
+              边 = 相关系数 / 衍生关系 / 共享来源<br><br>
+              <span style="color:#a6adc8;">检测：</span><br>
+              · 高相关特征对（共线性警告）<br>
+              · 衍生特征链<br>
+              · 数据泄漏路径<br>
+              · 孤立特征（与目标无关）
+            </div>
+          </div>
+          <div style="flex:1;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+            <div style="font-weight:600;color:#cba6f7;font-size:11px;margin-bottom:6px;">🧠 模型关联图谱</div>
+            <div style="font-size:9px;color:#585b70;">
+              节点 = 模型实例 / 参数配置 / 评估指标<br>
+              边 = 继承关系 / 相似配置 / 性能对比<br><br>
+              <span style="color:#a6adc8;">检测：</span><br>
+              · 相似模型不同性能 → 调参方向<br>
+              · 最优模型路径追踪<br>
+              · 过拟合迹象（train≫val）<br>
+              · 社区检测：模型家族聚类
+            </div>
+          </div>
+          <div style="flex:1;background:#11111b;border:1px solid #313244;border-radius:6px;padding:10px;">
+            <div style="font-weight:600;color:#fab387;font-size:11px;margin-bottom:6px;">🔍 图谱洞察引擎</div>
+            <div style="font-size:9px;color:#585b70;">
+              自动分析图谱结构，生成建议：<br><br>
+              <span style="color:#a6adc8;">惊奇连接：</span><br>
+              · 意外的高相关性特征对<br>
+              · 不同任务间的可迁移特征<br><br>
+              <span style="color:#a6adc8;">知识空白：</span><br>
+              · 未探索的特征组合<br>
+              · 未尝试的模型架构<br>
+              · 缺少的外部数据源
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心升级 4：持久化操作队列 & 增量缓存</h3>
+  <div style="display:flex;gap:12px;">
+    <div style="flex:1;background:#11111b;border:1px solid #313244;border-radius:8px;padding:14px;">
+      <div style="font-weight:600;color:#cdd6f4;font-size:12px;margin-bottom:8px;">📦 分析任务队列</div>
+      <div style="font-size:10px;color:#a6adc8;line-height:1.7;">
+        · ML 训练任务入队，异步执行<br>
+        · 支持取消、重试、优先级调整<br>
+        · 崩溃恢复：队列持久化到磁盘<br>
+        · 进度可视化：前端实时展示<br>
+        · GPU 任务排队：资源感知调度
+      </div>
+    </div>
+    <div style="flex:1;background:#11111b;border:1px solid #313244;border-radius:8px;padding:14px;">
+      <div style="font-weight:600;color:#cdd6f4;font-size:12px;margin-bottom:8px;">⚡ 增量计算缓存</div>
+      <div style="font-size:10px;color:#a6adc8;line-height:1.7;">
+        · 数据文件 SHA256 哈希 → 跳过未变更重分析<br>
+        · 中间结果缓存（describe、corr、特征重要性）<br>
+        · 代码块哈希 → 相同代码+相同数据 = 重用结果<br>
+        · 缓存失效策略：数据变更自动清除关联缓存
+      </div>
+    </div>
+    <div style="flex:1;background:#11111b;border:1px solid #313244;border-radius:8px;padding:14px;">
+      <div style="font-weight:600;color:#cdd6f4;font-size:12px;margin-bottom:8px;">📝 操作日志 log.md</div>
+      <div style="font-size:10px;color:#a6adc8;line-height:1.7;">
+        · 每条操作追加时间戳记录<br>
+        · 可解析格式：grep 过滤、统计分析<br>
+        · 用于 Agent 自我回顾："上次做了什么"<br>
+        · 会话恢复时快速重建上下文
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>升级后的 Agent 架构总览</h3>
+  <div style="background:#0a0a0f;border:1px solid #313244;border-radius:8px;padding:16px;font-size:10px;color:#a6adc8;line-height:1.8;">
+
+    <div style="display:flex;gap:8px;align-items:stretch;">
+      <!-- Left: Schema -->
+      <div style="flex:1;background:#11111b;border-top:3px solid #f9e2af;border-radius:6px;padding:10px;">
+        <div style="font-weight:700;color:#f9e2af;margin-bottom:4px;font-size:11px;">📋 Harness Schema 层</div>
+        purpose.md · schema.md · tools.yaml · evolution.md
+      </div>
+      <div style="display:flex;align-items:center;color:#585b70;">⟷</div>
+      <!-- Center: Engine -->
+      <div style="flex:2;background:#11111b;border-top:3px solid #89b4fa;border-radius:6px;padding:10px;">
+        <div style="font-weight:700;color:#89b4fa;margin-bottom:4px;font-size:11px;">🧠 Agent 执行引擎</div>
+        两步思维链 · ReAct 循环 · Tool Calling · Kernel Pool · GPU调度 · 任务队列
+      </div>
+      <div style="display:flex;align-items:center;color:#585b70;">⟷</div>
+      <!-- Right: Evolution -->
+      <div style="flex:1;background:#11111b;border-top:3px solid #cba6f7;border-radius:6px;padding:10px;">
+        <div style="font-weight:700;color:#cba6f7;margin-bottom:4px;font-size:11px;">🧬 自进化层</div>
+        Lint自审 · 信号收集 · 建议生成 · 人机审核 · 图谱洞察
+      </div>
+    </div>
+
+    <div style="text-align:center;color:#585b70;margin:8px 0;">⬇ ⬇ ⬇</div>
+
+    <div style="display:flex;gap:8px;">
+      <div style="flex:1;background:#0d1520;border:1px solid #313244;border-radius:4px;padding:8px;text-align:center;">📊 数据关联图谱</div>
+      <div style="flex:1;background:#0d1520;border:1px solid #313244;border-radius:4px;padding:8px;text-align:center;">🧠 模型关联图谱</div>
+      <div style="flex:1;background:#0d1520;border:1px solid #313244;border-radius:4px;padding:8px;text-align:center;">📦 增量缓存</div>
+      <div style="flex:1;background:#0d1520;border:1px solid #313244;border-radius:4px;padding:8px;text-align:center;">📝 操作日志</div>
+      <div style="flex:1;background:#0d1520;border:1px solid #313244;border-radius:4px;padding:8px;text-align:center;">🤝 审核队列</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3>数据科学家日常使用流程（融合后）</h3>
+  <div style="background:#11111b;border:1px solid #313244;border-radius:8px;padding:14px;font-size:11px;color:#a6adc8;line-height:1.8;">
+    <span style="color:#585b70;">9:00</span> 打开项目 → Agent 读取 <span style="color:#f9e2af;">purpose.md</span> 了解目标 → 自动读取 <span style="color:#f9e2af;">log.md</span> 回顾上次进度<br>
+    <span style="color:#585b70;">9:05</span> 用户："继续昨天的特征工程" → Agent <span style="color:#89b4fa;">两步分析</span>：检查增量缓存中发现 3 列已处理 → 建议下一步 → 用户确认<br>
+    <span style="color:#585b70;">9:15</span> Agent 执行特征编码 → 结果自动写入 <span style="color:#f9e2af;">index.md</span> → <span style="color:#f9e2af;">数据关联图谱</span> 更新 → 检测到新特征与目标高相关<br>
+    <span style="color:#585b70;">9:30</span> 用户："开始 ML 训练" → <span style="color:#cba6f7;">ML Agent</span> 接管 → 分析数据特征 → 推荐 XGBoost + LightGBM 对比<br>
+    <span style="color:#585b70;">9:32</span> 用户确认 → 训练任务进入 <span style="color:#a6e3a1;">持久化队列</span> → GPU 节点分配 → 实时进度条<br>
+    <span style="color:#585b70;">10:00</span> 训练完成 → <span style="color:#f9e2af;">模型关联图谱</span> 显示两模型性能对比 → Agent 建议调参方向<br>
+    <span style="color:#585b70;">10:15</span> 用户导出最佳模型 → Agent 追加 <span style="color:#f9e2af;">log.md</span> → Schema 自进化：记录本次高效工具组合
+  </div>
+</div>

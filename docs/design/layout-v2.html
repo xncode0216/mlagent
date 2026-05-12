@@ -1,0 +1,129 @@
+<h2>优化后的布局：左侧文件区 + 对话主区域 + 按需展开面板</h2>
+<p class="subtitle">基于方案D，融合了文件浏览侧栏</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)" style="border: 2px solid var(--accent);">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>推荐：三区布局 — 文件栏 | 对话 | 动态面板</h3>
+      <p>左侧文件树始终可见，中间大区域是对话主体，当 Agent 产出图表/代码/数据时，在右侧或底部自动展开对应面板。默认右侧折叠，保持界面干净。</p>
+      <div class="mockup">
+        <div class="mockup-header">完整布局预览</div>
+        <div class="mockup-body">
+          <!-- 顶部标签栏 -->
+          <div style="display:flex;gap:4px;padding:4px 8px;background:#11111b;border-radius:3px 3px 0 0;font-size:10px;color:#6c7086;">
+            <span style="background:#1e1e2e;color:#cdd6f4;padding:2px 8px;border-radius:3px;">📊 sales_analysis</span>
+            <span style="padding:2px 8px;">📄 report.py</span>
+            <span style="padding:2px 8px;">📋 data_preview</span>
+            <span style="margin-left:auto;font-size:9px;">+</span>
+          </div>
+          <!-- 主体三栏 -->
+          <div style="display:flex;height:280px;gap:0;">
+            <!-- 左侧文件栏 -->
+            <div style="width:16%;background:#1e1e2e;color:#cdd6f4;padding:4px 6px;font-size:10px;border-right:1px solid #313244;border-radius:0 0 0 3px;overflow:hidden;">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #313244;margin-bottom:4px;">
+                <b>📁 工作目录</b>
+                <span style="font-size:9px;color:#6c7086;">+ ✦</span>
+              </div>
+              <div style="color:#89b4fa;">▸ 📂 data/</div>
+              <div style="padding-left:10px;color:#a6e3a1;">  📄 sales.csv <span style="color:#6c7086;font-size:9px;">12K×15</span></div>
+              <div style="padding-left:10px;">  📄 customers.xlsx</div>
+              <div style="color:#89b4fa;">▸ 📂 notebooks/</div>
+              <div style="padding-left:10px;">  📄 eda.py</div>
+              <div style="color:#89b4fa;">▸ 📂 results/</div>
+              <div style="padding-left:10px;color:#f9e2af;">  🖼️ missing_heatmap.png</div>
+              <div style="color:#89b4fa;">▸ 📂 models/</div>
+              <div style="margin-top:8px;border-top:1px solid #313244;padding-top:4px;color:#6c7086;font-size:9px;">
+                📊 数据集<br>
+                🧠 模型列表<br>
+                ⚙️ Agent设置
+              </div>
+            </div>
+            <!-- 中间对话区 -->
+            <div style="width:54%;background:#181825;color:#cdd6f4;padding:10px;font-size:11px;display:flex;flex-direction:column;">
+              <div style="flex:1;overflow:hidden;">
+                <div style="border-bottom:1px solid #313244;padding-bottom:6px;margin-bottom:6px;display:flex;justify-content:space-between;">
+                  <b>💬 数据分析对话</b>
+                  <span style="font-size:9px;color:#6c7086;">🔄 自动执行 | 📌 会话24</span>
+                </div>
+                <div style="background:#1e1e2e;padding:6px 8px;border-radius:4px;margin-bottom:6px;">
+                  <span style="color:#89b4fa;">🤖 Agent</span><br>
+                  已加载 <b>sales.csv</b>，共 12,000 行 × 15 列。<br>
+                  检测到 <span style="color:#fab387">3列缺失值</span>：Age (2.3%), Income (0.8%), Region (5.1%)<br>
+                  <span style="color:#6c7086;font-size:9px;">⏱ 10:32:15 · 2.3s</span>
+                  <div style="margin-top:4px;display:flex;gap:3px;">
+                    <span style="background:#313244;padding:1px 5px;border-radius:2px;font-size:9px;cursor:pointer;">📊 查看图表</span>
+                    <span style="background:#313244;padding:1px 5px;border-radius:2px;font-size:9px;cursor:pointer;">&lt;/&gt; 源码</span>
+                    <span style="background:#313244;padding:1px 5px;border-radius:2px;font-size:9px;cursor:pointer;">📋 数据预览</span>
+                  </div>
+                </div>
+                <div style="background:#1e1e2e;padding:6px 8px;border-radius:4px;margin-bottom:6px;">
+                  <span style="color:#a6e3a1;">👤 你</span><br>
+                  用中位数填充 Age 和 Income，用众数填充 Region
+                </div>
+                <div style="background:#1e1e2e;padding:6px 8px;border-radius:4px;">
+                  <span style="color:#89b4fa;">🤖 Agent</span><br>
+                  已完成填充 ✅<br>
+                  <code style="background:#313244;padding:1px 4px;border-radius:2px;font-size:10px;">df['Age'].fillna(df['Age'].median(), inplace=True)</code><br>
+                  <code style="background:#313244;padding:1px 4px;border-radius:2px;font-size:10px;">df['Income'].fillna(...)</code>
+                </div>
+              </div>
+              <!-- 输入框 -->
+              <div style="background:#313244;border-radius:4px;padding:6px 10px;font-size:10px;color:#6c7086;display:flex;justify-content:space-between;align-items:center;">
+                输入分析需求...
+                <span style="font-size:9px;">Ctrl+Enter · @文件 · 🎤 · 📎</span>
+              </div>
+            </div>
+            <!-- 右侧动态面板（可折叠） -->
+            <div style="width:30%;background:#1e1e2e;color:#cdd6f4;padding:6px;font-size:10px;border-left:1px solid #313244;border-radius:0 0 3px 0;display:flex;flex-direction:column;gap:3px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px solid #313244;">
+                <b>📊 结果面板</b>
+                <span style="font-size:9px;color:#6c7086;">✕ · — · □</span>
+              </div>
+              <!-- 标签切换 -->
+              <div style="display:flex;gap:2px;font-size:9px;">
+                <span style="background:#313244;color:#cdd6f4;padding:1px 6px;border-radius:2px;">📊 图表</span>
+                <span style="padding:1px 6px;color:#6c7086;">&lt;/&gt; 代码</span>
+                <span style="padding:1px 6px;color:#6c7086;">📋 数据</span>
+                <span style="padding:1px 6px;color:#6c7086;">📝 日志</span>
+              </div>
+              <!-- 图表内容 -->
+              <div style="flex:1;background:#11111b;border-radius:3px;display:flex;align-items:center;justify-content:center;color:#6c7086;">
+                <span style="color:#f9e2af;">📊 缺失值分布热力图</span>
+              </div>
+              <!-- 代码内容（折叠） -->
+              <div style="background:#11111b;border-radius:3px;padding:4px;font-size:9px;color:#a6e3a1;">
+                import seaborn as sns<br>
+                sns.heatmap(df.isnull(), ...)
+              </div>
+              <!-- 快捷操作 -->
+              <div style="display:flex;gap:2px;font-size:9px;">
+                <span style="flex:1;background:#89b4fa;color:#1e1e2e;text-align:center;padding:2px;border-radius:2px;">📥 导出图表</span>
+                <span style="flex:1;background:#313244;text-align:center;padding:2px;border-radius:2px;color:#6c7086;">📋 复制代码</span>
+              </div>
+            </div>
+          </div>
+          <!-- 底部状态栏 -->
+          <div style="background:#11111b;color:#6c7086;font-size:9px;padding:2px 8px;display:flex;gap:12px;border-radius:0 0 3px 3px;">
+            <span>🐍 Python 3.11</span>
+            <span>📦 scikit-learn 1.5</span>
+            <span>🖥️ CPU · 内存 45%</span>
+            <span style="margin-left:auto;">⏱ 会话运行 12min</span>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>左侧文件栏始终可见，方便切换和管理数据文件</li>
+          <li>对话区宽敞，分析对话不受干扰</li>
+          <li>右侧面板按需展开/折叠，不挤占空间</li>
+          <li>底部状态栏显示 Python 环境、资源使用等关键信息</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>右侧面板空间有限，复杂图表可能需要弹出独立窗口</li>
+          <li>需要良好响应式设计适配不同屏幕</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>

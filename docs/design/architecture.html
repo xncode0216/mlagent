@@ -1,0 +1,169 @@
+<h2>MLAgent 系统架构总览</h2>
+<p class="subtitle">方案 C · Jupyter Kernel + Agent 编排 + 工具加速 · 三层融合架构</p>
+
+<div class="section">
+  <h3>架构全景图</h3>
+  <div class="mockup">
+    <div class="mockup-header">MLAgent 平台系统架构</div>
+    <div class="mockup-body">
+      <div style="font-family:system-ui;font-size:11px;color:#cdd6f4;line-height:1.6;">
+
+        <!-- Client Layer -->
+        <div style="background:linear-gradient(135deg,#1a1025,#1e1e2e);border:1px solid #313244;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="font-size:10px;color:#cba6f7;font-weight:700;margin-bottom:6px;">🖥️ 前端层 · React SPA</div>
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;text-align:center;border:1px solid #1e1e2e;">
+              <span style="color:#89b4fa;">📁 文件管理</span><br>
+              <span style="font-size:9px;color:#585b70;">文件树 · 上传 · 编辑</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;text-align:center;border:1px solid #1e1e2e;">
+              <span style="color:#89b4fa;">💬 对话面板</span><br>
+              <span style="font-size:9px;color:#585b70;">聊天 · Markdown · 图表</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;text-align:center;border:1px solid #1e1e2e;">
+              <span style="color:#89b4fa;">📊 结果面板</span><br>
+              <span style="font-size:9px;color:#585b70;">图表 · 代码 · 数据 · 日志</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;text-align:center;border:1px solid #1e1e2e;">
+              <span style="color:#cba6f7;">🧠 ML 面板</span><br>
+              <span style="font-size:9px;color:#585b70;">AutoML · 训练监控</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Arrow -->
+        <div style="text-align:center;color:#585b70;font-size:16px;margin:4px 0;">⬇ WebSocket + REST</div>
+
+        <!-- API Layer -->
+        <div style="background:linear-gradient(135deg,#11111b,#1e1e2e);border:1px solid #313244;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="font-size:10px;color:#89b4fa;font-weight:700;margin-bottom:6px;">🔌 API 网关 · FastAPI</div>
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:6px;font-size:10px;border:1px solid #1e1e2e;">
+              🔐 认证中间件<br><span style="color:#585b70;">JWT · 权限 · 路由</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:6px;font-size:10px;border:1px solid #1e1e2e;">
+              📡 WebSocket<br><span style="color:#585b70;">流式对话 · 实时输出</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:6px;font-size:10px;border:1px solid #1e1e2e;">
+              📁 文件服务<br><span style="color:#585b70;">上传 · 下载 · CRUD</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:6px;font-size:10px;border:1px solid #1e1e2e;">
+              📋 会话管理<br><span style="color:#585b70;">历史 · 项目CRUD</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align:center;color:#585b70;font-size:16px;margin:4px 0;">⬇</div>
+
+        <!-- Agent Engine -->
+        <div style="background:linear-gradient(135deg,#0a1628,#111530);border:2px solid #89b4fa;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="font-size:10px;color:#89b4fa;font-weight:700;margin-bottom:8px;">🧠 Agent 编排引擎（核心）</div>
+          <div style="display:flex;gap:8px;">
+            <div style="flex:2;background:#0d0d14;border-radius:4px;padding:8px;border:1px solid #1e1e2e;">
+              <div style="color:#89b4fa;font-weight:600;font-size:10px;">🤖 Agent 调度器</div>
+              <div style="font-size:9px;color:#a6adc8;margin-top:4px;">
+                · 意图识别 → 路由到对应 Agent<br>
+                · ReAct 多步推理循环<br>
+                · Tool Calling 编排<br>
+                · 流式 Token 输出管理
+              </div>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;border:1px solid #1e1e2e;">
+              <div style="color:#cba6f7;font-weight:600;font-size:10px;">🔧 工具注册中心</div>
+              <div style="font-size:9px;color:#a6adc8;margin-top:4px;">
+                · describe()<br>
+                · detect_missing()<br>
+                · correlation()<br>
+                · fill_na()<br>
+                · plot_distribution()<br>
+                · train_model()<br>
+                <span style="color:#585b70;">...可扩展</span>
+              </div>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;border:1px solid #1e1e2e;">
+              <div style="color:#a6e3a1;font-weight:600;font-size:10px;">🌐 LLM Router</div>
+              <div style="font-size:9px;color:#a6adc8;margin-top:4px;">
+                · OpenAI API<br>
+                · Claude API<br>
+                · DeepSeek<br>
+                · 通义千问<br>
+                · 自托管 vLLM<br>
+                <span style="color:#585b70;">按任务选模型</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align:center;color:#585b70;font-size:16px;margin:4px 0;">⬇</div>
+
+        <!-- Execution Layer -->
+        <div style="background:linear-gradient(135deg,#1a1025,#1e1e2e);border:1px solid #313244;border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="font-size:10px;color:#a6e3a1;font-weight:700;margin-bottom:6px;">⚡ 执行层 · Kernel Pool + GPU 调度</div>
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;border:1px solid #1e1e2e;">
+              <div style="color:#a6e3a1;font-weight:600;font-size:10px;">🐍 Kernel Pool</div>
+              <div style="font-size:9px;color:#585b70;margin-top:4px;">
+                · Docker 容器池<br>
+                · 每用户独立 Kernel<br>
+                · 预装科学计算栈<br>
+                · 超时自动回收<br>
+                · 内存/CPU 限制
+              </div>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;border:1px solid #1e1e2e;">
+              <div style="color:#fab387;font-weight:600;font-size:10px;">🖥️ GPU 节点</div>
+              <div style="font-size:9px;color:#585b70;margin-top:4px;">
+                · PyTorch / TF 镜像<br>
+                · GPU 按需分配<br>
+                · 训练完成后释放<br>
+                · 队列调度
+              </div>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:8px;border:1px solid #1e1e2e;">
+              <div style="color:#f9e2af;font-weight:600;font-size:10px;">📊 数据可视化</div>
+              <div style="font-size:9px;color:#585b70;margin-top:4px;">
+                · Plotly → 交互图<br>
+                · Matplotlib → 静态图<br>
+                · Base64 编码返回<br>
+                · 图表缓存
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align:center;color:#585b70;font-size:16px;margin:4px 0;">⬇</div>
+
+        <!-- Data Layer -->
+        <div style="background:linear-gradient(135deg,#11111b,#1e1e2e);border:1px solid #313244;border-radius:8px;padding:12px;">
+          <div style="font-size:10px;color:#6c7086;font-weight:700;margin-bottom:6px;">💾 数据层</div>
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:6px;text-align:center;border:1px solid #1e1e2e;">
+              🗄️ PostgreSQL<br><span style="font-size:9px;color:#585b70;">用户 · 会话 · 记录</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:6px;text-align:center;border:1px solid #1e1e2e;">
+              📁 用户工作目录<br><span style="font-size:9px;color:#585b70;">数据文件 · 模型 · 结果</span>
+            </div>
+            <div style="flex:1;background:#0d0d14;border-radius:4px;padding:6px;text-align:center;border:1px solid #1e1e2e;">
+              📦 Redis<br><span style="font-size:9px;color:#585b70;">缓存 · 会话状态 · 队列</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心数据流：用户发起一次分析请求</h3>
+  <div style="background:#11111b;border:1px solid #1e1e2e;border-radius:8px;padding:14px;font-size:11px;color:#a6adc8;line-height:1.8;">
+    <span style="color:#a6e3a1;">👤 用户输入</span> → <span style="color:#89b4fa;">WebSocket 发送消息</span> → <span style="color:#f9e2af;">API 网关鉴权</span> → <span style="color:#cba6f7;">Agent 调度器</span><br>
+    &nbsp;&nbsp;→ 意图识别：<span style="color:#fab387;">"数据分析任务"</span><br>
+    &nbsp;&nbsp;→ <span style="color:#89b4fa;">LLM Router</span> 选模型：<span style="color:#6c7086;">简单任务用 DeepSeek，复杂推理用 Claude</span><br>
+    &nbsp;&nbsp;→ Agent 决策：<span style="color:#a6e3a1;">先匹配工具 → 匹配到 detect_missing()</span><br>
+    &nbsp;&nbsp;→ 工具返回：<span style="color:#f9e2af;">{ missing_cols: 3, heatmap_base64: ... }</span><br>
+    &nbsp;&nbsp;→ Agent 继续：<span style="color:#89b4fa;">工具不够 → 生成 Python 代码 → 发送到 Kernel</span><br>
+    &nbsp;&nbsp;→ <span style="color:#a6e3a1;">Kernel 执行</span> → 返回 <span style="color:#f9e2af;">[stdout, plot_base64, dataframe_json]</span><br>
+    &nbsp;&nbsp;→ Agent 组织回复 → <span style="color:#89b4fa;">WebSocket 流式推送</span> → <span style="color:#a6e3a1;">前端渲染</span><br>
+    <span style="color:#585b70;">&nbsp;&nbsp;→ 会话记录写入 PostgreSQL</span>
+  </div>
+</div>
