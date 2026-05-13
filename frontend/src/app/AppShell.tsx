@@ -1,4 +1,8 @@
+import { useAgentStream } from "../features/chat/useAgentStream";
+
 export function AppShell() {
+  const { connected, events, sendMessage } = useAgentStream("dev-session");
+
   return (
     <div className="app-shell">
       <header className="top-nav">
@@ -11,9 +15,17 @@ export function AppShell() {
         <div className="model-selector">Claude / DeepSeek / Local vLLM</div>
       </header>
       <aside className="file-sidebar">项目文件</aside>
-      <main className="agent-workspace">数据分析 Agent</main>
+      <main className="agent-workspace">
+        <h2>数据分析 Agent</h2>
+        <button onClick={() => sendMessage("分析缺失值", "data/customer_churn.csv")}>
+          发送示例分析请求
+        </button>
+        <pre>{events.map((event) => JSON.stringify(event)).join("\n")}</pre>
+      </main>
       <section className="right-panel">图表 / 代码 / 数据 / 训练 / 日志</section>
-      <footer className="status-bar">Kernel Ready · WebSocket Connected · CPU/MEM</footer>
+      <footer className="status-bar">
+        {connected ? "WebSocket Connected" : "WebSocket Disconnected"}
+      </footer>
     </div>
   );
 }
