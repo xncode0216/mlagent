@@ -1,0 +1,33 @@
+[project]
+name = "mlagent-backend"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic-settings>=2.6.0",
+  "sqlalchemy>=2.0.0",
+  "psycopg[binary]>=3.2.0",
+  "alembic>=1.13.0",
+  "redis>=5.0.0",
+  "python-multipart>=0.0.9",
+  "pandas>=2.2.0",
+  "plotly>=5.24.0",
+  "matplotlib>=3.9.0",
+  "jupyter-client>=8.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "httpx>=0.27.0",
+  "ruff>=0.6.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
