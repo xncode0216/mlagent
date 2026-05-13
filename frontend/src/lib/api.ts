@@ -46,6 +46,20 @@ export type TrainingResult = {
   };
 };
 
+export type Lesson = {
+  id: string;
+  source_type: string;
+  source_id: string;
+  domain: string[];
+  observation: string;
+  recommendation: string;
+  confidence: number;
+  status: "pending_review" | "high_confidence" | "rejected";
+  evidence: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -111,5 +125,41 @@ export async function trainBaselineModel(
       target_column: targetColumn,
       session_id: sessionId,
     }),
+  });
+}
+
+export async function listLessons(projectId: string): Promise<Lesson[]> {
+  const result = await request<{ items: Lesson[] }>(`/api/projects/${projectId}/evolution/lessons`);
+  return result.items;
+}
+
+export async function extractLesson(
+  projectId: string,
+  payload: {
+    source_type: string;
+    source_id: string;
+    domain: string[];
+    observation: string;
+    recommendation: string;
+    confidence: number;
+    evidence?: Record<string, unknown>;
+  },
+): Promise<Lesson> {
+  return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/extract`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adoptLesson(projectId: string, lessonId: string): Promise<Lesson> {
+  return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/${lessonId}/adopt`, {
+    method: "POST",
+  });
+}
+
+export async function rejectLesson(projectId: string, lessonId: string): Promise<Lesson> {
+  return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/${lessonId}/reject`, {
+    method: "POST",
   });
 }

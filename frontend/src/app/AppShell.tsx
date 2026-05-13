@@ -3,18 +3,26 @@ import { useEffect, useMemo, useState } from "react";
 import { AgentWorkspace } from "../features/chat/AgentWorkspace";
 import type { AgentStreamEvent } from "../features/chat/types";
 import { useAgentStream } from "../features/chat/useAgentStream";
+import { EvolutionWorkspace } from "../features/evolution/EvolutionWorkspace";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { RightPanel } from "../features/right-panel/RightPanel";
 import {
+  adoptLesson,
   createProject,
+  extractLesson,
   listFiles,
+  listLessons,
   listProjects,
+  rejectLesson,
   trainBaselineModel,
   uploadProjectFile,
   type FileItem,
+  type Lesson,
   type Project,
   type TrainingResult,
 } from "../lib/api";
+
+type MainMode = "analysis" | "machine-learning" | "evolution";
 
 const sampleCsv = new Blob(["age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n"], {
   type: "text/csv",
@@ -31,10 +39,12 @@ export function AppShell() {
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [activeFile, setActiveFile] = useState("data/customer_churn.csv");
+  const [activeMode, setActiveMode] = useState<MainMode>("analysis");
   const [workspaceStatus, setWorkspaceStatus] = useState("正在连接后端项目服务...");
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
   const [trainingError, setTrainingError] = useState<string | null>(null);
   const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
 
   const visibleEvents = useMemo(() => [...events, ...localEvents], [events, localEvents]);
   const artifactCount = useMemo(
@@ -62,6 +72,7 @@ export function AppShell() {
         if (!cancelled) {
           setProject(current);
           setFiles(projectFiles);
+          setLessons(await listLessons(current.id));
           setWorkspaceStatus("项目文件已同步");
         }
       } catch {
@@ -101,6 +112,20 @@ export function AppShell() {
       const result = await trainBaselineModel(project.id, activeFile, targetColumn, "manual-training");
       setTrainingResult(result);
       setFiles(await listWorkbenchFiles(project.id));
+      const lesson = await extractLesson(project.id, {
+        source_type: "training",
+        source_id: result.experiment_id,
+        domain: ["machine_learning", "baseline"],
+        observation: `当前数据集 ${activeFile} 的 baseline 最佳模型为 ${String(result.model.strategy)}，accuracy ${(result.metrics.accuracy * 100).toFixed(2)}%。`,
+        recommendation: "在进入更昂贵的训练前，先运行 baseline 和数值阈值模型作为对照。",
+        confidence: Math.min(0.95, Math.max(0.5, result.metrics.accuracy)),
+        evidence: {
+          accuracy: result.metrics.accuracy,
+          runs: result.runs.map((run) => run.model_name),
+          model_path: result.model_artifact.path,
+        },
+      });
+      setLessons(await listLessons(project.id));
       setLocalEvents((current) => [
         ...current,
         {
@@ -135,6 +160,11 @@ export function AppShell() {
           progress: 1,
           label: "baseline 训练完成",
         },
+        {
+          type: "lesson_extracted",
+          lesson_id: lesson.id,
+          confidence: lesson.confidence,
+        },
       ]);
     } catch (error) {
       setTrainingError(error instanceof Error ? error.message : "训练任务失败");
@@ -145,14 +175,35 @@ export function AppShell() {
     }
   }
 
+  async function handleAdoptLesson(lessonId: string) {
+    if (!project) return;
+    await adoptLesson(project.id, lessonId);
+    setLessons(await listLessons(project.id));
+  }
+
+  async function handleRejectLesson(lessonId: string) {
+    if (!project) return;
+    await rejectLesson(project.id, lessonId);
+    setLessons(await listLessons(project.id));
+  }
+
   return (
     <div className="app-shell">
       <header className="top-nav">
         <div className="brand">MLAgent</div>
         <nav className="mode-tabs" aria-label="主功能">
-          <button className="active">数据分析</button>
-          <button>机器学习</button>
-          <button>自进化知识</button>
+          <button className={activeMode === "analysis" ? "active" : ""} onClick={() => setActiveMode("analysis")}>
+            数据分析
+          </button>
+          <button
+            className={activeMode === "machine-learning" ? "active" : ""}
+            onClick={() => setActiveMode("machine-learning")}
+          >
+            机器学习
+          </button>
+          <button className={activeMode === "evolution" ? "active" : ""} onClick={() => setActiveMode("evolution")}>
+            自进化知识
+          </button>
         </nav>
         <div className="model-selector">Claude / DeepSeek / Local vLLM</div>
       </header>
@@ -165,14 +216,18 @@ export function AppShell() {
           status={workspaceStatus}
         />
       </aside>
-      <AgentWorkspace
-        activeFile={activeFile}
-        connected={connected}
-        events={visibleEvents}
-        lastError={lastError}
-        projectId={project?.id}
-        sendMessage={sendMessage}
-      />
+      {activeMode === "evolution" ? (
+        <EvolutionWorkspace lessons={lessons} onAdopt={handleAdoptLesson} onReject={handleRejectLesson} />
+      ) : (
+        <AgentWorkspace
+          activeFile={activeFile}
+          connected={connected}
+          events={visibleEvents}
+          lastError={lastError}
+          projectId={project?.id}
+          sendMessage={sendMessage}
+        />
+      )}
       <RightPanel
         activeFile={activeFile}
         events={visibleEvents}

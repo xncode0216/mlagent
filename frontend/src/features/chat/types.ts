@@ -11,6 +11,7 @@ export type AgentStreamEvent =
   | { type: "kernel_output"; stream: "stdout" | "stderr"; text: string }
   | { type: "artifact_created"; artifact: Artifact }
   | { type: "task_progress"; task_id: string; progress: number; label: string }
+  | { type: "lesson_extracted"; lesson_id: string; confidence: number }
   | { type: "error"; code: string; message: string };
 
 export type Artifact = {
