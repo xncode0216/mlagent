@@ -500,3 +500,39 @@ button {
   color: #a6e3a1;
   font-size: 16px;
 }
+
+.model-compare {
+  border: 1px solid #313244;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.model-compare .panel-title {
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.model-compare table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.model-compare th,
+.model-compare td {
+  border-bottom: 1px solid #313244;
+  color: #cdd6f4;
+  font-size: 12px;
+  padding: 9px 12px;
+  text-align: left;
+}
+
+.model-compare tr:last-child td {
+  border-bottom: 0;
+}
+
+.model-compare th {
+  color: #a6adc8;
+  font-weight: 600;
+}

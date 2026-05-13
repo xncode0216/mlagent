@@ -21,6 +21,16 @@ export type TrainingResult = {
     class_count: number;
     confusion_matrix: Record<string, Record<string, number>>;
   };
+  runs: Array<{
+    model_name: string;
+    model: Record<string, unknown>;
+    metrics: {
+      accuracy: number;
+      row_count: number;
+      class_count: number;
+      confusion_matrix: Record<string, Record<string, number>>;
+    };
+  }>;
   model: Record<string, unknown>;
   model_artifact: {
     type: "model";

@@ -230,24 +230,49 @@ function TrainingPanel({
       </div>
       {error ? <div className="inline-alert">{error}</div> : null}
       {result ? (
-        <div className="metrics-grid">
-          <div>
-            <span>Accuracy</span>
-            <strong>{(result.metrics.accuracy * 100).toFixed(2)}%</strong>
+        <>
+          <div className="metrics-grid">
+            <div>
+              <span>Accuracy</span>
+              <strong>{(result.metrics.accuracy * 100).toFixed(2)}%</strong>
+            </div>
+            <div>
+              <span>Rows</span>
+              <strong>{result.metrics.row_count}</strong>
+            </div>
+            <div>
+              <span>Classes</span>
+              <strong>{result.metrics.class_count}</strong>
+            </div>
+            <div>
+              <span>Best Model</span>
+              <strong>{String(result.model.strategy)}</strong>
+            </div>
           </div>
-          <div>
-            <span>Rows</span>
-            <strong>{result.metrics.row_count}</strong>
+          <div className="model-compare">
+            <div className="panel-title">模型对比</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>模型</th>
+                  <th>Accuracy</th>
+                  <th>样本</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...result.runs]
+                  .sort((left, right) => right.metrics.accuracy - left.metrics.accuracy)
+                  .map((run) => (
+                    <tr key={run.model_name}>
+                      <td>{run.model_name}</td>
+                      <td>{(run.metrics.accuracy * 100).toFixed(2)}%</td>
+                      <td>{run.metrics.row_count}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
           </div>
-          <div>
-            <span>Classes</span>
-            <strong>{result.metrics.class_count}</strong>
-          </div>
-          <div>
-            <span>Model</span>
-            <strong>{String(result.model.strategy)}</strong>
-          </div>
-        </div>
+        </>
       ) : null}
     </div>
   );

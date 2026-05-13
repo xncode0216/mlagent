@@ -74,6 +74,7 @@ def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, 
         "experiment_id": experiment_id,
         "status": "completed",
         "metrics": result["metrics"],
+        "runs": result["runs"],
         "model": result["model"],
         "model_artifact": {
             "type": "model",

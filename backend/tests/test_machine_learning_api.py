@@ -28,6 +28,11 @@ def test_train_baseline_api_writes_metrics_and_model(tmp_path, monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["metrics"]["accuracy"] == 1.0
+    assert [run["model_name"] for run in payload["runs"]] == [
+        "majority_class",
+        "numeric_threshold:score",
+        "numeric_threshold:age",
+    ]
     assert payload["model_artifact"]["path"] == "models/baseline_churn_model.json"
     assert payload["metrics_artifact"]["path"].startswith("results/test-session/")
     assert (project_root / "models" / "baseline_churn_model.json").exists()

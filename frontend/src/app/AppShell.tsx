@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AgentWorkspace } from "../features/chat/AgentWorkspace";
+import type { AgentStreamEvent } from "../features/chat/types";
 import { useAgentStream } from "../features/chat/useAgentStream";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { RightPanel } from "../features/right-panel/RightPanel";
@@ -33,10 +34,12 @@ export function AppShell() {
   const [workspaceStatus, setWorkspaceStatus] = useState("正在连接后端项目服务...");
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
   const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
 
+  const visibleEvents = useMemo(() => [...events, ...localEvents], [events, localEvents]);
   const artifactCount = useMemo(
-    () => events.filter((event) => event.type === "artifact_created").length,
-    [events],
+    () => visibleEvents.filter((event) => event.type === "artifact_created").length,
+    [visibleEvents],
   );
 
   useEffect(() => {
@@ -85,12 +88,60 @@ export function AppShell() {
   async function handleTrainBaseline(targetColumn: string) {
     if (!project) return;
     setTrainingError(null);
+    setLocalEvents((current) => [
+      ...current,
+      {
+        type: "task_progress",
+        task_id: "manual-training",
+        progress: 0.2,
+        label: "开始训练 baseline 模型",
+      },
+    ]);
     try {
       const result = await trainBaselineModel(project.id, activeFile, targetColumn, "manual-training");
       setTrainingResult(result);
       setFiles(await listWorkbenchFiles(project.id));
+      setLocalEvents((current) => [
+        ...current,
+        {
+          type: "artifact_created",
+          artifact: {
+            id: result.metrics_artifact.id,
+            project_id: project.id,
+            session_id: "manual-training",
+            type: "training",
+            name: result.metrics_artifact.name,
+            path: result.metrics_artifact.path,
+            metadata: { experiment_id: result.experiment_id },
+            created_at: result.metrics_artifact.created_at,
+          },
+        },
+        {
+          type: "artifact_created",
+          artifact: {
+            id: `${result.experiment_id}-model`,
+            project_id: project.id,
+            session_id: "manual-training",
+            type: "model",
+            name: result.model_artifact.name,
+            path: result.model_artifact.path,
+            metadata: { experiment_id: result.experiment_id },
+            created_at: new Date().toISOString(),
+          },
+        },
+        {
+          type: "task_progress",
+          task_id: "manual-training",
+          progress: 1,
+          label: "baseline 训练完成",
+        },
+      ]);
     } catch (error) {
       setTrainingError(error instanceof Error ? error.message : "训练任务失败");
+      setLocalEvents((current) => [
+        ...current,
+        { type: "error", code: "training_failed", message: "baseline 训练失败" },
+      ]);
     }
   }
 
@@ -117,14 +168,14 @@ export function AppShell() {
       <AgentWorkspace
         activeFile={activeFile}
         connected={connected}
-        events={events}
+        events={visibleEvents}
         lastError={lastError}
         projectId={project?.id}
         sendMessage={sendMessage}
       />
       <RightPanel
         activeFile={activeFile}
-        events={events}
+        events={visibleEvents}
         projectId={project?.id}
         trainingError={trainingError}
         trainingResult={trainingResult}
