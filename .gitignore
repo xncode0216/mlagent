@@ -4,6 +4,9 @@ __pycache__/
 .env
 venv/
 .venv/
+.pytest_cache/
+.ruff_cache/
+workspaces/
 
 # Node
 node_modules/
