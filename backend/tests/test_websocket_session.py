@@ -1,0 +1,69 @@
+from fastapi.testclient import TestClient
+
+from app.core.config import get_settings
+from app.main import app
+
+
+def test_session_socket_rejects_active_file_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    with client.websocket_connect("/ws/sessions/test-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {"project_id": project["id"], "active_file": "../escape.csv"},
+            }
+        )
+
+        assert websocket.receive_json()["type"] == "tool_call_started"
+        finished = websocket.receive_json()
+        error = websocket.receive_json()
+
+    assert finished["type"] == "tool_call_finished"
+    assert finished["status"] == "error"
+    assert error == {
+        "type": "error",
+        "code": "invalid_active_file",
+        "message": "Active file is outside the project workspace",
+    }
+
+
+def test_session_socket_emits_artifact_with_created_at(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,churn\n42,1\n37,0\n",
+        encoding="utf-8",
+    )
+
+    with client.websocket_connect("/ws/sessions/test-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                },
+            }
+        )
+
+        event_types = []
+        first_artifact = None
+        for _ in range(5):
+            event = websocket.receive_json()
+            event_types.append(event["type"])
+            if event["type"] == "artifact_created":
+                first_artifact = event["artifact"]
+                break
+
+    assert "tool_call_started" in event_types
+    assert first_artifact is not None
+    assert first_artifact["created_at"]
+    assert first_artifact["path"].startswith("results/test-session/")

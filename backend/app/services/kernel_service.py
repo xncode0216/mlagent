@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -19,7 +20,7 @@ class KernelServiceProtocol(Protocol):
 class LocalPythonKernelService:
     def execute(self, code: str, timeout_seconds: int = 10) -> KernelExecutionResult:
         process = subprocess.run(
-            ["python", "-c", code],
+            [sys.executable, "-c", code],
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
@@ -32,7 +33,7 @@ class LocalPythonKernelService:
         )
 
 
-class JupyterKernelService:
+class DockerPythonKernelService:
     """Runs Python code inside the configured Docker kernel image.
 
     The service keeps the same interface as the local spike. It executes one
@@ -82,6 +83,9 @@ class JupyterKernelService:
         )
 
 
+JupyterKernelService = DockerPythonKernelService
+
+
 def create_kernel_service(
     backend: str = "local",
     image: str = "mlagent-kernel:dev",
@@ -91,7 +95,7 @@ def create_kernel_service(
     if backend == "local":
         return LocalPythonKernelService()
     if backend == "jupyter":
-        return JupyterKernelService(
+        return DockerPythonKernelService(
             image=image,
             workspace_root=workspace_root,
             docker_executable=docker_executable,

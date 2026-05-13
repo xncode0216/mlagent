@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -10,6 +11,7 @@ class ArtifactRecord:
     id: str
     path: Path
     metadata: dict[str, Any]
+    created_at: str
 
 
 class ArtifactService:
@@ -25,6 +27,7 @@ class ArtifactService:
         payload: dict[str, Any],
     ) -> ArtifactRecord:
         artifact_id = uuid4().hex
+        created_at = datetime.now(UTC).isoformat()
         artifact_dir = self.project_root / "results" / session_id
         artifact_dir.mkdir(parents=True, exist_ok=True)
         path = artifact_dir / name
@@ -38,5 +41,7 @@ class ArtifactService:
                 "session_id": session_id,
                 "type": artifact_type,
                 "name": name,
+                "created_at": created_at,
             },
+            created_at=created_at,
         )

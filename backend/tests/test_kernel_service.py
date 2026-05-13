@@ -1,10 +1,16 @@
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
 
-from app.services.kernel_service import JupyterKernelService, LocalPythonKernelService, create_kernel_service
+from app.services.kernel_service import (
+    JupyterKernelService,
+    LocalPythonKernelService,
+    create_kernel_service,
+)
+import app.services.kernel_service as kernel_service
 
 
 def test_executes_python_and_returns_stdout():
@@ -18,6 +24,34 @@ def test_executes_python_and_returns_stdout():
 def test_factory_creates_local_service():
     service = create_kernel_service("local")
     assert isinstance(service, LocalPythonKernelService)
+
+
+def test_local_kernel_uses_current_python_interpreter(monkeypatch):
+    captured_command: list[str] = []
+
+    def fake_run(command, **kwargs):
+        captured_command.extend(command)
+
+        class Result:
+            returncode = 0
+            stdout = "ok\n"
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr("app.services.kernel_service.subprocess.run", fake_run)
+
+    service = LocalPythonKernelService()
+    result = service.execute("print('ok')")
+
+    assert result.status == "ok"
+    assert captured_command[:2] == [sys.executable, "-c"]
+
+
+def test_factory_creates_docker_kernel_for_jupyter_backend():
+    service = create_kernel_service("jupyter")
+    assert hasattr(kernel_service, "DockerPythonKernelService")
+    assert isinstance(service, kernel_service.DockerPythonKernelService)
 
 
 @pytest.mark.skipif(
