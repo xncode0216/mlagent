@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
 .env
 venv/
 .venv/
@@ -10,6 +11,7 @@ workspaces/
 
 # Node
 node_modules/
+.npm-cache/
 dist/
 .next/
 
