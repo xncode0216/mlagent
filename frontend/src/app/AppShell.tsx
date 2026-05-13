@@ -8,9 +8,11 @@ import {
   createProject,
   listFiles,
   listProjects,
+  trainBaselineModel,
   uploadProjectFile,
   type FileItem,
   type Project,
+  type TrainingResult,
 } from "../lib/api";
 
 const sampleCsv = new Blob(["age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n"], {
@@ -29,6 +31,8 @@ export function AppShell() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [activeFile, setActiveFile] = useState("data/customer_churn.csv");
   const [workspaceStatus, setWorkspaceStatus] = useState("正在连接后端项目服务...");
+  const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
+  const [trainingError, setTrainingError] = useState<string | null>(null);
 
   const artifactCount = useMemo(
     () => events.filter((event) => event.type === "artifact_created").length,
@@ -78,6 +82,18 @@ export function AppShell() {
     setActiveFile(targetPath);
   }
 
+  async function handleTrainBaseline(targetColumn: string) {
+    if (!project) return;
+    setTrainingError(null);
+    try {
+      const result = await trainBaselineModel(project.id, activeFile, targetColumn, "manual-training");
+      setTrainingResult(result);
+      setFiles(await listWorkbenchFiles(project.id));
+    } catch (error) {
+      setTrainingError(error instanceof Error ? error.message : "训练任务失败");
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="top-nav">
@@ -106,7 +122,14 @@ export function AppShell() {
         projectId={project?.id}
         sendMessage={sendMessage}
       />
-      <RightPanel events={events} />
+      <RightPanel
+        activeFile={activeFile}
+        events={events}
+        projectId={project?.id}
+        trainingError={trainingError}
+        trainingResult={trainingResult}
+        onTrainBaseline={handleTrainBaseline}
+      />
       <footer className="status-bar">
         <span>{connected ? "WebSocket Connected" : "WebSocket Disconnected"}</span>
         <span>Active file: {activeFile}</span>

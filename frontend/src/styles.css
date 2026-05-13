@@ -316,15 +316,29 @@ button {
 .artifact-list {
   display: grid;
   gap: 10px;
+  margin-bottom: 12px;
+}
+
+.artifact-list.compact {
+  grid-template-columns: 1fr;
 }
 
 .artifact-card {
   background: #181825;
   border: 1px solid #313244;
   border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
   display: grid;
   gap: 8px;
   padding: 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.artifact-card.selected {
+  border-color: #89b4fa;
+  box-shadow: inset 3px 0 0 #89b4fa;
 }
 
 .artifact-card div {
@@ -350,6 +364,92 @@ button {
   overflow-wrap: anywhere;
 }
 
+.json-preview {
+  background: #0a0a0f;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  color: #cdd6f4;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.data-preview {
+  border: 1px solid #313244;
+  border-radius: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.data-preview table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+.data-preview th,
+.data-preview td {
+  border-bottom: 1px solid #313244;
+  color: #cdd6f4;
+  font-size: 12px;
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-preview th {
+  background: #181825;
+  color: #a6adc8;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.training-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.training-form {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto;
+}
+
+.training-form label {
+  color: #a6adc8;
+  display: grid;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.training-form input {
+  background: #0a0a0f;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  color: #f5f5f5;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.training-form button {
+  background: #1e1e2e;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  color: #a6e3a1;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.training-form button:disabled {
+  color: #6c7086;
+  cursor: not-allowed;
+}
+
 .training-snapshot {
   display: grid;
   gap: 10px;
@@ -372,4 +472,31 @@ button {
 .training-snapshot strong {
   color: #f5f5f5;
   font-size: 13px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.metrics-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metrics-grid div {
+  background: rgba(166, 227, 161, 0.08);
+  border: 1px solid rgba(166, 227, 161, 0.22);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.metrics-grid span {
+  color: #6c7086;
+  font-size: 11px;
+}
+
+.metrics-grid strong {
+  color: #a6e3a1;
+  font-size: 16px;
 }

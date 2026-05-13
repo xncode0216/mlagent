@@ -17,7 +17,7 @@ export type Artifact = {
   id: string;
   project_id: string;
   session_id: string;
-  type: "dataframe" | "chart" | "code" | "markdown" | "log";
+  type: "dataframe" | "chart" | "code" | "markdown" | "log" | "training" | "model";
   name: string;
   path: string;
   metadata: Record<string, unknown>;

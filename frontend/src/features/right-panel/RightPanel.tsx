@@ -1,12 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { readProjectFileContent, type TrainingResult } from "../../lib/api";
 import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
 
 const tabs = ["图表", "代码", "数据", "训练", "日志"] as const;
 
 type RightPanelProps = {
+  activeFile: string;
   events: AgentStreamEvent[];
+  projectId?: string;
+  trainingError: string | null;
+  trainingResult: TrainingResult | null;
+  onTrainBaseline: (targetColumn: string) => Promise<void>;
 };
 
 function artifactEvents(events: AgentStreamEvent[]) {
@@ -17,33 +23,288 @@ function artifactEvents(events: AgentStreamEvent[]) {
     .map((event) => event.artifact);
 }
 
-function ArtifactList({ artifacts }: { artifacts: Artifact[] }) {
+function ArtifactList({
+  artifacts,
+  selectedId,
+  onSelect,
+}: {
+  artifacts: Artifact[];
+  selectedId?: string;
+  onSelect: (artifact: Artifact) => void;
+}) {
   if (artifacts.length === 0) {
     return <div className="empty-state">当前还没有可展示的产物。</div>;
   }
 
   return (
-    <div className="artifact-list">
+    <div className="artifact-list compact">
       {artifacts.map((artifact) => (
-        <article className="artifact-card" key={artifact.id}>
+        <button
+          className={artifact.id === selectedId ? "artifact-card selected" : "artifact-card"}
+          key={artifact.id}
+          onClick={() => onSelect(artifact)}
+        >
           <div>
             <strong>{artifact.name}</strong>
             <span>{artifact.type}</span>
           </div>
           <code>{artifact.path}</code>
           <small>{artifact.created_at}</small>
-        </article>
+        </button>
       ))}
     </div>
   );
 }
 
-export function RightPanel({ events }: RightPanelProps) {
+function JsonTable({ value }: { value: unknown }) {
+  if (!value || typeof value !== "object") {
+    return <pre className="json-preview">{JSON.stringify(value, null, 2)}</pre>;
+  }
+
+  if (
+    "sample" in value &&
+    Array.isArray(value.sample) &&
+    value.sample.length > 0 &&
+    typeof value.sample[0] === "object"
+  ) {
+    const rows = value.sample as Record<string, unknown>[];
+    const columns = Object.keys(rows[0]);
+    return (
+      <div className="data-preview">
+        <table>
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={index}>
+                {columns.map((column) => (
+                  <td key={column}>{String(row[column] ?? "")}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if ("columns" in value && "matrix" in value && Array.isArray(value.columns) && Array.isArray(value.matrix)) {
+    const columns = value.columns as string[];
+    const matrix = value.matrix as number[][];
+    return (
+      <div className="data-preview">
+        <table>
+          <thead>
+            <tr>
+              <th>字段</th>
+              {columns.map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {matrix.map((row, index) => (
+              <tr key={columns[index]}>
+                <th>{columns[index]}</th>
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if ("columns" in value && value.columns && typeof value.columns === "object") {
+    return (
+      <div className="data-preview">
+        <table>
+          <thead>
+            <tr>
+              <th>字段</th>
+              <th>缺失数</th>
+              <th>缺失率</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(value.columns as Record<string, { missing_count?: number; missing_ratio?: number }>).map(
+              ([column, profile]) => (
+                <tr key={column}>
+                  <td>{column}</td>
+                  <td>{profile.missing_count ?? 0}</td>
+                  <td>{((profile.missing_ratio ?? 0) * 100).toFixed(2)}%</td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return <pre className="json-preview">{JSON.stringify(value, null, 2)}</pre>;
+}
+
+function ArtifactPreview({
+  artifact,
+  content,
+  error,
+}: {
+  artifact?: Artifact;
+  content: string | null;
+  error: string | null;
+}) {
+  if (!artifact) {
+    return null;
+  }
+  if (error) {
+    return <div className="empty-state">{error}</div>;
+  }
+  if (!content) {
+    return <div className="empty-state">正在读取产物内容...</div>;
+  }
+
+  try {
+    return <JsonTable value={JSON.parse(content)} />;
+  } catch {
+    return <pre className="json-preview">{content}</pre>;
+  }
+}
+
+function TrainingPanel({
+  activeFile,
+  disabled,
+  error,
+  result,
+  onTrainBaseline,
+}: {
+  activeFile: string;
+  disabled: boolean;
+  error: string | null;
+  result: TrainingResult | null;
+  onTrainBaseline: (targetColumn: string) => Promise<void>;
+}) {
+  const [targetColumn, setTargetColumn] = useState("churn");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submitTraining() {
+    setSubmitting(true);
+    try {
+      await onTrainBaseline(targetColumn);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="training-panel">
+      <div className="training-form">
+        <label>
+          目标列
+          <input value={targetColumn} onChange={(event) => setTargetColumn(event.target.value)} />
+        </label>
+        <button disabled={disabled || submitting || !targetColumn} onClick={submitTraining}>
+          {submitting ? "训练中..." : "训练 baseline"}
+        </button>
+      </div>
+      <div className="training-snapshot">
+        <div>
+          <span>数据集</span>
+          <strong>{activeFile}</strong>
+        </div>
+        <div>
+          <span>GPU</span>
+          <strong>按需申请</strong>
+        </div>
+        <div>
+          <span>状态</span>
+          <strong>{result ? "已完成" : "等待建模任务"}</strong>
+        </div>
+      </div>
+      {error ? <div className="inline-alert">{error}</div> : null}
+      {result ? (
+        <div className="metrics-grid">
+          <div>
+            <span>Accuracy</span>
+            <strong>{(result.metrics.accuracy * 100).toFixed(2)}%</strong>
+          </div>
+          <div>
+            <span>Rows</span>
+            <strong>{result.metrics.row_count}</strong>
+          </div>
+          <div>
+            <span>Classes</span>
+            <strong>{result.metrics.class_count}</strong>
+          </div>
+          <div>
+            <span>Model</span>
+            <strong>{String(result.model.strategy)}</strong>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function RightPanel({
+  activeFile,
+  events,
+  projectId,
+  trainingError,
+  trainingResult,
+  onTrainBaseline,
+}: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("日志");
+  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
+  const [artifactContent, setArtifactContent] = useState<string | null>(null);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
   const artifacts = useMemo(() => artifactEvents(events), [events]);
   const chartArtifacts = artifacts.filter((artifact) => artifact.type === "chart");
   const dataArtifacts = artifacts.filter((artifact) => artifact.type === "dataframe");
   const codeArtifacts = artifacts.filter((artifact) => artifact.type === "code");
+  const activeArtifacts =
+    activeTab === "图表" ? chartArtifacts : activeTab === "数据" ? dataArtifacts : codeArtifacts;
+
+  useEffect(() => {
+    if (!["图表", "代码", "数据"].includes(activeTab)) {
+      setSelectedArtifact(undefined);
+      return;
+    }
+    if (!selectedArtifact || !activeArtifacts.some((artifact) => artifact.id === selectedArtifact.id)) {
+      setSelectedArtifact(activeArtifacts[0]);
+    }
+  }, [activeArtifacts, activeTab, selectedArtifact]);
+
+  useEffect(() => {
+    if (!projectId || !selectedArtifact) {
+      setArtifactContent(null);
+      return;
+    }
+
+    let cancelled = false;
+    setArtifactContent(null);
+    setArtifactError(null);
+    readProjectFileContent(projectId, selectedArtifact.path)
+      .then((result) => {
+        if (!cancelled) setArtifactContent(result.content);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setArtifactError(error instanceof Error ? error.message : "产物读取失败");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, selectedArtifact]);
 
   return (
     <section className="right-panel">
@@ -58,24 +319,44 @@ export function RightPanel({ events }: RightPanelProps) {
           </button>
         ))}
       </div>
-      {activeTab === "图表" ? <ArtifactList artifacts={chartArtifacts} /> : null}
-      {activeTab === "代码" ? <ArtifactList artifacts={codeArtifacts} /> : null}
-      {activeTab === "数据" ? <ArtifactList artifacts={dataArtifacts} /> : null}
+      {activeTab === "图表" ? (
+        <>
+          <ArtifactList
+            artifacts={chartArtifacts}
+            selectedId={selectedArtifact?.id}
+            onSelect={setSelectedArtifact}
+          />
+          <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+        </>
+      ) : null}
+      {activeTab === "代码" ? (
+        <>
+          <ArtifactList
+            artifacts={codeArtifacts}
+            selectedId={selectedArtifact?.id}
+            onSelect={setSelectedArtifact}
+          />
+          <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+        </>
+      ) : null}
+      {activeTab === "数据" ? (
+        <>
+          <ArtifactList
+            artifacts={dataArtifacts}
+            selectedId={selectedArtifact?.id}
+            onSelect={setSelectedArtifact}
+          />
+          <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+        </>
+      ) : null}
       {activeTab === "训练" ? (
-        <div className="training-snapshot">
-          <div>
-            <span>状态</span>
-            <strong>等待建模任务</strong>
-          </div>
-          <div>
-            <span>GPU</span>
-            <strong>按需申请</strong>
-          </div>
-          <div>
-            <span>模型对比</span>
-            <strong>待接入</strong>
-          </div>
-        </div>
+        <TrainingPanel
+          activeFile={activeFile}
+          disabled={!projectId}
+          error={trainingError}
+          result={trainingResult}
+          onTrainBaseline={onTrainBaseline}
+        />
       ) : null}
       {activeTab === "日志" ? <LogPanel events={events} /> : null}
     </section>
