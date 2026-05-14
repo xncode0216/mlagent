@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { readProjectFileContent, type TrainingResult } from "../../lib/api";
+import { readProjectFileContent, type ExperimentRun, type TrainingResult } from "../../lib/api";
 import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
 
@@ -13,6 +13,7 @@ type RightPanelProps = {
   projectId?: string;
   trainingError: string | null;
   trainingResult: TrainingResult | null;
+  trainingRuns: ExperimentRun[];
   onTrainModel: (targetColumn: string, engine: TrainingEngine, useGpu: boolean) => Promise<void>;
 };
 
@@ -184,12 +185,14 @@ function TrainingPanel({
   disabled,
   error,
   result,
+  runs,
   onTrainModel,
 }: {
   activeFile: string;
   disabled: boolean;
   error: string | null;
   result: TrainingResult | null;
+  runs: ExperimentRun[];
   onTrainModel: (targetColumn: string, engine: TrainingEngine, useGpu: boolean) => Promise<void>;
 }) {
   const [targetColumn, setTargetColumn] = useState("churn");
@@ -304,6 +307,33 @@ function TrainingPanel({
           </div>
         </>
       ) : null}
+      <div className="model-compare">
+        <div className="panel-title">历史实验</div>
+        {runs.length === 0 ? (
+          <div className="empty-state compact-empty">还没有训练记录。</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>引擎</th>
+                <th>最佳模型</th>
+                <th>Accuracy</th>
+                <th>GPU</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((run) => (
+                <tr key={run.experiment_id}>
+                  <td>{run.engine}</td>
+                  <td>{run.best_model_name}</td>
+                  <td>{(run.metrics.accuracy * 100).toFixed(2)}%</td>
+                  <td>{run.use_gpu ? "是" : "否"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
@@ -314,6 +344,7 @@ export function RightPanel({
   projectId,
   trainingError,
   trainingResult,
+  trainingRuns,
   onTrainModel,
 }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("日志");
@@ -410,6 +441,7 @@ export function RightPanel({
           disabled={!projectId}
           error={trainingError}
           result={trainingResult}
+          runs={trainingRuns}
           onTrainModel={onTrainModel}
         />
       ) : null}

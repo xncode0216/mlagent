@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.api.projects import PROJECTS
 from app.core.config import get_settings
 from app.services.artifact_service import ArtifactService
+from app.services.experiment_service import ExperimentService
 from app.services.kernel_service import create_kernel_service
 from app.tools.machine_learning import train_baseline_classifier, train_sklearn_classifier
 
@@ -46,6 +47,12 @@ def _safe_name(value: str) -> str:
     return safe or "target"
 
 
+@router.get("/runs")
+def list_training_runs(project_id: str) -> dict[str, Any]:
+    root = _project_root(project_id)
+    return {"items": ExperimentService(root).list_runs()}
+
+
 @router.post("/train-baseline")
 def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, Any]:
     root = _project_root(project_id)
@@ -80,6 +87,30 @@ def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, 
             **result,
         },
     )
+    model_artifact = {
+        "type": "model",
+        "name": model_name,
+        "path": str(model_path.relative_to(root)).replace("\\", "/"),
+    }
+    metrics_artifact_payload = {
+        "id": metrics_artifact.id,
+        "type": "training",
+        "name": "training_metrics.json",
+        "path": str(metrics_artifact.path.relative_to(root)).replace("\\", "/"),
+        "created_at": metrics_artifact.created_at,
+    }
+    ExperimentService(root).record_run(
+        project_id=project_id,
+        experiment_id=experiment_id,
+        engine="baseline",
+        dataset_path=payload.dataset_path,
+        target_column=payload.target_column,
+        use_gpu=False,
+        metrics=result["metrics"],
+        model_artifact=model_artifact,
+        metrics_artifact=metrics_artifact_payload,
+        best_model_name=result.get("model_name", model_name),
+    )
 
     return {
         "experiment_id": experiment_id,
@@ -89,18 +120,8 @@ def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, 
         "metrics": result["metrics"],
         "runs": result["runs"],
         "model": result["model"],
-        "model_artifact": {
-            "type": "model",
-            "name": model_name,
-            "path": str(model_path.relative_to(root)).replace("\\", "/"),
-        },
-        "metrics_artifact": {
-            "id": metrics_artifact.id,
-            "type": "training",
-            "name": "training_metrics.json",
-            "path": str(metrics_artifact.path.relative_to(root)).replace("\\", "/"),
-            "created_at": metrics_artifact.created_at,
-        },
+        "model_artifact": model_artifact,
+        "metrics_artifact": metrics_artifact_payload,
     }
 
 
@@ -146,6 +167,30 @@ def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, An
             **result,
         },
     )
+    model_artifact = {
+        "type": "model",
+        "name": model_name,
+        "path": result.get("model_path", model_path),
+    }
+    metrics_artifact_payload = {
+        "id": metrics_artifact.id,
+        "type": "training",
+        "name": "sklearn_training_metrics.json",
+        "path": str(metrics_artifact.path.relative_to(root)).replace("\\", "/"),
+        "created_at": metrics_artifact.created_at,
+    }
+    ExperimentService(root).record_run(
+        project_id=project_id,
+        experiment_id=experiment_id,
+        engine="sklearn",
+        dataset_path=payload.dataset_path,
+        target_column=payload.target_column,
+        use_gpu=payload.use_gpu,
+        metrics=result["metrics"],
+        model_artifact=model_artifact,
+        metrics_artifact=metrics_artifact_payload,
+        best_model_name=result.get("model_name", model_name),
+    )
 
     return {
         "experiment_id": experiment_id,
@@ -155,16 +200,6 @@ def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, An
         "metrics": result["metrics"],
         "runs": result["runs"],
         "model": result["model"],
-        "model_artifact": {
-            "type": "model",
-            "name": model_name,
-            "path": result.get("model_path", model_path),
-        },
-        "metrics_artifact": {
-            "id": metrics_artifact.id,
-            "type": "training",
-            "name": "sklearn_training_metrics.json",
-            "path": str(metrics_artifact.path.relative_to(root)).replace("\\", "/"),
-            "created_at": metrics_artifact.created_at,
-        },
+        "model_artifact": model_artifact,
+        "metrics_artifact": metrics_artifact_payload,
     }

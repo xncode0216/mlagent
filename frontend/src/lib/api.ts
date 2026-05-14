@@ -52,6 +52,37 @@ export type TrainingResult = {
   };
 };
 
+export type ExperimentRun = {
+  experiment_id: string;
+  project_id: string;
+  status: "completed";
+  engine: "baseline" | "sklearn";
+  dataset_path: string;
+  target_column: string;
+  use_gpu: boolean;
+  best_model_name: string;
+  metrics: {
+    accuracy: number;
+    f1_weighted?: number;
+    row_count: number;
+    eval_row_count?: number;
+    class_count: number;
+  };
+  model_artifact: {
+    type: "model";
+    name: string;
+    path: string;
+  };
+  metrics_artifact: {
+    id: string;
+    type: "training";
+    name: string;
+    path: string;
+    created_at: string;
+  };
+  created_at: string;
+};
+
 export type Lesson = {
   id: string;
   source_type: string;
@@ -151,6 +182,11 @@ export async function trainSklearnModel(
       use_gpu: useGpu,
     }),
   });
+}
+
+export async function listTrainingRuns(projectId: string): Promise<ExperimentRun[]> {
+  const result = await request<{ items: ExperimentRun[] }>(`/api/projects/${projectId}/ml/runs`);
+  return result.items;
 }
 
 export async function listLessons(projectId: string): Promise<Lesson[]> {

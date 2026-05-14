@@ -13,11 +13,13 @@ import {
   listFiles,
   listLessons,
   listProjects,
+  listTrainingRuns,
   rejectLesson,
   trainBaselineModel,
   trainSklearnModel,
   uploadProjectFile,
   type FileItem,
+  type ExperimentRun,
   type Lesson,
   type Project,
   type TrainingResult,
@@ -44,6 +46,7 @@ export function AppShell() {
   const [activeMode, setActiveMode] = useState<MainMode>("analysis");
   const [workspaceStatus, setWorkspaceStatus] = useState("正在连接后端项目服务...");
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
+  const [trainingRuns, setTrainingRuns] = useState<ExperimentRun[]>([]);
   const [trainingError, setTrainingError] = useState<string | null>(null);
   const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -75,6 +78,7 @@ export function AppShell() {
           setProject(current);
           setFiles(projectFiles);
           setLessons(await listLessons(current.id));
+          setTrainingRuns(await listTrainingRuns(current.id));
           setWorkspaceStatus("项目文件已同步");
         }
       } catch {
@@ -117,6 +121,7 @@ export function AppShell() {
           : await trainBaselineModel(project.id, activeFile, targetColumn, "manual-training");
       setTrainingResult(result);
       setFiles(await listWorkbenchFiles(project.id));
+      setTrainingRuns(await listTrainingRuns(project.id));
       const lesson = await extractLesson(project.id, {
         source_type: "training",
         source_id: result.experiment_id,
@@ -244,6 +249,7 @@ export function AppShell() {
         projectId={project?.id}
         trainingError={trainingError}
         trainingResult={trainingResult}
+        trainingRuns={trainingRuns}
         onTrainModel={handleTrainModel}
       />
       <footer className="status-bar">

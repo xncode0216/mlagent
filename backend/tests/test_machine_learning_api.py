@@ -38,6 +38,14 @@ def test_train_baseline_api_writes_metrics_and_model(tmp_path, monkeypatch):
     assert payload["metrics_artifact"]["path"].startswith("results/test-session/")
     assert (project_root / "models" / "baseline_churn_model.json").exists()
 
+    runs_response = client.get(f"/api/projects/{project['id']}/ml/runs")
+    assert runs_response.status_code == 200
+    runs = runs_response.json()["items"]
+    assert len(runs) == 1
+    assert runs[0]["experiment_id"] == payload["experiment_id"]
+    assert runs[0]["engine"] == "baseline"
+    assert runs[0]["metrics"]["accuracy"] == 1.0
+
 
 def test_train_baseline_api_rejects_path_escape(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
@@ -106,3 +114,10 @@ def test_train_sklearn_api_writes_metrics_and_model_reference(tmp_path, monkeypa
     assert payload["metrics"]["accuracy"] == 0.875
     assert payload["model_artifact"]["path"] == "models/sklearn_churn_model.joblib"
     assert payload["metrics_artifact"]["path"].startswith("results/sklearn-session/")
+
+    runs_response = client.get(f"/api/projects/{project['id']}/ml/runs")
+    assert runs_response.status_code == 200
+    runs = runs_response.json()["items"]
+    assert runs[0]["experiment_id"] == payload["experiment_id"]
+    assert runs[0]["engine"] == "sklearn"
+    assert runs[0]["use_gpu"] is False
