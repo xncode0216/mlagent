@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.projects import PROJECTS
+from app.api.projects import get_registered_project
 from app.services.evolution_service import EvolutionService, LessonRecord
 
 router = APIRouter(prefix="/api/projects/{project_id}/evolution", tags=["evolution"])
@@ -25,7 +25,7 @@ class LessonList(BaseModel):
 
 
 def _project_root(project_id: str) -> Path:
-    project = PROJECTS.get(project_id)
+    project = get_registered_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return Path(project.workspace_path).resolve()

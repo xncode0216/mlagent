@@ -2,14 +2,14 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.api.projects import PROJECTS
+from app.api.projects import get_registered_project
 from app.schemas.file import FileItem, FileList
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
 
 def _get_project_root(project_id: str) -> Path:
-    project = PROJECTS.get(project_id)
+    project = get_registered_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return Path(project.workspace_path).resolve()

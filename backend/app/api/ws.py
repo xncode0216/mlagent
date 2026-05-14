@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.api.projects import PROJECTS
+from app.api.projects import get_registered_project
 from app.services.artifact_service import ArtifactService
 from app.tools.data_analysis import correlation_matrix, detect_missing, profile_dataset
 
@@ -24,7 +24,7 @@ def _resolve_active_file(project_id: object, active_file: object) -> ActiveFileR
     if not isinstance(project_id, str) or not isinstance(active_file, str):
         return ActiveFileResolution(csv_path=None)
 
-    project = PROJECTS.get(project_id)
+    project = get_registered_project(project_id)
     if project is None:
         return ActiveFileResolution(None, "project_not_found", "Project not found")
 
@@ -86,7 +86,10 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                 continue
 
             if isinstance(project_id, str) and resolution.csv_path is not None:
-                project_root = Path(PROJECTS[project_id].workspace_path).resolve()
+                project = get_registered_project(project_id)
+                if project is None:
+                    continue
+                project_root = Path(project.workspace_path).resolve()
                 artifacts = [
                     ("dataframe", "profile.json", profile_dataset(resolution.csv_path)),
                     ("dataframe", "missing.json", detect_missing(resolution.csv_path)),
