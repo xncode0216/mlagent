@@ -31,9 +31,9 @@ def _training_code(dataset_path: str, target_column: str, model_output_path: str
     marker_literal = json.dumps(RESULT_MARKER)
     return f"""
 import json
+import pickle
 from pathlib import Path
 
-import joblib
 import pandas as pd
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -52,9 +52,17 @@ if target_column not in df.columns:
 if df.empty:
     raise ValueError("Training dataset is empty")
 
-features = df.drop(columns=[target_column])
+features = df.drop(columns=[target_column]).copy()
 target = df[target_column].astype(str)
 feature_columns = list(features.columns)
+for column in feature_columns:
+    if pd.api.types.is_numeric_dtype(features[column]):
+        fill_value = features[column].median()
+        if pd.isna(fill_value):
+            fill_value = 0
+        features[column] = features[column].fillna(fill_value)
+    else:
+        features[column] = features[column].fillna("__missing__").astype(str)
 encoded_features = pd.get_dummies(features, dummy_na=True)
 if encoded_features.shape[1] == 0:
     raise ValueError("Training dataset has no feature columns")
@@ -119,7 +127,8 @@ for model_name, estimator in estimators:
         best_estimator = estimator
 
 model_output_path.parent.mkdir(parents=True, exist_ok=True)
-joblib.dump(best_estimator, model_output_path)
+with model_output_path.open("wb") as model_file:
+    pickle.dump(best_estimator, model_file)
 
 result = {{
     "engine": "sklearn",

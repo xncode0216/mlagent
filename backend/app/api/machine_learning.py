@@ -152,7 +152,7 @@ def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, An
     _resolve_project_file(root, payload.dataset_path)
     settings = get_settings()
     experiment_id = uuid4().hex
-    model_name = f"sklearn_{_safe_name(payload.target_column)}_model.joblib"
+    model_name = f"sklearn_{_safe_name(payload.target_column)}_model.pkl"
     model_path = f"models/{model_name}"
     kernel_service = create_kernel_service(
         backend=settings.kernel_backend,

@@ -25,7 +25,7 @@ def test_train_sklearn_classifier_executes_inside_kernel_and_parses_result(tmp_p
     dataset_path = tmp_path / "data" / "training.csv"
     dataset_path.parent.mkdir()
     dataset_path.write_text(
-        "score,age,churn\n0.1,25,no\n0.2,30,no\n0.3,31,no\n0.4,35,no\n"
+        "score,age,churn\n0.1,,no\n0.2,30,no\n0.3,31,no\n0.4,35,no\n"
         "0.7,44,yes\n0.8,45,yes\n0.9,50,yes\n1.0,55,yes\n",
         encoding="utf-8",
     )
@@ -39,7 +39,7 @@ def test_train_sklearn_classifier_executes_inside_kernel_and_parses_result(tmp_p
                 '"model":{"algorithm":"random_forest"},"metrics":{"accuracy":1.0,'
                 '"f1_weighted":1.0,"row_count":8,"class_count":2},'
                 '"runs":[{"model_name":"random_forest","metrics":{"accuracy":1.0}}],'
-                '"model_path":"models/sklearn_churn_model.joblib"}\n'
+                '"model_path":"models/sklearn_churn_model.pkl"}\n'
             ),
             stderr="",
         )
@@ -49,16 +49,20 @@ def test_train_sklearn_classifier_executes_inside_kernel_and_parses_result(tmp_p
         workspace_root=tmp_path,
         dataset_path="data/training.csv",
         target_column="churn",
-        model_output_path="models/sklearn_churn_model.joblib",
+        model_output_path="models/sklearn_churn_model.pkl",
         kernel_service=kernel,
     )
 
     assert result["engine"] == "sklearn"
     assert result["model"]["algorithm"] == "random_forest"
     assert result["metrics"]["accuracy"] == 1.0
+    assert "import pickle" in kernel.code
+    assert "joblib" not in kernel.code
+    assert "fillna" in kernel.code
+    assert "median" in kernel.code
     assert "sklearn.ensemble" in kernel.code
     assert "data/training.csv" in kernel.code
-    assert "models/sklearn_churn_model.joblib" in kernel.code
+    assert "models/sklearn_churn_model.pkl" in kernel.code
     assert kernel.timeout_seconds == 120
 
 
@@ -73,7 +77,7 @@ def test_train_sklearn_classifier_rejects_kernel_errors(tmp_path: Path):
             workspace_root=tmp_path,
             dataset_path="data/training.csv",
             target_column="churn",
-            model_output_path="models/sklearn_churn_model.joblib",
+            model_output_path="models/sklearn_churn_model.pkl",
             kernel_service=kernel,
         )
 
@@ -100,11 +104,11 @@ def test_train_sklearn_classifier_runs_in_docker_kernel(tmp_path: Path):
         workspace_root=tmp_path,
         dataset_path="data/training.csv",
         target_column="churn",
-        model_output_path="models/sklearn_churn_model.joblib",
+        model_output_path="models/sklearn_churn_model.pkl",
         kernel_service=kernel,
     )
 
     assert result["engine"] == "sklearn"
     assert result["metrics"]["row_count"] == 8
-    assert result["model_path"] == "models/sklearn_churn_model.joblib"
-    assert (tmp_path / "models" / "sklearn_churn_model.joblib").exists()
+    assert result["model_path"] == "models/sklearn_churn_model.pkl"
+    assert (tmp_path / "models" / "sklearn_churn_model.pkl").exists()

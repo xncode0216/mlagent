@@ -38,7 +38,7 @@ def test_experiment_service_records_and_lists_runs(tmp_path: Path):
             "feature_importance": [{"feature": "score", "importance": 0.72}],
         },
         candidate_runs=[{"model_name": "random_forest", "metrics": {"accuracy": 0.875}}],
-        model_artifact={"type": "model", "name": "sklearn.joblib", "path": "models/sklearn.joblib"},
+        model_artifact={"type": "model", "name": "sklearn.pkl", "path": "models/sklearn.pkl"},
         metrics_artifact={
             "id": "metrics-2",
             "type": "training",

@@ -104,7 +104,7 @@ def test_train_sklearn_api_writes_metrics_and_model_reference(tmp_path, monkeypa
                     '"metrics":{"accuracy":0.875,"f1_weighted":0.87,"row_count":8,"class_count":2},'
                     '"runs":[{"model_name":"logistic_regression","model":{"algorithm":"logistic_regression"},'
                     '"metrics":{"accuracy":0.875}}],'
-                    '"model_path":"models/sklearn_churn_model.joblib"}\n'
+                    '"model_path":"models/sklearn_churn_model.pkl"}\n'
                 ),
                 stderr="",
             )
@@ -140,7 +140,7 @@ def test_train_sklearn_api_writes_metrics_and_model_reference(tmp_path, monkeypa
     payload = response.json()
     assert payload["engine"] == "sklearn"
     assert payload["metrics"]["accuracy"] == 0.875
-    assert payload["model_artifact"]["path"] == "models/sklearn_churn_model.joblib"
+    assert payload["model_artifact"]["path"] == "models/sklearn_churn_model.pkl"
     assert payload["metrics_artifact"]["path"].startswith("results/sklearn-session/")
 
     runs_response = client.get(f"/api/projects/{project['id']}/ml/runs")
