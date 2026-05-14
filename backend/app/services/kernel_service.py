@@ -46,10 +46,12 @@ class DockerPythonKernelService:
         image: str = "mlagent-kernel:dev",
         workspace_root: Path | None = None,
         docker_executable: str = "docker",
+        use_gpu: bool = False,
     ):
         self.image = image
         self.workspace_root = workspace_root.resolve() if workspace_root else None
         self.docker_executable = docker_executable
+        self.use_gpu = use_gpu
 
     def execute(self, code: str, timeout_seconds: int = 60) -> KernelExecutionResult:
         command = [
@@ -59,6 +61,8 @@ class DockerPythonKernelService:
             "--network",
             "none",
         ]
+        if self.use_gpu:
+            command.extend(["--gpus", "all"])
         if self.workspace_root is not None:
             command.extend(
                 [
@@ -91,6 +95,7 @@ def create_kernel_service(
     image: str = "mlagent-kernel:dev",
     workspace_root: Path | None = None,
     docker_executable: str = "docker",
+    use_gpu: bool = False,
 ) -> KernelServiceProtocol:
     if backend == "local":
         return LocalPythonKernelService()
@@ -99,5 +104,6 @@ def create_kernel_service(
             image=image,
             workspace_root=workspace_root,
             docker_executable=docker_executable,
+            use_gpu=use_gpu,
         )
     raise ValueError(f"Unsupported kernel backend: {backend}")

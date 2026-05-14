@@ -15,6 +15,7 @@ import {
   listProjects,
   rejectLesson,
   trainBaselineModel,
+  trainSklearnModel,
   uploadProjectFile,
   type FileItem,
   type Lesson,
@@ -23,6 +24,7 @@ import {
 } from "../lib/api";
 
 type MainMode = "analysis" | "machine-learning" | "evolution";
+type TrainingEngine = "baseline" | "sklearn";
 
 const sampleCsv = new Blob(["age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n"], {
   type: "text/csv",
@@ -96,7 +98,7 @@ export function AppShell() {
     setActiveFile(targetPath);
   }
 
-  async function handleTrainBaseline(targetColumn: string) {
+  async function handleTrainModel(targetColumn: string, engine: TrainingEngine, useGpu: boolean) {
     if (!project) return;
     setTrainingError(null);
     setLocalEvents((current) => [
@@ -105,24 +107,32 @@ export function AppShell() {
         type: "task_progress",
         task_id: "manual-training",
         progress: 0.2,
-        label: "开始训练 baseline 模型",
+        label: `开始训练 ${engine} 模型`,
       },
     ]);
     try {
-      const result = await trainBaselineModel(project.id, activeFile, targetColumn, "manual-training");
+      const result =
+        engine === "sklearn"
+          ? await trainSklearnModel(project.id, activeFile, targetColumn, "manual-training", useGpu)
+          : await trainBaselineModel(project.id, activeFile, targetColumn, "manual-training");
       setTrainingResult(result);
       setFiles(await listWorkbenchFiles(project.id));
       const lesson = await extractLesson(project.id, {
         source_type: "training",
         source_id: result.experiment_id,
-        domain: ["machine_learning", "baseline"],
-        observation: `当前数据集 ${activeFile} 的 baseline 最佳模型为 ${String(result.model.strategy)}，accuracy ${(result.metrics.accuracy * 100).toFixed(2)}%。`,
-        recommendation: "在进入更昂贵的训练前，先运行 baseline 和数值阈值模型作为对照。",
+        domain: ["machine_learning", result.engine],
+        observation: `当前数据集 ${activeFile} 的 ${result.engine} 最佳模型为 ${String(result.model.strategy ?? result.model.algorithm)}，accuracy ${(result.metrics.accuracy * 100).toFixed(2)}%。`,
+        recommendation:
+          result.engine === "sklearn"
+            ? "将 sklearn 实验结果作为后续特征工程、模型搜索和部署评估的基准。"
+            : "在进入更昂贵的训练前，先运行 baseline 和数值阈值模型作为对照。",
         confidence: Math.min(0.95, Math.max(0.5, result.metrics.accuracy)),
         evidence: {
           accuracy: result.metrics.accuracy,
+          f1_weighted: result.metrics.f1_weighted,
           runs: result.runs.map((run) => run.model_name),
           model_path: result.model_artifact.path,
+          engine: result.engine,
         },
       });
       setLessons(await listLessons(project.id));
@@ -158,7 +168,7 @@ export function AppShell() {
           type: "task_progress",
           task_id: "manual-training",
           progress: 1,
-          label: "baseline 训练完成",
+          label: `${result.engine} 训练完成`,
         },
         {
           type: "lesson_extracted",
@@ -170,7 +180,7 @@ export function AppShell() {
       setTrainingError(error instanceof Error ? error.message : "训练任务失败");
       setLocalEvents((current) => [
         ...current,
-        { type: "error", code: "training_failed", message: "baseline 训练失败" },
+        { type: "error", code: "training_failed", message: `${engine} 训练失败` },
       ]);
     }
   }
@@ -234,7 +244,7 @@ export function AppShell() {
         projectId={project?.id}
         trainingError={trainingError}
         trainingResult={trainingResult}
-        onTrainBaseline={handleTrainBaseline}
+        onTrainModel={handleTrainModel}
       />
       <footer className="status-bar">
         <span>{connected ? "WebSocket Connected" : "WebSocket Disconnected"}</span>

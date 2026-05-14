@@ -413,6 +413,31 @@ button {
   gap: 12px;
 }
 
+.segmented-control {
+  background: #0a0a0f;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.segmented-control button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #a6adc8;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.segmented-control button.active {
+  background: #313244;
+  color: #f5f5f5;
+}
+
 .training-form {
   align-items: end;
   display: grid;
@@ -448,6 +473,22 @@ button {
 .training-form button:disabled {
   color: #6c7086;
   cursor: not-allowed;
+}
+
+.gpu-toggle {
+  align-items: center;
+  color: #a6adc8;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.gpu-toggle input {
+  accent-color: #a6e3a1;
+}
+
+.gpu-toggle input:disabled + span {
+  color: #6c7086;
 }
 
 .training-snapshot {

@@ -15,9 +15,13 @@ export type FileItem = {
 export type TrainingResult = {
   experiment_id: string;
   status: "completed";
+  engine: "baseline" | "sklearn";
+  use_gpu: boolean;
   metrics: {
     accuracy: number;
+    f1_weighted?: number;
     row_count: number;
+    eval_row_count?: number;
     class_count: number;
     confusion_matrix: Record<string, Record<string, number>>;
   };
@@ -26,7 +30,9 @@ export type TrainingResult = {
     model: Record<string, unknown>;
     metrics: {
       accuracy: number;
+      f1_weighted?: number;
       row_count: number;
+      eval_row_count?: number;
       class_count: number;
       confusion_matrix: Record<string, Record<string, number>>;
     };
@@ -124,6 +130,25 @@ export async function trainBaselineModel(
       dataset_path: datasetPath,
       target_column: targetColumn,
       session_id: sessionId,
+    }),
+  });
+}
+
+export async function trainSklearnModel(
+  projectId: string,
+  datasetPath: string,
+  targetColumn: string,
+  sessionId = "manual-training",
+  useGpu = false,
+): Promise<TrainingResult> {
+  return request<TrainingResult>(`/api/projects/${projectId}/ml/train-sklearn`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      dataset_path: datasetPath,
+      target_column: targetColumn,
+      session_id: sessionId,
+      use_gpu: useGpu,
     }),
   });
 }

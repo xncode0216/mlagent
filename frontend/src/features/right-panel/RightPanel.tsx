@@ -5,6 +5,7 @@ import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
 
 const tabs = ["图表", "代码", "数据", "训练", "日志"] as const;
+type TrainingEngine = "baseline" | "sklearn";
 
 type RightPanelProps = {
   activeFile: string;
@@ -12,7 +13,7 @@ type RightPanelProps = {
   projectId?: string;
   trainingError: string | null;
   trainingResult: TrainingResult | null;
-  onTrainBaseline: (targetColumn: string) => Promise<void>;
+  onTrainModel: (targetColumn: string, engine: TrainingEngine, useGpu: boolean) => Promise<void>;
 };
 
 function artifactEvents(events: AgentStreamEvent[]) {
@@ -183,21 +184,23 @@ function TrainingPanel({
   disabled,
   error,
   result,
-  onTrainBaseline,
+  onTrainModel,
 }: {
   activeFile: string;
   disabled: boolean;
   error: string | null;
   result: TrainingResult | null;
-  onTrainBaseline: (targetColumn: string) => Promise<void>;
+  onTrainModel: (targetColumn: string, engine: TrainingEngine, useGpu: boolean) => Promise<void>;
 }) {
   const [targetColumn, setTargetColumn] = useState("churn");
+  const [engine, setEngine] = useState<TrainingEngine>("sklearn");
+  const [useGpu, setUseGpu] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function submitTraining() {
     setSubmitting(true);
     try {
-      await onTrainBaseline(targetColumn);
+      await onTrainModel(targetColumn, engine, useGpu);
     } finally {
       setSubmitting(false);
     }
@@ -205,23 +208,44 @@ function TrainingPanel({
 
   return (
     <div className="training-panel">
+      <div className="segmented-control" aria-label="训练引擎">
+        <button className={engine === "sklearn" ? "active" : ""} onClick={() => setEngine("sklearn")}>
+          sklearn 实验
+        </button>
+        <button className={engine === "baseline" ? "active" : ""} onClick={() => setEngine("baseline")}>
+          快速 baseline
+        </button>
+      </div>
       <div className="training-form">
         <label>
           目标列
           <input value={targetColumn} onChange={(event) => setTargetColumn(event.target.value)} />
         </label>
         <button disabled={disabled || submitting || !targetColumn} onClick={submitTraining}>
-          {submitting ? "训练中..." : "训练 baseline"}
+          {submitting ? "训练中..." : engine === "sklearn" ? "启动 sklearn 训练" : "训练 baseline"}
         </button>
       </div>
+      <label className="gpu-toggle">
+        <input
+          checked={useGpu}
+          disabled={engine !== "sklearn"}
+          type="checkbox"
+          onChange={(event) => setUseGpu(event.target.checked)}
+        />
+        <span>请求 GPU 执行</span>
+      </label>
       <div className="training-snapshot">
         <div>
           <span>数据集</span>
           <strong>{activeFile}</strong>
         </div>
         <div>
+          <span>引擎</span>
+          <strong>{result?.engine ?? engine}</strong>
+        </div>
+        <div>
           <span>GPU</span>
-          <strong>按需申请</strong>
+          <strong>{result?.use_gpu || useGpu ? "已请求" : "未请求"}</strong>
         </div>
         <div>
           <span>状态</span>
@@ -237,6 +261,10 @@ function TrainingPanel({
               <strong>{(result.metrics.accuracy * 100).toFixed(2)}%</strong>
             </div>
             <div>
+              <span>F1 weighted</span>
+              <strong>{result.metrics.f1_weighted !== undefined ? `${(result.metrics.f1_weighted * 100).toFixed(2)}%` : "-"}</strong>
+            </div>
+            <div>
               <span>Rows</span>
               <strong>{result.metrics.row_count}</strong>
             </div>
@@ -246,7 +274,7 @@ function TrainingPanel({
             </div>
             <div>
               <span>Best Model</span>
-              <strong>{String(result.model.strategy)}</strong>
+              <strong>{String(result.model.strategy ?? result.model.algorithm)}</strong>
             </div>
           </div>
           <div className="model-compare">
@@ -256,6 +284,7 @@ function TrainingPanel({
                 <tr>
                   <th>模型</th>
                   <th>Accuracy</th>
+                  <th>F1</th>
                   <th>样本</th>
                 </tr>
               </thead>
@@ -266,6 +295,7 @@ function TrainingPanel({
                     <tr key={run.model_name}>
                       <td>{run.model_name}</td>
                       <td>{(run.metrics.accuracy * 100).toFixed(2)}%</td>
+                      <td>{run.metrics.f1_weighted !== undefined ? `${(run.metrics.f1_weighted * 100).toFixed(2)}%` : "-"}</td>
                       <td>{run.metrics.row_count}</td>
                     </tr>
                   ))}
@@ -284,7 +314,7 @@ export function RightPanel({
   projectId,
   trainingError,
   trainingResult,
-  onTrainBaseline,
+  onTrainModel,
 }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("日志");
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
@@ -380,7 +410,7 @@ export function RightPanel({
           disabled={!projectId}
           error={trainingError}
           result={trainingResult}
-          onTrainBaseline={onTrainBaseline}
+          onTrainModel={onTrainModel}
         />
       ) : null}
       {activeTab === "日志" ? <LogPanel events={events} /> : null}

@@ -7,8 +7,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.projects import PROJECTS
+from app.core.config import get_settings
 from app.services.artifact_service import ArtifactService
-from app.tools.machine_learning import train_baseline_classifier
+from app.services.kernel_service import create_kernel_service
+from app.tools.machine_learning import train_baseline_classifier, train_sklearn_classifier
 
 router = APIRouter(prefix="/api/projects/{project_id}/ml", tags=["machine-learning"])
 
@@ -17,6 +19,10 @@ class TrainBaselineRequest(BaseModel):
     dataset_path: str = Field(min_length=1)
     target_column: str = Field(min_length=1)
     session_id: str = "manual-training"
+
+
+class TrainSklearnRequest(TrainBaselineRequest):
+    use_gpu: bool = False
 
 
 def _project_root(project_id: str) -> Path:
@@ -33,6 +39,11 @@ def _resolve_project_file(root: Path, path: str) -> Path:
     if not resolved.exists() or not resolved.is_file():
         raise HTTPException(status_code=404, detail="Dataset not found")
     return resolved
+
+
+def _safe_name(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value)
+    return safe or "target"
 
 
 @router.post("/train-baseline")
@@ -73,6 +84,8 @@ def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, 
     return {
         "experiment_id": experiment_id,
         "status": "completed",
+        "engine": "baseline",
+        "use_gpu": False,
         "metrics": result["metrics"],
         "runs": result["runs"],
         "model": result["model"],
@@ -85,6 +98,72 @@ def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, 
             "id": metrics_artifact.id,
             "type": "training",
             "name": "training_metrics.json",
+            "path": str(metrics_artifact.path.relative_to(root)).replace("\\", "/"),
+            "created_at": metrics_artifact.created_at,
+        },
+    }
+
+
+@router.post("/train-sklearn")
+def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, Any]:
+    root = _project_root(project_id)
+    _resolve_project_file(root, payload.dataset_path)
+    settings = get_settings()
+    experiment_id = uuid4().hex
+    model_name = f"sklearn_{_safe_name(payload.target_column)}_model.joblib"
+    model_path = f"models/{model_name}"
+    kernel_service = create_kernel_service(
+        backend=settings.kernel_backend,
+        image=settings.kernel_image,
+        workspace_root=root,
+        docker_executable=settings.docker_executable,
+        use_gpu=payload.use_gpu,
+    )
+
+    try:
+        result = train_sklearn_classifier(
+            workspace_root=root,
+            dataset_path=payload.dataset_path,
+            target_column=payload.target_column,
+            model_output_path=model_path,
+            kernel_service=kernel_service,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    artifact_service = ArtifactService(root)
+    metrics_artifact = artifact_service.write_json(
+        project_id=project_id,
+        session_id=payload.session_id,
+        artifact_type="training",
+        name="sklearn_training_metrics.json",
+        payload={
+            "experiment_id": experiment_id,
+            "dataset_path": payload.dataset_path,
+            "use_gpu": payload.use_gpu,
+            **result,
+        },
+    )
+
+    return {
+        "experiment_id": experiment_id,
+        "status": "completed",
+        "engine": "sklearn",
+        "use_gpu": payload.use_gpu,
+        "metrics": result["metrics"],
+        "runs": result["runs"],
+        "model": result["model"],
+        "model_artifact": {
+            "type": "model",
+            "name": model_name,
+            "path": result.get("model_path", model_path),
+        },
+        "metrics_artifact": {
+            "id": metrics_artifact.id,
+            "type": "training",
+            "name": "sklearn_training_metrics.json",
             "path": str(metrics_artifact.path.relative_to(root)).replace("\\", "/"),
             "created_at": metrics_artifact.created_at,
         },
