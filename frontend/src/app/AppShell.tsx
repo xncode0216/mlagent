@@ -18,8 +18,8 @@ import {
   trainBaselineModel,
   trainSklearnModel,
   uploadProjectFile,
-  type FileItem,
   type ExperimentRun,
+  type FileItem,
   type Lesson,
   type Project,
   type TrainingResult,
@@ -70,29 +70,22 @@ export function AppShell() {
       }
 
       if (!cancelled) {
-        setProject(current);
-        setFiles(projectFiles);
-        setActiveFile(projectFiles.find((item) => item.type === "file")?.path ?? "data/customer_churn.csv");
-        setLessons(await listLessons(current.id));
-        setTrainingRuns(await listTrainingRuns(current.id));
-        setTrainingResult(null);
-        setTrainingError(null);
-        setLocalEvents([]);
+        await activateProject(current, projectFiles);
         setWorkspaceStatus("项目文件已同步");
       }
     }
 
     async function bootstrapProject() {
       try {
-        let projects = await listProjects();
-        let current = projects[0];
+        let initialProjects = await listProjects();
+        let current = initialProjects[0];
         if (!current) {
           current = await createProject("sales_churn_analysis");
-          projects = [current];
+          initialProjects = [current];
         }
 
         if (!cancelled) {
-          setProjects(projects);
+          setProjects(initialProjects);
         }
         await loadProject(current);
       } catch {
@@ -108,19 +101,23 @@ export function AppShell() {
     };
   }, []);
 
-  async function switchProject(projectId: string) {
-    const nextProject = projects.find((item) => item.id === projectId);
-    if (!nextProject) return;
-    setWorkspaceStatus("正在切换项目...");
-    const projectFiles = await listWorkbenchFiles(nextProject.id);
+  async function activateProject(nextProject: Project, projectFiles?: FileItem[]) {
+    const nextFiles = projectFiles ?? (await listWorkbenchFiles(nextProject.id));
     setProject(nextProject);
-    setFiles(projectFiles);
-    setActiveFile(projectFiles.find((item) => item.type === "file")?.path ?? "");
+    setFiles(nextFiles);
+    setActiveFile(nextFiles.find((item) => item.type === "file")?.path ?? "");
     setLessons(await listLessons(nextProject.id));
     setTrainingRuns(await listTrainingRuns(nextProject.id));
     setTrainingResult(null);
     setTrainingError(null);
     setLocalEvents([]);
+  }
+
+  async function switchProject(projectId: string) {
+    const nextProject = projects.find((item) => item.id === projectId);
+    if (!nextProject) return;
+    setWorkspaceStatus("正在切换项目...");
+    await activateProject(nextProject);
     setWorkspaceStatus("项目文件已同步");
   }
 
@@ -132,19 +129,7 @@ export function AppShell() {
     const nextProjects = await listProjects();
     setProjects(nextProjects);
     setNewProjectName("");
-    await switchProjectFromRecord(created);
-  }
-
-  async function switchProjectFromRecord(nextProject: Project) {
-    const projectFiles = await listWorkbenchFiles(nextProject.id);
-    setProject(nextProject);
-    setFiles(projectFiles);
-    setActiveFile(projectFiles.find((item) => item.type === "file")?.path ?? "");
-    setLessons(await listLessons(nextProject.id));
-    setTrainingRuns(await listTrainingRuns(nextProject.id));
-    setTrainingResult(null);
-    setTrainingError(null);
-    setLocalEvents([]);
+    await activateProject(created);
     setWorkspaceStatus("项目文件已同步");
   }
 
@@ -180,7 +165,9 @@ export function AppShell() {
         source_type: "training",
         source_id: result.experiment_id,
         domain: ["machine_learning", result.engine],
-        observation: `当前数据集 ${activeFile} 的 ${result.engine} 最佳模型为 ${String(result.model.strategy ?? result.model.algorithm)}，accuracy ${(result.metrics.accuracy * 100).toFixed(2)}%。`,
+        observation: `当前数据集 ${activeFile} 的 ${result.engine} 最佳模型为 ${String(
+          result.model.strategy ?? result.model.algorithm,
+        )}，accuracy ${(result.metrics.accuracy * 100).toFixed(2)}%。`,
         recommendation:
           result.engine === "sklearn"
             ? "将 sklearn 实验结果作为后续特征工程、模型搜索和部署评估的基准。"
@@ -260,32 +247,6 @@ export function AppShell() {
     <div className="app-shell">
       <header className="top-nav">
         <div className="brand">MLAgent</div>
-        <div className="project-switcher">
-          <select
-            aria-label="当前项目"
-            disabled={projects.length === 0}
-            value={project?.id ?? ""}
-            onChange={(event) => void switchProject(event.target.value)}
-          >
-            {projects.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <input
-            aria-label="新项目名称"
-            placeholder="新项目名称"
-            value={newProjectName}
-            onChange={(event) => setNewProjectName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") void handleCreateProject();
-            }}
-          />
-          <button disabled={!newProjectName.trim()} onClick={() => void handleCreateProject()}>
-            新建
-          </button>
-        </div>
         <nav className="mode-tabs" aria-label="主功能">
           <button className={activeMode === "analysis" ? "active" : ""} onClick={() => setActiveMode("analysis")}>
             数据分析
@@ -305,9 +266,15 @@ export function AppShell() {
       <aside className="file-sidebar">
         <FileExplorer
           activePath={activeFile}
+          currentProjectId={project?.id}
           files={files}
+          newProjectName={newProjectName}
+          onCreateProject={handleCreateProject}
+          onNewProjectNameChange={setNewProjectName}
           onSelect={setActiveFile}
+          onSwitchProject={(projectId) => void switchProject(projectId)}
           onUpload={handleUpload}
+          projects={projects}
           projectName={project?.name}
           projectPath={project?.workspace_path}
           status={workspaceStatus}

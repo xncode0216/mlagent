@@ -16,7 +16,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 260px minmax(420px, 1fr) 420px;
+  grid-template-columns: 286px minmax(420px, 1fr) 420px;
   grid-template-rows: 48px 1fr 28px;
   height: 100vh;
   background: #0a0a0f;
@@ -35,48 +35,6 @@ button {
 .brand {
   font-weight: 700;
   color: #f5f5f5;
-}
-
-.project-switcher {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-  min-width: 360px;
-}
-
-.project-switcher select,
-.project-switcher input {
-  background: #0a0a0f;
-  border: 1px solid #313244;
-  border-radius: 6px;
-  color: #cdd6f4;
-  font: inherit;
-  font-size: 12px;
-  min-width: 0;
-  padding: 6px 8px;
-}
-
-.project-switcher select {
-  flex: 1;
-}
-
-.project-switcher input {
-  width: 120px;
-}
-
-.project-switcher button {
-  background: #1e1e2e;
-  border: 1px solid #45475a;
-  border-radius: 6px;
-  color: #89b4fa;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 6px 9px;
-}
-
-.project-switcher button:disabled {
-  color: #6c7086;
-  cursor: not-allowed;
 }
 
 .mode-tabs {
@@ -109,19 +67,25 @@ button {
 .right-panel {
   min-height: 0;
   border-right: 1px solid #313244;
-  padding: 14px;
   background: #0f0f17;
+}
+
+.file-sidebar {
+  overflow: auto;
+  padding: 10px;
 }
 
 .agent-workspace {
   background: #0a0a0f;
   overflow: auto;
+  padding: 14px;
 }
 
 .right-panel {
   border-right: 0;
   background: #11111b;
   overflow: auto;
+  padding: 14px;
 }
 
 .status-bar {
@@ -140,34 +104,129 @@ button {
   color: #f5f5f5;
   font-size: 13px;
   font-weight: 700;
-  margin-bottom: 10px;
 }
 
-.project-summary {
+.file-explorer {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-panel {
   background: #11111b;
   border: 1px solid #313244;
-  border-radius: 8px;
+  border-radius: 6px;
   display: grid;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 9px;
   padding: 10px;
 }
 
-.project-summary strong {
+.workspace-header,
+.section-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.workspace-header strong {
   color: #f5f5f5;
+  display: block;
   font-size: 13px;
 }
 
-.project-summary code {
+.sidebar-kicker,
+.field-label {
+  color: #6c7086;
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.field-label {
+  margin-bottom: -4px;
+  text-transform: none;
+}
+
+.project-select,
+.new-project-row input {
+  background: #0a0a0f;
+  border: 1px solid #313244;
+  border-radius: 5px;
+  color: #cdd6f4;
+  font: inherit;
+  font-size: 12px;
+  min-width: 0;
+  padding: 7px 8px;
+  width: 100%;
+}
+
+.project-select:disabled {
+  color: #6c7086;
+}
+
+.new-project-row {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 30px 30px;
+}
+
+.icon-button {
+  align-items: center;
+  background: #181825;
+  border: 1px solid #313244;
+  border-radius: 5px;
+  color: #a6adc8;
+  cursor: pointer;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  width: 30px;
+}
+
+.icon-button:hover {
+  background: #1e1e2e;
+  border-color: #45475a;
+  color: #89b4fa;
+}
+
+.icon-button:disabled {
+  color: #585b70;
+  cursor: not-allowed;
+}
+
+.project-meta {
+  border-top: 1px solid #313244;
+  display: grid;
+  gap: 5px;
+  padding-top: 9px;
+}
+
+.project-meta span {
+  color: #f5f5f5;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-meta code {
   color: #89b4fa;
   font-size: 10px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
+.file-section {
+  display: grid;
+  gap: 10px;
+}
+
 .file-list {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -181,7 +240,7 @@ button {
 }
 
 .file-list li.selected {
-  background: #1e1e2e;
+  background: #1a2234;
   color: #89b4fa;
 }
 
@@ -193,32 +252,21 @@ button {
   cursor: pointer;
   display: flex;
   gap: 8px;
-  padding: 7px 8px;
+  min-height: 28px;
+  padding: 5px 8px;
   text-align: left;
   width: 100%;
 }
 
-.file-kind {
-  color: #6c7086;
-  font-size: 10px;
-  min-width: 24px;
-}
-
-.upload-control {
+.file-icon {
   align-items: center;
-  background: #181825;
-  border: 1px solid #45475a;
-  border-radius: 6px;
-  color: #89b4fa;
-  cursor: pointer;
-  display: flex;
-  font-size: 12px;
+  color: #6c7086;
+  display: inline-flex;
+  flex: 0 0 16px;
   justify-content: center;
-  margin-bottom: 10px;
-  padding: 8px;
 }
 
-.upload-control input {
+.upload-button input {
   display: none;
 }
 
