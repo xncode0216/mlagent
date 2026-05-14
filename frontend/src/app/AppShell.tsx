@@ -1,4 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  BookOpen,
+  Database,
+  FlaskConical,
+  FolderOpen,
+  GitBranch,
+  Search,
+  Settings,
+  UserCircle,
+} from "lucide-react";
 
 import { AgentWorkspace } from "../features/chat/AgentWorkspace";
 import type { AgentStreamEvent } from "../features/chat/types";
@@ -263,6 +273,33 @@ export function AppShell() {
         </nav>
         <div className="model-selector">Claude / DeepSeek / Local vLLM</div>
       </header>
+      <aside className="activity-bar" aria-label="工作台导航">
+        <button className="active" aria-label="资源管理器" title="资源管理器">
+          <FolderOpen size={18} />
+        </button>
+        <button aria-label="搜索" title="搜索">
+          <Search size={18} />
+        </button>
+        <button aria-label="数据源" title="数据源">
+          <Database size={18} />
+        </button>
+        <button aria-label="实验" title="实验">
+          <FlaskConical size={18} />
+        </button>
+        <button aria-label="版本" title="版本">
+          <GitBranch size={18} />
+        </button>
+        <button aria-label="知识库" title="知识库">
+          <BookOpen size={18} />
+        </button>
+        <div className="activity-spacer" />
+        <button aria-label="账户" title="账户">
+          <UserCircle size={18} />
+        </button>
+        <button aria-label="设置" title="设置">
+          <Settings size={18} />
+        </button>
+      </aside>
       <aside className="file-sidebar">
         <FileExplorer
           activePath={activeFile}
@@ -285,6 +322,7 @@ export function AppShell() {
       ) : (
         <AgentWorkspace
           activeFile={activeFile}
+          mode={activeMode}
           connected={connected}
           events={visibleEvents}
           lastError={lastError}
@@ -295,6 +333,7 @@ export function AppShell() {
       <RightPanel
         activeFile={activeFile}
         events={visibleEvents}
+        mode={activeMode}
         projectId={project?.id}
         trainingError={trainingError}
         trainingResult={trainingResult}

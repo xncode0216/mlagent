@@ -1,3 +1,4 @@
+import { BarChart3, Code2, Database, Download, FileText, LineChart, Play, Table2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { readProjectFileContent, type ExperimentRun, type TrainingResult } from "../../lib/api";
@@ -10,6 +11,7 @@ type TrainingEngine = "baseline" | "sklearn";
 type RightPanelProps = {
   activeFile: string;
   events: AgentStreamEvent[];
+  mode: "analysis" | "machine-learning" | "evolution";
   projectId?: string;
   trainingError: string | null;
   trainingResult: TrainingResult | null;
@@ -34,9 +36,7 @@ function ArtifactList({
   selectedId?: string;
   onSelect: (artifact: Artifact) => void;
 }) {
-  if (artifacts.length === 0) {
-    return <div className="empty-state">当前还没有可展示的产物。</div>;
-  }
+  if (artifacts.length === 0) return null;
 
   return (
     <div className="artifact-list compact">
@@ -131,8 +131,8 @@ function JsonTable({ value }: { value: unknown }) {
           <thead>
             <tr>
               <th>字段</th>
-              <th>缺失数</th>
-              <th>缺失率</th>
+              <th>缺失数量</th>
+              <th>缺失比例</th>
             </tr>
           </thead>
           <tbody>
@@ -163,21 +163,133 @@ function ArtifactPreview({
   content: string | null;
   error: string | null;
 }) {
-  if (!artifact) {
-    return null;
-  }
-  if (error) {
-    return <div className="empty-state">{error}</div>;
-  }
-  if (!content) {
-    return <div className="empty-state">正在读取产物内容...</div>;
-  }
+  if (!artifact) return null;
+  if (error) return <div className="empty-state">{error}</div>;
+  if (!content) return <div className="empty-state">正在读取产物内容...</div>;
 
   try {
     return <JsonTable value={JSON.parse(content)} />;
   } catch {
     return <pre className="json-preview">{content}</pre>;
   }
+}
+
+function DemoChartGallery() {
+  const bars = [18, 42, 68, 86, 76, 58, 35, 20, 12];
+  const heatCells = Array.from({ length: 42 }, (_, index) => (index % 9 === 0 ? "hot" : index % 5 === 0 ? "warm" : ""));
+
+  return (
+    <div className="chart-gallery">
+      <section className="visual-card wide">
+        <div className="card-heading">
+          <BarChart3 size={15} />
+          缺失值热力图
+        </div>
+        <div className="heatmap-grid" aria-label="缺失值热力图">
+          {heatCells.map((state, index) => (
+            <span key={index} className={state} />
+          ))}
+        </div>
+      </section>
+      <section className="visual-card">
+        <div className="card-heading">
+          <LineChart size={15} />
+          月费分布
+        </div>
+        <div className="histogram" aria-label="月费分布">
+          {bars.map((height, index) => (
+            <span key={index} style={{ height: `${height}%` }} />
+          ))}
+        </div>
+      </section>
+      <section className="visual-card">
+        <div className="card-heading">
+          <Table2 size={15} />
+          特征相关性
+        </div>
+        <div className="correlation-grid" aria-label="特征相关性矩阵">
+          {["1.00", "-0.25", "0.83", "-0.35", "0.65", "1.00", "0.19", "-0.20", "0.42"].map((value, index) => (
+            <span key={`${value}-${index}`}>{value}</span>
+          ))}
+        </div>
+      </section>
+      <div className="panel-actions">
+        <button>
+          <FileText size={15} />
+          生成报告
+        </button>
+        <button>
+          <Database size={15} />
+          清洗数据
+        </button>
+        <button>
+          <Play size={15} />
+          传给 ML Agent
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CodeWorkspace({ activeFile }: { activeFile: string }) {
+  return (
+    <div className="code-workspace">
+      <div className="card-heading">
+        <Code2 size={15} />
+        可复现分析脚本
+      </div>
+      <pre className="json-preview code-panel">{`import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+df = pd.read_csv("${activeFile}")
+profile = df.describe(include="all")
+missing = df.isnull().mean().sort_values(ascending=False)
+corr = df.select_dtypes("number").corr()
+
+print(profile.head())
+print(missing.head(10))`}</pre>
+    </div>
+  );
+}
+
+function DataWorkspace({ activeFile }: { activeFile: string }) {
+  const rows = [
+    ["customer_id", "object", "0", "唯一客户编号"],
+    ["tenure", "int64", "0", "客户在网时长"],
+    ["monthly_charges", "float64", "0", "月费金额"],
+    ["total_charges", "float64", "11", "累计费用"],
+    ["churn", "category", "0", "是否流失"],
+  ];
+  return (
+    <div className="data-workspace">
+      <div className="dataset-strip">
+        <span>当前数据集</span>
+        <strong>{activeFile}</strong>
+      </div>
+      <div className="data-preview">
+        <table>
+          <thead>
+            <tr>
+              <th>字段</th>
+              <th>类型</th>
+              <th>缺失</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row[0]}>
+                {row.map((cell) => (
+                  <td key={cell}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function TrainingPanel({
@@ -259,65 +371,34 @@ function TrainingPanel({
         </div>
         <div>
           <span>状态</span>
-          <strong>{result ? "已完成" : "等待建模任务"}</strong>
+          <strong>{result ? "已完成" : submitting ? "运行中" : "等待建模任务"}</strong>
         </div>
       </div>
       {error ? <div className="inline-alert">{error}</div> : null}
       {result ? (
-        <>
-          <div className="metrics-grid">
-            <div>
-              <span>Accuracy</span>
-              <strong>{(result.metrics.accuracy * 100).toFixed(2)}%</strong>
-            </div>
-            <div>
-              <span>F1 weighted</span>
-              <strong>{result.metrics.f1_weighted !== undefined ? `${(result.metrics.f1_weighted * 100).toFixed(2)}%` : "-"}</strong>
-            </div>
-            <div>
-              <span>Rows</span>
-              <strong>{result.metrics.row_count}</strong>
-            </div>
-            <div>
-              <span>Classes</span>
-              <strong>{result.metrics.class_count}</strong>
-            </div>
-            <div>
-              <span>Best Model</span>
-              <strong>{String(result.model.strategy ?? result.model.algorithm)}</strong>
-            </div>
+        <div className="metrics-grid">
+          <div>
+            <span>Accuracy</span>
+            <strong>{(result.metrics.accuracy * 100).toFixed(2)}%</strong>
           </div>
-          <div className="model-compare">
-            <div className="panel-title">模型对比</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>模型</th>
-                  <th>Accuracy</th>
-                  <th>F1</th>
-                  <th>样本</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...result.runs]
-                  .sort((left, right) => right.metrics.accuracy - left.metrics.accuracy)
-                  .map((run) => (
-                    <tr key={run.model_name}>
-                      <td>{run.model_name}</td>
-                      <td>{(run.metrics.accuracy * 100).toFixed(2)}%</td>
-                      <td>{run.metrics.f1_weighted !== undefined ? `${(run.metrics.f1_weighted * 100).toFixed(2)}%` : "-"}</td>
-                      <td>{run.metrics.row_count}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+          <div>
+            <span>F1 weighted</span>
+            <strong>{result.metrics.f1_weighted !== undefined ? `${(result.metrics.f1_weighted * 100).toFixed(2)}%` : "-"}</strong>
           </div>
-        </>
+          <div>
+            <span>Rows</span>
+            <strong>{result.metrics.row_count}</strong>
+          </div>
+          <div>
+            <span>Best Model</span>
+            <strong>{String(result.model.strategy ?? result.model.algorithm)}</strong>
+          </div>
+        </div>
       ) : null}
       <div className="model-compare">
         <div className="panel-title">历史实验</div>
         {runs.length === 0 ? (
-          <div className="empty-state compact-empty">还没有训练记录。</div>
+          <div className="empty-state compact-empty">还没有训练记录，启动一次训练后这里会显示实验历史。</div>
         ) : (
           <table>
             <thead>
@@ -358,30 +439,16 @@ function TrainingPanel({
               <strong>{selectedRun.target_column}</strong>
             </div>
             <div>
-              <span>数据集</span>
-              <code>{selectedRun.dataset_path}</code>
-            </div>
-            <div>
               <span>模型文件</span>
               <code>{selectedRun.model_artifact.path}</code>
-            </div>
-            <div>
-              <span>指标文件</span>
-              <code>{selectedRun.metrics_artifact.path}</code>
             </div>
           </div>
           {featureImportance.length > 0 ? (
             <div className="model-compare nested">
               <div className="panel-title">特征重要性</div>
               <table>
-                <thead>
-                  <tr>
-                    <th>特征</th>
-                    <th>重要性</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  {featureImportance.map((item) => (
+                  {featureImportance.slice(0, 8).map((item) => (
                     <tr key={String(item.feature)}>
                       <td>{item.feature}</td>
                       <td>{typeof item.importance === "number" ? item.importance.toFixed(4) : "-"}</td>
@@ -425,13 +492,14 @@ function TrainingPanel({
 export function RightPanel({
   activeFile,
   events,
+  mode,
   projectId,
   trainingError,
   trainingResult,
   trainingRuns,
   onTrainModel,
 }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("日志");
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("图表");
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
   const [artifactContent, setArtifactContent] = useState<string | null>(null);
   const [artifactError, setArtifactError] = useState<string | null>(null);
@@ -441,6 +509,10 @@ export function RightPanel({
   const codeArtifacts = artifacts.filter((artifact) => artifact.type === "code");
   const activeArtifacts =
     activeTab === "图表" ? chartArtifacts : activeTab === "数据" ? dataArtifacts : codeArtifacts;
+
+  useEffect(() => {
+    setActiveTab(mode === "machine-learning" ? "训练" : mode === "evolution" ? "日志" : "图表");
+  }, [mode]);
 
   useEffect(() => {
     if (!["图表", "代码", "数据"].includes(activeTab)) {
@@ -491,32 +563,32 @@ export function RightPanel({
       </div>
       {activeTab === "图表" ? (
         <>
-          <ArtifactList
-            artifacts={chartArtifacts}
-            selectedId={selectedArtifact?.id}
-            onSelect={setSelectedArtifact}
-          />
-          <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+          <ArtifactList artifacts={chartArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          {selectedArtifact ? (
+            <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+          ) : (
+            <DemoChartGallery />
+          )}
         </>
       ) : null}
       {activeTab === "代码" ? (
         <>
-          <ArtifactList
-            artifacts={codeArtifacts}
-            selectedId={selectedArtifact?.id}
-            onSelect={setSelectedArtifact}
-          />
-          <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+          <ArtifactList artifacts={codeArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          {selectedArtifact ? (
+            <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+          ) : (
+            <CodeWorkspace activeFile={activeFile} />
+          )}
         </>
       ) : null}
       {activeTab === "数据" ? (
         <>
-          <ArtifactList
-            artifacts={dataArtifacts}
-            selectedId={selectedArtifact?.id}
-            onSelect={setSelectedArtifact}
-          />
-          <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+          <ArtifactList artifacts={dataArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          {selectedArtifact ? (
+            <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+          ) : (
+            <DataWorkspace activeFile={activeFile} />
+          )}
         </>
       ) : null}
       {activeTab === "训练" ? (
@@ -530,6 +602,12 @@ export function RightPanel({
         />
       ) : null}
       {activeTab === "日志" ? <LogPanel events={events} /> : null}
+      <div className="right-panel-footer">
+        <button>
+          <Download size={14} />
+          导出当前面板
+        </button>
+      </div>
     </section>
   );
 }
