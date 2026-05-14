@@ -47,10 +47,29 @@ def _safe_name(value: str) -> str:
     return safe or "target"
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if hasattr(value, "item"):
+        return value.item()
+    return value
+
+
 @router.get("/runs")
 def list_training_runs(project_id: str) -> dict[str, Any]:
     root = _project_root(project_id)
     return {"items": ExperimentService(root).list_runs()}
+
+
+@router.get("/runs/{experiment_id}")
+def get_training_run(project_id: str, experiment_id: str) -> dict[str, Any]:
+    root = _project_root(project_id)
+    run = ExperimentService(root).get_run(experiment_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Training run not found")
+    return run
 
 
 @router.post("/train-baseline")
@@ -58,7 +77,7 @@ def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, 
     root = _project_root(project_id)
     csv_path = _resolve_project_file(root, payload.dataset_path)
     try:
-        result = train_baseline_classifier(csv_path, payload.target_column)
+        result = _json_safe(train_baseline_classifier(csv_path, payload.target_column))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -107,6 +126,8 @@ def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, 
         target_column=payload.target_column,
         use_gpu=False,
         metrics=result["metrics"],
+        model=result["model"],
+        candidate_runs=result["runs"],
         model_artifact=model_artifact,
         metrics_artifact=metrics_artifact_payload,
         best_model_name=result.get("model_name", model_name),
@@ -142,13 +163,13 @@ def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, An
     )
 
     try:
-        result = train_sklearn_classifier(
+        result = _json_safe(train_sklearn_classifier(
             workspace_root=root,
             dataset_path=payload.dataset_path,
             target_column=payload.target_column,
             model_output_path=model_path,
             kernel_service=kernel_service,
-        )
+        ))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -187,6 +208,8 @@ def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, An
         target_column=payload.target_column,
         use_gpu=payload.use_gpu,
         metrics=result["metrics"],
+        model=result["model"],
+        candidate_runs=result["runs"],
         model_artifact=model_artifact,
         metrics_artifact=metrics_artifact_payload,
         best_model_name=result.get("model_name", model_name),

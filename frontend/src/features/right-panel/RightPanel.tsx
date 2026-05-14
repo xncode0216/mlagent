@@ -198,7 +198,14 @@ function TrainingPanel({
   const [targetColumn, setTargetColumn] = useState("churn");
   const [engine, setEngine] = useState<TrainingEngine>("sklearn");
   const [useGpu, setUseGpu] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const selectedRun = runs.find((run) => run.experiment_id === selectedRunId) ?? runs[0];
+  const featureImportance = Array.isArray(selectedRun?.model.feature_importance)
+    ? (selectedRun.model.feature_importance as Array<{ feature?: string; importance?: number }>)
+    : [];
+  const confusionMatrix = selectedRun?.metrics.confusion_matrix;
+  const confusionLabels = confusionMatrix ? Object.keys(confusionMatrix) : [];
 
   async function submitTraining() {
     setSubmitting(true);
@@ -323,7 +330,11 @@ function TrainingPanel({
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr key={run.experiment_id}>
+                <tr
+                  className={run.experiment_id === selectedRun?.experiment_id ? "selected-row" : ""}
+                  key={run.experiment_id}
+                  onClick={() => setSelectedRunId(run.experiment_id)}
+                >
                   <td>{run.engine}</td>
                   <td>{run.best_model_name}</td>
                   <td>{(run.metrics.accuracy * 100).toFixed(2)}%</td>
@@ -334,6 +345,79 @@ function TrainingPanel({
           </table>
         )}
       </div>
+      {selectedRun ? (
+        <div className="experiment-detail">
+          <div className="panel-title">实验详情</div>
+          <div className="detail-grid">
+            <div>
+              <span>实验 ID</span>
+              <code>{selectedRun.experiment_id}</code>
+            </div>
+            <div>
+              <span>目标列</span>
+              <strong>{selectedRun.target_column}</strong>
+            </div>
+            <div>
+              <span>数据集</span>
+              <code>{selectedRun.dataset_path}</code>
+            </div>
+            <div>
+              <span>模型文件</span>
+              <code>{selectedRun.model_artifact.path}</code>
+            </div>
+            <div>
+              <span>指标文件</span>
+              <code>{selectedRun.metrics_artifact.path}</code>
+            </div>
+          </div>
+          {featureImportance.length > 0 ? (
+            <div className="model-compare nested">
+              <div className="panel-title">特征重要性</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>特征</th>
+                    <th>重要性</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {featureImportance.map((item) => (
+                    <tr key={String(item.feature)}>
+                      <td>{item.feature}</td>
+                      <td>{typeof item.importance === "number" ? item.importance.toFixed(4) : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {confusionMatrix && confusionLabels.length > 0 ? (
+            <div className="model-compare nested">
+              <div className="panel-title">混淆矩阵</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>真实 \\ 预测</th>
+                    {confusionLabels.map((label) => (
+                      <th key={label}>{label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {confusionLabels.map((label) => (
+                    <tr key={label}>
+                      <th>{label}</th>
+                      {confusionLabels.map((predicted) => (
+                        <td key={predicted}>{confusionMatrix[label]?.[predicted] ?? 0}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

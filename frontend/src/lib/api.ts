@@ -67,7 +67,20 @@ export type ExperimentRun = {
     row_count: number;
     eval_row_count?: number;
     class_count: number;
+    confusion_matrix?: Record<string, Record<string, number>>;
   };
+  model: Record<string, unknown>;
+  candidate_runs: Array<{
+    model_name: string;
+    model?: Record<string, unknown>;
+    metrics: {
+      accuracy: number;
+      f1_weighted?: number;
+      row_count?: number;
+      eval_row_count?: number;
+      class_count?: number;
+    };
+  }>;
   model_artifact: {
     type: "model";
     name: string;
@@ -187,6 +200,10 @@ export async function trainSklearnModel(
 export async function listTrainingRuns(projectId: string): Promise<ExperimentRun[]> {
   const result = await request<{ items: ExperimentRun[] }>(`/api/projects/${projectId}/ml/runs`);
   return result.items;
+}
+
+export async function getTrainingRun(projectId: string, experimentId: string): Promise<ExperimentRun> {
+  return request<ExperimentRun>(`/api/projects/${projectId}/ml/runs/${experimentId}`);
 }
 
 export async function listLessons(projectId: string): Promise<Lesson[]> {

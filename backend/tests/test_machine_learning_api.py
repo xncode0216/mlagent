@@ -47,6 +47,33 @@ def test_train_baseline_api_writes_metrics_and_model(tmp_path, monkeypatch):
     assert runs[0]["metrics"]["accuracy"] == 1.0
 
 
+def test_train_baseline_api_accepts_numeric_target_values(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "numeric_churn"}).json()
+    project_root = tmp_path / "dev-user" / project["id"]
+    dataset_path = project_root / "data" / "customer_churn.csv"
+    dataset_path.write_text(
+        "age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n",
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        f"/api/projects/{project['id']}/ml/train-baseline",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "target_column": "churn",
+            "session_id": "numeric-session",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["model"]["prediction"] == 0
+    assert payload["metrics"]["accuracy"] == 0.6667
+
+
 def test_train_baseline_api_rejects_path_escape(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()
@@ -75,7 +102,8 @@ def test_train_sklearn_api_writes_metrics_and_model_reference(tmp_path, monkeypa
                     '"target_column":"churn","feature_columns":["score","age"],'
                     '"model":{"algorithm":"logistic_regression"},'
                     '"metrics":{"accuracy":0.875,"f1_weighted":0.87,"row_count":8,"class_count":2},'
-                    '"runs":[{"model_name":"logistic_regression","metrics":{"accuracy":0.875}}],'
+                    '"runs":[{"model_name":"logistic_regression","model":{"algorithm":"logistic_regression"},'
+                    '"metrics":{"accuracy":0.875}}],'
                     '"model_path":"models/sklearn_churn_model.joblib"}\n'
                 ),
                 stderr="",
@@ -121,3 +149,12 @@ def test_train_sklearn_api_writes_metrics_and_model_reference(tmp_path, monkeypa
     assert runs[0]["experiment_id"] == payload["experiment_id"]
     assert runs[0]["engine"] == "sklearn"
     assert runs[0]["use_gpu"] is False
+
+    detail_response = client.get(f"/api/projects/{project['id']}/ml/runs/{payload['experiment_id']}")
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["model"]["algorithm"] == "logistic_regression"
+    assert detail["candidate_runs"][0]["model_name"] == "logistic_regression"
+
+    missing_response = client.get(f"/api/projects/{project['id']}/ml/runs/missing")
+    assert missing_response.status_code == 404

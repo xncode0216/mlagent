@@ -14,6 +14,8 @@ def test_experiment_service_records_and_lists_runs(tmp_path: Path):
         target_column="churn",
         use_gpu=False,
         metrics={"accuracy": 0.5, "row_count": 4, "class_count": 2},
+        model={"strategy": "majority_class"},
+        candidate_runs=[{"model_name": "majority_class", "metrics": {"accuracy": 0.5}}],
         model_artifact={"type": "model", "name": "baseline.json", "path": "models/baseline.json"},
         metrics_artifact={
             "id": "metrics-1",
@@ -31,6 +33,11 @@ def test_experiment_service_records_and_lists_runs(tmp_path: Path):
         target_column="churn",
         use_gpu=True,
         metrics={"accuracy": 0.875, "f1_weighted": 0.87, "row_count": 8, "class_count": 2},
+        model={
+            "algorithm": "random_forest",
+            "feature_importance": [{"feature": "score", "importance": 0.72}],
+        },
+        candidate_runs=[{"model_name": "random_forest", "metrics": {"accuracy": 0.875}}],
         model_artifact={"type": "model", "name": "sklearn.joblib", "path": "models/sklearn.joblib"},
         metrics_artifact={
             "id": "metrics-2",
@@ -46,3 +53,5 @@ def test_experiment_service_records_and_lists_runs(tmp_path: Path):
     assert (tmp_path / "experiments" / "runs" / "run-1.json").exists()
     assert [run["experiment_id"] for run in service.list_runs()] == ["run-2", "run-1"]
     assert service.list_runs()[0]["use_gpu"] is True
+    assert service.get_run("run-2")["model"]["feature_importance"][0]["feature"] == "score"
+    assert service.get_run("missing") is None
