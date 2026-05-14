@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.schemas.project import ProjectRead
@@ -16,7 +17,13 @@ class ProjectRegistryService:
             return {}
         payload = json.loads(self.registry_path.read_text(encoding="utf-8"))
         projects = payload.get("projects", [])
-        return {item["id"]: ProjectRead(**item) for item in projects}
+        normalized = []
+        for item in projects:
+            now = datetime.now(UTC).isoformat()
+            item.setdefault("created_at", now)
+            item.setdefault("updated_at", item["created_at"])
+            normalized.append(ProjectRead(**item))
+        return {project.id: project for project in normalized}
 
     def save_project(self, project: ProjectRead) -> None:
         projects = self.load_projects()

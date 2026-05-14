@@ -40,10 +40,12 @@ async function listWorkbenchFiles(projectId: string) {
 
 export function AppShell() {
   const { connected, events, lastError, sendMessage } = useAgentStream("dev-session");
+  const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [activeFile, setActiveFile] = useState("data/customer_churn.csv");
   const [activeMode, setActiveMode] = useState<MainMode>("analysis");
+  const [newProjectName, setNewProjectName] = useState("");
   const [workspaceStatus, setWorkspaceStatus] = useState("正在连接后端项目服务...");
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
   const [trainingRuns, setTrainingRuns] = useState<ExperimentRun[]>([]);
@@ -60,27 +62,39 @@ export function AppShell() {
   useEffect(() => {
     let cancelled = false;
 
+    async function loadProject(current: Project) {
+      let projectFiles = await listWorkbenchFiles(current.id);
+      if (!projectFiles.some((item) => item.path === "data/customer_churn.csv")) {
+        await uploadProjectFile(current.id, "data/customer_churn.csv", sampleCsv);
+        projectFiles = await listWorkbenchFiles(current.id);
+      }
+
+      if (!cancelled) {
+        setProject(current);
+        setFiles(projectFiles);
+        setActiveFile(projectFiles.find((item) => item.type === "file")?.path ?? "data/customer_churn.csv");
+        setLessons(await listLessons(current.id));
+        setTrainingRuns(await listTrainingRuns(current.id));
+        setTrainingResult(null);
+        setTrainingError(null);
+        setLocalEvents([]);
+        setWorkspaceStatus("项目文件已同步");
+      }
+    }
+
     async function bootstrapProject() {
       try {
         let projects = await listProjects();
         let current = projects[0];
         if (!current) {
           current = await createProject("sales_churn_analysis");
-        }
-
-        let projectFiles = await listWorkbenchFiles(current.id);
-        if (!projectFiles.some((item) => item.path === "data/customer_churn.csv")) {
-          await uploadProjectFile(current.id, "data/customer_churn.csv", sampleCsv);
-          projectFiles = await listWorkbenchFiles(current.id);
+          projects = [current];
         }
 
         if (!cancelled) {
-          setProject(current);
-          setFiles(projectFiles);
-          setLessons(await listLessons(current.id));
-          setTrainingRuns(await listTrainingRuns(current.id));
-          setWorkspaceStatus("项目文件已同步");
+          setProjects(projects);
         }
+        await loadProject(current);
       } catch {
         if (!cancelled) {
           setWorkspaceStatus("后端未连接，当前展示静态工作台骨架");
@@ -93,6 +107,46 @@ export function AppShell() {
       cancelled = true;
     };
   }, []);
+
+  async function switchProject(projectId: string) {
+    const nextProject = projects.find((item) => item.id === projectId);
+    if (!nextProject) return;
+    setWorkspaceStatus("正在切换项目...");
+    const projectFiles = await listWorkbenchFiles(nextProject.id);
+    setProject(nextProject);
+    setFiles(projectFiles);
+    setActiveFile(projectFiles.find((item) => item.type === "file")?.path ?? "");
+    setLessons(await listLessons(nextProject.id));
+    setTrainingRuns(await listTrainingRuns(nextProject.id));
+    setTrainingResult(null);
+    setTrainingError(null);
+    setLocalEvents([]);
+    setWorkspaceStatus("项目文件已同步");
+  }
+
+  async function handleCreateProject() {
+    const name = newProjectName.trim();
+    if (!name) return;
+    setWorkspaceStatus("正在创建项目...");
+    const created = await createProject(name);
+    const nextProjects = await listProjects();
+    setProjects(nextProjects);
+    setNewProjectName("");
+    await switchProjectFromRecord(created);
+  }
+
+  async function switchProjectFromRecord(nextProject: Project) {
+    const projectFiles = await listWorkbenchFiles(nextProject.id);
+    setProject(nextProject);
+    setFiles(projectFiles);
+    setActiveFile(projectFiles.find((item) => item.type === "file")?.path ?? "");
+    setLessons(await listLessons(nextProject.id));
+    setTrainingRuns(await listTrainingRuns(nextProject.id));
+    setTrainingResult(null);
+    setTrainingError(null);
+    setLocalEvents([]);
+    setWorkspaceStatus("项目文件已同步");
+  }
 
   async function handleUpload(file: File) {
     if (!project) return;
@@ -206,6 +260,32 @@ export function AppShell() {
     <div className="app-shell">
       <header className="top-nav">
         <div className="brand">MLAgent</div>
+        <div className="project-switcher">
+          <select
+            aria-label="当前项目"
+            disabled={projects.length === 0}
+            value={project?.id ?? ""}
+            onChange={(event) => void switchProject(event.target.value)}
+          >
+            {projects.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label="新项目名称"
+            placeholder="新项目名称"
+            value={newProjectName}
+            onChange={(event) => setNewProjectName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void handleCreateProject();
+            }}
+          />
+          <button disabled={!newProjectName.trim()} onClick={() => void handleCreateProject()}>
+            新建
+          </button>
+        </div>
         <nav className="mode-tabs" aria-label="主功能">
           <button className={activeMode === "analysis" ? "active" : ""} onClick={() => setActiveMode("analysis")}>
             数据分析
@@ -228,6 +308,8 @@ export function AppShell() {
           files={files}
           onSelect={setActiveFile}
           onUpload={handleUpload}
+          projectName={project?.name}
+          projectPath={project?.workspace_path}
           status={workspaceStatus}
         />
       </aside>
@@ -254,6 +336,7 @@ export function AppShell() {
       />
       <footer className="status-bar">
         <span>{connected ? "WebSocket Connected" : "WebSocket Disconnected"}</span>
+        <span>Project: {project?.name ?? "None"}</span>
         <span>Active file: {activeFile}</span>
         <span>Artifacts: {artifactCount}</span>
       </footer>

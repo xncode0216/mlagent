@@ -10,3 +10,5 @@ class ProjectRead(BaseModel):
     owner_id: str
     name: str
     workspace_path: str
+    created_at: str | None = None
+    updated_at: str | None = None

@@ -1,4 +1,5 @@
 from uuid import uuid4
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 
@@ -39,11 +40,14 @@ def create_project(payload: ProjectCreate) -> ProjectRead:
     project_id = uuid4().hex
     service = WorkspaceService(settings.workspace_root)
     root = service.ensure_project_root(settings.dev_user_id, project_id)
+    now = datetime.now(UTC).isoformat()
     project = ProjectRead(
         id=project_id,
         owner_id=settings.dev_user_id,
         name=payload.name,
         workspace_path=str(root),
+        created_at=now,
+        updated_at=now,
     )
     PROJECTS[project_id] = project
     ProjectRegistryService(settings.workspace_root, settings.dev_user_id).save_project(project)

@@ -14,6 +14,8 @@ type FileExplorerProps = {
   files: FileItem[];
   onSelect: (path: string) => void;
   onUpload: (file: File) => Promise<void>;
+  projectName?: string;
+  projectPath?: string;
   status: string;
 };
 
@@ -22,6 +24,8 @@ export function FileExplorer({
   files,
   onSelect,
   onUpload,
+  projectName,
+  projectPath,
   status,
 }: FileExplorerProps) {
   const visibleFiles = files.length > 0 ? files : fallbackItems;
@@ -29,6 +33,10 @@ export function FileExplorer({
   return (
     <div className="file-explorer">
       <div className="panel-title">项目文件</div>
+      <div className="project-summary">
+        <strong>{projectName ?? "未选择项目"}</strong>
+        {projectPath ? <code>{projectPath}</code> : null}
+      </div>
       <label className="upload-control">
         上传 CSV
         <input

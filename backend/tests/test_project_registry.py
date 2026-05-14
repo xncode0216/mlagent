@@ -20,6 +20,8 @@ def test_project_registry_persists_created_projects(tmp_path, monkeypatch):
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
     assert registry["projects"][0]["id"] == project["id"]
     assert registry["projects"][0]["name"] == "titanic_validation"
+    assert registry["projects"][0]["created_at"]
+    assert registry["projects"][0]["updated_at"]
 
 
 def test_project_registry_recovers_after_memory_clear(tmp_path, monkeypatch):
@@ -38,6 +40,7 @@ def test_project_registry_recovers_after_memory_clear(tmp_path, monkeypatch):
     assert [item["id"] for item in list_response.json()] == [project["id"]]
     assert detail_response.status_code == 200
     assert detail_response.json()["workspace_path"] == project["workspace_path"]
+    assert detail_response.json()["created_at"]
 
 
 def test_project_registry_allows_file_api_after_memory_clear(tmp_path, monkeypatch):

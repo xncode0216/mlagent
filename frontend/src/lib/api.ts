@@ -3,6 +3,8 @@ export type Project = {
   owner_id: string;
   name: string;
   workspace_path: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type FileItem = {
