@@ -12,6 +12,7 @@ workspaces/
 # Node
 node_modules/
 .npm-cache/
+.vite/
 dist/
 .next/
 *.tsbuildinfo

@@ -18,17 +18,20 @@ import { FileExplorer } from "../features/files/FileExplorer";
 import { RightPanel } from "../features/right-panel/RightPanel";
 import {
   adoptLesson,
+  createAgentSession,
   createProject,
   extractLesson,
   listEvolutionProtocols,
   listFiles,
   listLessons,
+  listProjectSessions,
   listProjects,
   listTrainingRuns,
   rejectLesson,
   trainBaselineModel,
   trainSklearnModel,
   uploadProjectFile,
+  type AgentSession,
   type ExperimentRun,
   type EvolutionProtocol,
   type FileItem,
@@ -50,8 +53,18 @@ async function listWorkbenchFiles(projectId: string) {
   return [...rootFiles, ...dataFiles];
 }
 
+function modeLabel(mode: MainMode) {
+  return {
+    analysis: "数据分析",
+    "machine-learning": "机器学习",
+    evolution: "自进化知识",
+  }[mode];
+}
+
 export function AppShell() {
-  const { connected, events, lastError, sendMessage } = useAgentStream("dev-session");
+  const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
+  const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const { connected, events, lastError, sendMessage } = useAgentStream(activeSession?.id ?? "dev-session");
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -114,6 +127,32 @@ export function AppShell() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function ensureModeSession() {
+      if (!project) return;
+      const existingSessions = await listProjectSessions(project.id);
+      let nextSession = existingSessions.find((session) => session.mode === activeMode);
+      if (!nextSession) {
+        nextSession = await createAgentSession(project.id, {
+          mode: activeMode,
+          title: `${modeLabel(activeMode)} - ${project.name}`,
+        });
+      }
+      const refreshedSessions = await listProjectSessions(project.id);
+      if (!cancelled) {
+        setSessions(refreshedSessions);
+        setActiveSession(nextSession);
+      }
+    }
+
+    void ensureModeSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeMode, project]);
+
   async function activateProject(nextProject: Project, projectFiles?: FileItem[]) {
     const nextFiles = projectFiles ?? (await listWorkbenchFiles(nextProject.id));
     setProject(nextProject);
@@ -122,6 +161,8 @@ export function AppShell() {
     setLessons(await listLessons(nextProject.id));
     setProtocols(await listEvolutionProtocols(nextProject.id));
     setTrainingRuns(await listTrainingRuns(nextProject.id));
+    setSessions(await listProjectSessions(nextProject.id));
+    setActiveSession(null);
     setTrainingResult(null);
     setTrainingError(null);
     setLocalEvents([]);
@@ -318,6 +359,8 @@ export function AppShell() {
           projects={projects}
           projectName={project?.name}
           projectPath={project?.workspace_path}
+          sessions={sessions}
+          activeSessionId={activeSession?.id}
           status={workspaceStatus}
         />
       </aside>
@@ -352,6 +395,7 @@ export function AppShell() {
       <footer className="status-bar">
         <span>{connected ? "WebSocket Connected" : "WebSocket Disconnected"}</span>
         <span>Project: {project?.name ?? "None"}</span>
+        <span>Session: {activeSession?.title ?? "None"}</span>
         <span>Active file: {activeFile}</span>
         <span>Artifacts: {artifactCount}</span>
       </footer>

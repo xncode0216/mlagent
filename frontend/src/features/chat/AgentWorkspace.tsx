@@ -12,7 +12,7 @@ type AgentWorkspaceProps = {
   projectId?: string;
   sendMessage: (
     content: string,
-    context: { projectId?: string; activeFile?: string },
+    context: { projectId?: string; activeFile?: string; mode?: string },
   ) => void;
 };
 
@@ -96,7 +96,7 @@ export function AgentWorkspace({
   function submit(content = draft) {
     const text = content.trim();
     if (!text || !connected || !projectId) return;
-    sendMessage(text, { projectId, activeFile });
+    sendMessage(text, { projectId, activeFile, mode });
     setDraft("");
   }
 

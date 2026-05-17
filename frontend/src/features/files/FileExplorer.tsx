@@ -1,7 +1,7 @@
 import { Check, Database, FileCode2, FileText, Folder, FolderPlus, Upload, X } from "lucide-react";
 import { useState } from "react";
 
-import type { FileItem, Project } from "../../lib/api";
+import type { AgentSession, FileItem, Project } from "../../lib/api";
 
 const fallbackItems: FileItem[] = [
   { name: "customer_churn.csv", path: "data/customer_churn.csv", type: "file" },
@@ -25,6 +25,8 @@ type FileExplorerProps = {
   projectName?: string;
   projectPath?: string;
   projects: Project[];
+  sessions: AgentSession[];
+  activeSessionId?: string;
   status: string;
 };
 
@@ -48,6 +50,8 @@ export function FileExplorer({
   projectName,
   projectPath,
   projects,
+  sessions,
+  activeSessionId,
   status,
 }: FileExplorerProps) {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
@@ -140,6 +144,25 @@ export function FileExplorer({
           <span>{projectName ?? "未选择项目"}</span>
           {projectPath ? <code title={projectPath}>{projectPath}</code> : null}
         </div>
+      </section>
+
+      <section className="session-section" aria-label="会话记录">
+        <div className="section-header">
+          <span className="panel-title">会话记录</span>
+          <span className="sidebar-kicker">{sessions.length}</span>
+        </div>
+        {sessions.length === 0 ? (
+          <div className="sidebar-status">当前项目还没有会话记录。</div>
+        ) : (
+          <ul className="session-list">
+            {sessions.slice(0, 6).map((session) => (
+              <li key={session.id} className={session.id === activeSessionId ? "selected" : ""}>
+                <span>{session.title}</span>
+                <small>{session.message_count} 条消息</small>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="file-section" aria-label="项目文件">

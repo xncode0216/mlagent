@@ -28,10 +28,14 @@ def get_registered_project(project_id: str) -> ProjectRead | None:
     return PROJECTS.get(project_id)
 
 
-@router.get("")
-def list_projects() -> list[ProjectRead]:
+def list_registered_projects() -> list[ProjectRead]:
     _sync_projects_from_registry()
     return list(PROJECTS.values())
+
+
+@router.get("")
+def list_projects() -> list[ProjectRead]:
+    return list_registered_projects()
 
 
 @router.post("")

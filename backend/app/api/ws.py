@@ -8,6 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.projects import get_registered_project
 from app.services.artifact_service import ArtifactService
+from app.services.session_service import SessionService
 from app.tools.data_analysis import correlation_matrix, detect_missing, plot_distribution, profile_dataset
 
 router = APIRouter(tags=["websocket"])
@@ -90,6 +91,20 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                 if project is None:
                     continue
                 project_root = Path(project.workspace_path).resolve()
+                session_service = SessionService(project_root)
+                session_service.ensure_session(
+                    project_id=project_id,
+                    session_id=session_id,
+                    mode=str(context.get("mode") or "analysis"),
+                )
+                if isinstance(payload.get("content"), str):
+                    session_service.append_message(
+                        session_id=session_id,
+                        role="user",
+                        content=payload["content"],
+                        metadata={"active_file": active_file},
+                    )
+
                 artifacts = [
                     ("dataframe", "profile.json", profile_dataset(resolution.csv_path)),
                     ("dataframe", "missing.json", detect_missing(resolution.csv_path)),
@@ -105,21 +120,25 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                         name=name,
                         payload=data,
                     )
-                    await websocket.send_json(
-                        {
-                            "type": "artifact_created",
-                            "artifact": {
-                                "id": artifact.id,
-                                "project_id": project_id,
-                                "session_id": session_id,
-                                "type": artifact_type,
-                                "name": name,
-                                "path": str(artifact.path.relative_to(project_root)).replace("\\", "/"),
-                                "metadata": artifact.metadata,
-                                "created_at": artifact.created_at,
-                            },
-                        }
+                    event_payload = {
+                        "type": "artifact_created",
+                        "artifact": {
+                            "id": artifact.id,
+                            "project_id": project_id,
+                            "session_id": session_id,
+                            "type": artifact_type,
+                            "name": name,
+                            "path": str(artifact.path.relative_to(project_root)).replace("\\", "/"),
+                            "metadata": artifact.metadata,
+                            "created_at": artifact.created_at,
+                        },
+                    }
+                    session_service.append_event(
+                        session_id=session_id,
+                        event_type="artifact_created",
+                        payload=event_payload,
                     )
+                    await websocket.send_json(event_payload)
 
             await asyncio.sleep(0.2)
             await websocket.send_json(
@@ -132,15 +151,35 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                     {"type": "message_delta", "message_id": message_id, "delta": chunk}
                 )
                 await asyncio.sleep(0.01)
+            if isinstance(project_id, str):
+                project = get_registered_project(project_id)
+                if project is not None:
+                    session_service = SessionService(Path(project.workspace_path).resolve())
+                    if session_service.get_session(session_id) is not None:
+                        session_service.append_message(
+                            session_id=session_id,
+                            role="assistant",
+                            content=text,
+                            metadata={"message_id": message_id},
+                        )
 
-            await websocket.send_json(
-                {
-                    "type": "task_progress",
-                    "task_id": session_id,
-                    "progress": 1,
-                    "label": "完成",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
-            )
+            progress_event = {
+                "type": "task_progress",
+                "task_id": session_id,
+                "progress": 1,
+                "label": "完成",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+            if isinstance(project_id, str):
+                project = get_registered_project(project_id)
+                if project is not None:
+                    session_service = SessionService(Path(project.workspace_path).resolve())
+                    if session_service.get_session(session_id) is not None:
+                        session_service.append_event(
+                            session_id=session_id,
+                            event_type="task_progress",
+                            payload=progress_event,
+                        )
+            await websocket.send_json(progress_event)
     except WebSocketDisconnect:
         return

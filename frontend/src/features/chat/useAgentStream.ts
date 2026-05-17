@@ -5,6 +5,7 @@ import type { AgentStreamEvent } from "./types";
 type MessageContext = {
   projectId?: string;
   activeFile?: string;
+  mode?: string;
 };
 
 export function useAgentStream(sessionId: string) {
@@ -14,6 +15,7 @@ export function useAgentStream(sessionId: string) {
   const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
+    setEvents([]);
     const socket = new WebSocket(`ws://127.0.0.1:8000/ws/sessions/${sessionId}`);
     socketRef.current = socket;
     socket.onopen = () => {
@@ -46,6 +48,7 @@ export function useAgentStream(sessionId: string) {
         context: {
           project_id: context.projectId,
           active_file: context.activeFile,
+          mode: context.mode,
         },
       }),
     );

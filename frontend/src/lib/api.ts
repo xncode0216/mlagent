@@ -123,6 +123,25 @@ export type EvolutionProtocol = {
   stability: "stable" | "experimental";
 };
 
+export type AgentSession = {
+  id: string;
+  project_id: string;
+  mode: "analysis" | "machine-learning" | "evolution" | string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+};
+
+export type AgentMessage = {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant" | string;
+  content: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -172,6 +191,27 @@ export async function readProjectFileContent(
   return request<{ path: string; content: string }>(
     `/api/projects/${projectId}/files/content?path=${encodeURIComponent(path)}`,
   );
+}
+
+export async function createAgentSession(
+  projectId: string,
+  payload: { mode: string; title?: string },
+): Promise<AgentSession> {
+  return request<AgentSession>(`/api/projects/${projectId}/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listProjectSessions(projectId: string): Promise<AgentSession[]> {
+  const result = await request<{ items: AgentSession[] }>(`/api/projects/${projectId}/sessions`);
+  return result.items;
+}
+
+export async function listSessionMessages(sessionId: string): Promise<AgentMessage[]> {
+  const result = await request<{ items: AgentMessage[] }>(`/api/sessions/${sessionId}/messages`);
+  return result.items;
 }
 
 export async function trainBaselineModel(
