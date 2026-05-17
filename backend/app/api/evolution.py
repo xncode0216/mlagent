@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
-from app.services.evolution_service import EvolutionService, LessonRecord
+from app.services.evolution_service import EvolutionProtocol, EvolutionService, LessonRecord
 
 router = APIRouter(prefix="/api/projects/{project_id}/evolution", tags=["evolution"])
 
@@ -24,6 +24,10 @@ class LessonList(BaseModel):
     items: list[LessonRecord]
 
 
+class ProtocolList(BaseModel):
+    items: list[EvolutionProtocol]
+
+
 def _project_root(project_id: str) -> Path:
     project = get_registered_project(project_id)
     if project is None:
@@ -35,6 +39,12 @@ def _project_root(project_id: str) -> Path:
 def list_lessons(project_id: str) -> LessonList:
     service = EvolutionService(_project_root(project_id))
     return LessonList(items=service.list_lessons())
+
+
+@router.get("/protocols")
+def list_protocols(project_id: str) -> ProtocolList:
+    service = EvolutionService(_project_root(project_id))
+    return ProtocolList(items=service.list_protocols())
 
 
 @router.post("/lessons/extract")

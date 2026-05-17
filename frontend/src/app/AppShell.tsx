@@ -20,6 +20,7 @@ import {
   adoptLesson,
   createProject,
   extractLesson,
+  listEvolutionProtocols,
   listFiles,
   listLessons,
   listProjects,
@@ -29,6 +30,7 @@ import {
   trainSklearnModel,
   uploadProjectFile,
   type ExperimentRun,
+  type EvolutionProtocol,
   type FileItem,
   type Lesson,
   type Project,
@@ -62,6 +64,7 @@ export function AppShell() {
   const [trainingError, setTrainingError] = useState<string | null>(null);
   const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [protocols, setProtocols] = useState<EvolutionProtocol[]>([]);
 
   const visibleEvents = useMemo(() => [...events, ...localEvents], [events, localEvents]);
   const artifactCount = useMemo(
@@ -117,6 +120,7 @@ export function AppShell() {
     setFiles(nextFiles);
     setActiveFile(nextFiles.find((item) => item.type === "file")?.path ?? "");
     setLessons(await listLessons(nextProject.id));
+    setProtocols(await listEvolutionProtocols(nextProject.id));
     setTrainingRuns(await listTrainingRuns(nextProject.id));
     setTrainingResult(null);
     setTrainingError(null);
@@ -318,7 +322,12 @@ export function AppShell() {
         />
       </aside>
       {activeMode === "evolution" ? (
-        <EvolutionWorkspace lessons={lessons} onAdopt={handleAdoptLesson} onReject={handleRejectLesson} />
+        <EvolutionWorkspace
+          lessons={lessons}
+          protocols={protocols}
+          onAdopt={handleAdoptLesson}
+          onReject={handleRejectLesson}
+        />
       ) : (
         <AgentWorkspace
           activeFile={activeFile}

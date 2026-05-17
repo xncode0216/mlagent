@@ -1,9 +1,10 @@
 import { CheckCircle2, GitMerge, Network, ShieldCheck, XCircle } from "lucide-react";
 
-import type { Lesson } from "../../lib/api";
+import type { EvolutionProtocol, Lesson } from "../../lib/api";
 
 type EvolutionWorkspaceProps = {
   lessons: Lesson[];
+  protocols: EvolutionProtocol[];
   onAdopt: (lessonId: string) => Promise<void>;
   onReject: (lessonId: string) => Promise<void>;
 };
@@ -14,11 +15,10 @@ const statusLabel: Record<Lesson["status"], string> = {
   rejected: "已拒绝",
 };
 
-export function EvolutionWorkspace({ lessons, onAdopt, onReject }: EvolutionWorkspaceProps) {
+export function EvolutionWorkspace({ lessons, protocols, onAdopt, onReject }: EvolutionWorkspaceProps) {
   const pendingCount = lessons.filter((lesson) => lesson.status === "pending_review").length;
   const adoptedCount = lessons.filter((lesson) => lesson.status === "high_confidence").length;
   const rejectedCount = lessons.filter((lesson) => lesson.status === "rejected").length;
-  const visibleLessons = lessons.length > 0 ? lessons : [];
 
   return (
     <main className="agent-workspace evolution-workspace">
@@ -28,11 +28,12 @@ export function EvolutionWorkspace({ lessons, onAdopt, onReject }: EvolutionWork
             <Network size={18} />
             自进化知识 Agent
           </h2>
-          <p>从历史分析和训练任务中抽取经验，审核后注入后续 Agent 的默认上下文和工具策略。</p>
+          <p>从历史分析和训练任务中抽取经验，并把成熟工程方法转成后续 Agent 可注入的执行协议。</p>
         </div>
         <div className="runtime-chips">
           <span className="runtime-chip ready">内网模式</span>
           <span className="runtime-chip">规则审计</span>
+          <span className="runtime-chip">Skills: {protocols.length}</span>
         </div>
       </div>
 
@@ -50,8 +51,8 @@ export function EvolutionWorkspace({ lessons, onAdopt, onReject }: EvolutionWork
           <strong>{rejectedCount}</strong>
         </div>
         <div>
-          <span>总记录</span>
-          <strong>{lessons.length}</strong>
+          <span>内置协议</span>
+          <strong>{protocols.length}</strong>
         </div>
       </div>
 
@@ -61,10 +62,10 @@ export function EvolutionWorkspace({ lessons, onAdopt, onReject }: EvolutionWork
             <span className="panel-title">从历史任务提取的经验</span>
             <span className="sidebar-kicker">Review Queue</span>
           </div>
-          {visibleLessons.length === 0 ? (
+          {lessons.length === 0 ? (
             <div className="empty-state">训练或分析任务完成后，这里会出现可审核的候选经验。</div>
           ) : (
-            visibleLessons.map((lesson) => (
+            lessons.map((lesson) => (
               <article className="lesson-card" key={lesson.id}>
                 <div className="lesson-card-header">
                   <span>{statusLabel[lesson.status]}</span>
@@ -97,25 +98,33 @@ export function EvolutionWorkspace({ lessons, onAdopt, onReject }: EvolutionWork
         <section className="knowledge-panel">
           <div className="card-heading">
             <ShieldCheck size={15} />
-            规则注入预览
+            内置进化协议
           </div>
-          <pre className="json-preview code-panel">{`rules:
-  - missing_value_median
-  - leakage_detection
-  - lightgbm_categorical_handle
-
-policy:
-  confidence_threshold: 0.85
-  require_human_review: true
-  inject_into:
-    - data_analysis_agent
-    - ml_training_agent`}</pre>
+          <div className="protocol-list">
+            {protocols.map((protocol) => (
+              <article className="protocol-card" key={protocol.id}>
+                <div>
+                  <strong>{protocol.name}</strong>
+                  <span className={protocol.stability === "experimental" ? "protocol-badge experimental" : "protocol-badge"}>
+                    {protocol.stability === "experimental" ? "实验" : "稳定"}
+                  </span>
+                </div>
+                <p>{protocol.purpose}</p>
+                <small>{protocol.source_skill}</small>
+                <ul>
+                  {protocol.agent_policy.slice(0, 2).map((policy) => (
+                    <li key={policy}>{policy}</li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
           <div className="knowledge-graph-mini">
-            <span>数据清洗</span>
+            <span>任务澄清</span>
             <GitMerge size={16} />
-            <span>特征工程</span>
+            <span>反馈闭环</span>
             <GitMerge size={16} />
-            <span>模型训练</span>
+            <span>经验审查</span>
           </div>
         </section>
       </div>

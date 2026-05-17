@@ -112,6 +112,17 @@ export type Lesson = {
   updated_at: string;
 };
 
+export type EvolutionProtocol = {
+  id: string;
+  source_skill: string;
+  name: string;
+  purpose: string;
+  trigger: string;
+  agent_policy: string[];
+  inject_into: string[];
+  stability: "stable" | "experimental";
+};
+
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -210,6 +221,11 @@ export async function getTrainingRun(projectId: string, experimentId: string): P
 
 export async function listLessons(projectId: string): Promise<Lesson[]> {
   const result = await request<{ items: Lesson[] }>(`/api/projects/${projectId}/evolution/lessons`);
+  return result.items;
+}
+
+export async function listEvolutionProtocols(projectId: string): Promise<EvolutionProtocol[]> {
+  const result = await request<{ items: EvolutionProtocol[] }>(`/api/projects/${projectId}/evolution/protocols`);
   return result.items;
 }
 

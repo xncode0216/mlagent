@@ -68,3 +68,21 @@ def test_adopt_and_reject_lessons(tmp_path, monkeypatch):
 
     assert rejected.status_code == 200
     assert rejected.json()["status"] == "rejected"
+
+
+def test_list_evolution_protocols_includes_imported_skill_mechanisms(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    response = client.get(f"/api/projects/{project['id']}/evolution/protocols")
+
+    assert response.status_code == 200
+    protocols = response.json()["items"]
+    protocol_ids = {item["id"] for item in protocols}
+    assert "grill-with-docs" in protocol_ids
+    assert "diagnose-loop" in protocol_ids
+    assert "tdd-vertical-slice" in protocol_ids
+    assert "two-axis-review" in protocol_ids
+    assert all(item["agent_policy"] for item in protocols)

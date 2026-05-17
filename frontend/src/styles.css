@@ -1311,6 +1311,70 @@ button {
   align-self: start;
 }
 
+.protocol-list {
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.protocol-card {
+  background: #0f172a;
+  border: 1px solid #263244;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.protocol-card div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.protocol-card strong {
+  color: #f5f5f5;
+  font-size: 13px;
+}
+
+.protocol-card p,
+.protocol-card li,
+.protocol-card small {
+  color: #a6adc8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.protocol-card p,
+.protocol-card ul {
+  margin: 0;
+}
+
+.protocol-card ul {
+  padding-left: 18px;
+}
+
+.protocol-card small {
+  color: #6c7086;
+}
+
+.protocol-badge {
+  background: rgba(166, 227, 161, 0.12);
+  border: 1px solid rgba(166, 227, 161, 0.28);
+  border-radius: 999px;
+  color: #a6e3a1;
+  font-size: 11px;
+  padding: 3px 7px;
+}
+
+.protocol-badge.experimental {
+  background: rgba(249, 226, 175, 0.12);
+  border-color: rgba(249, 226, 175, 0.28);
+  color: #f9e2af;
+}
+
 .knowledge-graph-mini {
   align-items: center;
   color: #a6adc8;
