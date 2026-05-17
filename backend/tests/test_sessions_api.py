@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from app.api.projects import PROJECTS
@@ -92,3 +94,17 @@ def test_list_session_events_after_websocket_run(tmp_path, monkeypatch):
     assert "tool_call_finished" in event_types
     assert "artifact_created" in event_types
     assert event_types[-1] == "task_progress"
+
+    trace_ids = {event["trace_id"] for event in events}
+    assert len(trace_ids) == 1
+    finished = next(event for event in events if event["type"] == "tool_call_finished")
+    assert finished["duration_ms"] >= 0
+    assert finished["finished_at"]
+
+    log_path = tmp_path / "dev-user" / project["id"] / "logs" / "session-events.jsonl"
+    persisted_log_events = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert [event["payload"]["type"] for event in persisted_log_events] == event_types

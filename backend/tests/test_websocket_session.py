@@ -19,17 +19,19 @@ def test_session_socket_rejects_active_file_path_escape(tmp_path, monkeypatch):
             }
         )
 
-        assert websocket.receive_json()["type"] == "tool_call_started"
+        started = websocket.receive_json()
         finished = websocket.receive_json()
         error = websocket.receive_json()
 
+    assert started["type"] == "tool_call_started"
     assert finished["type"] == "tool_call_finished"
     assert finished["status"] == "error"
-    assert error == {
-        "type": "error",
-        "code": "invalid_active_file",
-        "message": "Active file is outside the project workspace",
-    }
+    assert finished["trace_id"] == started["trace_id"]
+    assert finished["duration_ms"] >= 0
+    assert error["type"] == "error"
+    assert error["trace_id"] == started["trace_id"]
+    assert error["code"] == "invalid_active_file"
+    assert error["message"] == "Active file is outside the project workspace"
 
 
 def test_session_socket_emits_artifact_with_created_at(tmp_path, monkeypatch):

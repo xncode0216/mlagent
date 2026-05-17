@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from time import perf_counter
 from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -44,6 +45,10 @@ def _resolve_active_file(project_id: object, active_file: object) -> ActiveFileR
     return ActiveFileResolution(csv_path=csv_path)
 
 
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
 @router.websocket("/ws/sessions/{session_id}")
 async def session_socket(websocket: WebSocket, session_id: str) -> None:
     await websocket.accept()
@@ -58,15 +63,20 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
 
             message_id = uuid4().hex
             call_id = uuid4().hex
+            trace_id = uuid4().hex
             context = payload.get("context", {})
             project_id = context.get("project_id")
             active_file = context.get("active_file")
+            started_at = _utc_now()
+            tool_started_at = perf_counter()
 
             tool_started_event = {
                 "type": "tool_call_started",
+                "trace_id": trace_id,
                 "call_id": call_id,
                 "tool": "profile_dataset",
                 "args": context,
+                "started_at": started_at,
             }
             await websocket.send_json(tool_started_event)
 
@@ -75,13 +85,21 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                 await websocket.send_json(
                     {
                         "type": "tool_call_finished",
+                        "trace_id": trace_id,
                         "call_id": call_id,
                         "status": "error",
                         "error": resolution.message,
+                        "finished_at": _utc_now(),
+                        "duration_ms": round((perf_counter() - tool_started_at) * 1000, 2),
                     }
                 )
                 await websocket.send_json(
-                    {"type": "error", "code": resolution.code, "message": resolution.message}
+                    {
+                        "type": "error",
+                        "trace_id": trace_id,
+                        "code": resolution.code,
+                        "message": resolution.message,
+                    }
                 )
                 continue
 
@@ -126,6 +144,7 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                     )
                     event_payload = {
                         "type": "artifact_created",
+                        "trace_id": trace_id,
                         "artifact": {
                             "id": artifact.id,
                             "project_id": project_id,
@@ -145,7 +164,14 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                     await websocket.send_json(event_payload)
 
             await asyncio.sleep(0.2)
-            tool_finished_event = {"type": "tool_call_finished", "call_id": call_id, "status": "success"}
+            tool_finished_event = {
+                "type": "tool_call_finished",
+                "trace_id": trace_id,
+                "call_id": call_id,
+                "status": "success",
+                "finished_at": _utc_now(),
+                "duration_ms": round((perf_counter() - tool_started_at) * 1000, 2),
+            }
             if isinstance(project_id, str):
                 project = get_registered_project(project_id)
                 if project is not None:
@@ -178,10 +204,11 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
 
             progress_event = {
                 "type": "task_progress",
+                "trace_id": trace_id,
                 "task_id": session_id,
                 "progress": 1,
                 "label": "完成",
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": _utc_now(),
             }
             if isinstance(project_id, str):
                 project = get_registered_project(project_id)

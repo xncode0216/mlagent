@@ -44,6 +44,15 @@ function eventDetail(event: AgentStreamEvent) {
   return "";
 }
 
+function formatDuration(event: AgentStreamEvent) {
+  if (event.type !== "tool_call_finished" || typeof event.duration_ms !== "number") return "";
+  return `${event.duration_ms.toFixed(0)}ms`;
+}
+
+function formatTrace(event: AgentStreamEvent) {
+  return event.trace_id ? `trace ${event.trace_id.slice(0, 8)}` : "";
+}
+
 export function LogPanel({ events }: LogPanelProps) {
   const [levelFilter, setLevelFilter] = useState<LogLevel>("ALL");
   const [query, setQuery] = useState("");
@@ -103,7 +112,12 @@ export function LogPanel({ events }: LogPanelProps) {
             return (
               <div className={`log-row ${detail ? "with-detail" : ""}`} key={`${event.type}-${index}`}>
                 <span className={`log-level ${eventLevel(event).toLowerCase()}`}>{eventLevel(event)}</span>
-                <span className="log-message">{formatEventMessage(event)}</span>
+                <span className="log-message">
+                  {formatEventMessage(event)}
+                  <span className="log-meta">
+                    {[formatTrace(event), formatDuration(event)].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
                 {detail ? (
                   <details className="log-detail">
                     <summary>详情</summary>

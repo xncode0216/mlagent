@@ -102,7 +102,7 @@ class SessionService:
         session_id: str,
         event_type: str,
         payload: dict[str, Any],
-    ) -> None:
+    ) -> dict[str, Any]:
         if self.get_session(session_id) is None:
             raise KeyError(f"Unknown session: {session_id}")
         event = {
@@ -116,6 +116,11 @@ class SessionService:
         session_dir.mkdir(parents=True, exist_ok=True)
         with (session_dir / "events.jsonl").open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        logs_dir = self.project_root / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        with (logs_dir / f"{session_id}.jsonl").open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+        return event
 
     def list_messages(self, session_id: str) -> list[dict[str, Any]]:
         messages_path = self.sessions_dir / session_id / "messages.jsonl"

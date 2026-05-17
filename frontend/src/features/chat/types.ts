@@ -1,18 +1,30 @@
+type TraceFields = {
+  trace_id?: string;
+};
+
 export type AgentStreamEvent =
-  | { type: "message_delta"; message_id: string; delta: string }
-  | { type: "tool_call_started"; call_id: string; tool: string; args: Record<string, unknown> }
+  | ({ type: "message_delta"; message_id: string; delta: string } & TraceFields)
+  | ({
+      type: "tool_call_started";
+      call_id: string;
+      tool: string;
+      args: Record<string, unknown>;
+      started_at?: string;
+    } & TraceFields)
   | {
       type: "tool_call_finished";
       call_id: string;
       status: "success" | "error";
       result_ref?: string;
       error?: string;
-    }
-  | { type: "kernel_output"; stream: "stdout" | "stderr"; text: string }
-  | { type: "artifact_created"; artifact: Artifact }
-  | { type: "task_progress"; task_id: string; progress: number; label: string }
-  | { type: "lesson_extracted"; lesson_id: string; confidence: number }
-  | { type: "error"; code: string; message: string };
+      finished_at?: string;
+      duration_ms?: number;
+    } & TraceFields
+  | ({ type: "kernel_output"; stream: "stdout" | "stderr"; text: string } & TraceFields)
+  | ({ type: "artifact_created"; artifact: Artifact } & TraceFields)
+  | ({ type: "task_progress"; task_id: string; progress: number; label: string } & TraceFields)
+  | ({ type: "lesson_extracted"; lesson_id: string; confidence: number } & TraceFields)
+  | ({ type: "error"; code: string; message: string } & TraceFields);
 
 export type Artifact = {
   id: string;
