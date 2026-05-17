@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from app.api.projects import get_registered_project, list_registered_projects
 from app.schemas.session import AgentSessionCreate, AgentSessionRead, MessageRead
@@ -46,3 +47,16 @@ def list_session_messages(session_id: str) -> dict[str, list[MessageRead]]:
 def list_session_events(session_id: str) -> dict[str, list[dict]]:
     service = _find_session_service(session_id)
     return {"items": service.list_events(session_id)}
+
+
+@router.get("/api/sessions/{session_id}/log")
+def download_session_log(session_id: str) -> FileResponse:
+    service = _find_session_service(session_id)
+    log_path = service.log_path(session_id)
+    if not log_path.exists():
+        raise HTTPException(status_code=404, detail="Session log not found")
+    return FileResponse(
+        log_path,
+        media_type="application/x-ndjson",
+        filename=f"{session_id}.jsonl",
+    )

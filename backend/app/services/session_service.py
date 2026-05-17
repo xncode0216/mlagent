@@ -143,6 +143,9 @@ class SessionService:
         ]
         return [event["payload"] for event in events]
 
+    def log_path(self, session_id: str) -> Path:
+        return self.project_root / "logs" / f"{session_id}.jsonl"
+
     def _load_sessions(self) -> dict[str, dict[str, Any]]:
         if not self.index_path.exists():
             return {}

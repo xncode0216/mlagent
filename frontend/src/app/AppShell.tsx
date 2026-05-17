@@ -456,6 +456,7 @@ export function AppShell() {
         events={visibleEvents}
         mode={activeMode}
         projectId={project?.id}
+        sessionId={activeSession?.id}
         trainingError={trainingError}
         trainingResult={trainingResult}
         trainingRuns={trainingRuns}

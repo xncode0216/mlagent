@@ -732,6 +732,54 @@ button {
   font-size: 12px;
 }
 
+.log-toolbar-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.log-download {
+  border: 1px solid #313244;
+  border-radius: 6px;
+  color: #89b4fa;
+  font-size: 12px;
+  padding: 5px 8px;
+  text-decoration: none;
+}
+
+.log-download:hover {
+  background: #181825;
+  border-color: rgba(137, 180, 250, 0.5);
+}
+
+.trace-summary-list {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.trace-summary {
+  align-items: center;
+  background: rgba(24, 24, 37, 0.72);
+  border: 1px solid #313244;
+  border-radius: 6px;
+  color: #a6adc8;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 8px;
+  padding: 7px 8px;
+}
+
+.trace-summary .trace-id {
+  color: #cdd6f4;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.trace-error {
+  color: #f38ba8;
+}
+
 .log-controls {
   align-items: center;
   display: grid;

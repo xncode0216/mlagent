@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { sessionLogDownloadUrl } from "../../lib/api";
 import type { AgentStreamEvent } from "../chat/types";
 
 type LogPanelProps = {
   events: AgentStreamEvent[];
+  sessionId?: string;
 };
 
 type LogLevel = "ALL" | "INFO" | "TOOL" | "WARN" | "ERROR";
+
+type TraceSummary = {
+  traceId: string;
+  events: number;
+  tools: number;
+  artifacts: number;
+  errors: number;
+  durationMs: number;
+};
 
 function formatEventMessage(event: AgentStreamEvent) {
   switch (event.type) {
@@ -53,7 +64,7 @@ function formatTrace(event: AgentStreamEvent) {
   return event.trace_id ? `trace ${event.trace_id.slice(0, 8)}` : "";
 }
 
-export function LogPanel({ events }: LogPanelProps) {
+export function LogPanel({ events, sessionId }: LogPanelProps) {
   const [levelFilter, setLevelFilter] = useState<LogLevel>("ALL");
   const [query, setQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
@@ -66,11 +77,37 @@ export function LogPanel({ events }: LogPanelProps) {
         .filter((event) => levelFilter === "ALL" || eventLevel(event) === levelFilter)
         .filter((event) => {
           if (!normalizedQuery) return true;
-          const searchable = `${event.type} ${eventLevel(event)} ${formatEventMessage(event)} ${eventDetail(event)}`.toLowerCase();
+          const searchable =
+            `${event.type} ${event.trace_id ?? ""} ${eventLevel(event)} ${formatEventMessage(event)} ${eventDetail(event)}`.toLowerCase();
           return searchable.includes(normalizedQuery);
         }),
     [events, levelFilter, normalizedQuery],
   );
+  const traceSummaries = useMemo(() => {
+    const traces = new Map<string, TraceSummary>();
+    for (const event of displayEvents) {
+      if (!event.trace_id) continue;
+      const summary =
+        traces.get(event.trace_id) ??
+        {
+          traceId: event.trace_id,
+          events: 0,
+          tools: 0,
+          artifacts: 0,
+          errors: 0,
+          durationMs: 0,
+        };
+      summary.events += 1;
+      if (event.type === "tool_call_started") summary.tools += 1;
+      if (event.type === "artifact_created") summary.artifacts += 1;
+      if (eventLevel(event) === "ERROR") summary.errors += 1;
+      if (event.type === "tool_call_finished" && typeof event.duration_ms === "number") {
+        summary.durationMs += event.duration_ms;
+      }
+      traces.set(event.trace_id, summary);
+    }
+    return [...traces.values()].sort((left, right) => right.events - left.events);
+  }, [displayEvents]);
 
   useEffect(() => {
     if (!autoScroll || !listRef.current) return;
@@ -81,8 +118,29 @@ export function LogPanel({ events }: LogPanelProps) {
     <div className="log-panel">
       <div className="log-toolbar">
         <div className="panel-title">执行日志</div>
-        <span>{displayEvents.length} 条事件</span>
+        <div className="log-toolbar-actions">
+          <span>{displayEvents.length} 条事件</span>
+          {sessionId ? (
+            <a className="log-download" download={`${sessionId}.jsonl`} href={sessionLogDownloadUrl(sessionId)}>
+              导出 JSONL
+            </a>
+          ) : null}
+        </div>
       </div>
+      {traceSummaries.length > 0 ? (
+        <div className="trace-summary-list">
+          {traceSummaries.slice(0, 4).map((trace) => (
+            <div className="trace-summary" key={trace.traceId}>
+              <span className="trace-id">trace {trace.traceId.slice(0, 8)}</span>
+              <span>{trace.events} 事件</span>
+              <span>{trace.tools} 工具</span>
+              <span>{trace.artifacts} 产物</span>
+              <span className={trace.errors > 0 ? "trace-error" : ""}>{trace.errors} 错误</span>
+              <span>{trace.durationMs.toFixed(0)}ms</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="log-controls">
         <input
           aria-label="搜索日志"

@@ -108,3 +108,14 @@ def test_list_session_events_after_websocket_run(tmp_path, monkeypatch):
         if line.strip()
     ]
     assert [event["payload"]["type"] for event in persisted_log_events] == event_types
+
+    log_response = client.get("/api/sessions/session-events/log")
+    assert log_response.status_code == 200
+    assert log_response.headers["content-type"].startswith("application/x-ndjson")
+    assert log_response.headers["content-disposition"].endswith('filename="session-events.jsonl"')
+    downloaded_events = [
+        json.loads(line)
+        for line in log_response.text.splitlines()
+        if line.strip()
+    ]
+    assert [event["payload"]["trace_id"] for event in downloaded_events] == [events[0]["trace_id"]] * len(events)

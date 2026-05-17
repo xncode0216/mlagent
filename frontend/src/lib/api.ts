@@ -219,6 +219,10 @@ export async function listSessionEvents(sessionId: string): Promise<unknown[]> {
   return result.items;
 }
 
+export function sessionLogDownloadUrl(sessionId: string): string {
+  return `${API_BASE_URL}/api/sessions/${sessionId}/log`;
+}
+
 export async function trainBaselineModel(
   projectId: string,
   datasetPath: string,

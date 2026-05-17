@@ -13,6 +13,7 @@ type RightPanelProps = {
   events: AgentStreamEvent[];
   mode: "analysis" | "machine-learning" | "evolution";
   projectId?: string;
+  sessionId?: string;
   trainingError: string | null;
   trainingResult: TrainingResult | null;
   trainingRuns: ExperimentRun[];
@@ -525,6 +526,7 @@ export function RightPanel({
   events,
   mode,
   projectId,
+  sessionId,
   trainingError,
   trainingResult,
   trainingRuns,
@@ -632,7 +634,7 @@ export function RightPanel({
           onTrainModel={onTrainModel}
         />
       ) : null}
-      {activeTab === "日志" ? <LogPanel events={events} /> : null}
+      {activeTab === "日志" ? <LogPanel events={events} sessionId={sessionId} /> : null}
       <div className="right-panel-footer">
         <button>
           <Download size={14} />
