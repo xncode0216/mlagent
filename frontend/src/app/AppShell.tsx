@@ -26,12 +26,14 @@ import {
   listLessons,
   listProjectSessions,
   listProjects,
+  listSessionMessages,
   listTrainingRuns,
   rejectLesson,
   trainBaselineModel,
   trainSklearnModel,
   uploadProjectFile,
   type AgentSession,
+  type AgentMessage,
   type ExperimentRun,
   type EvolutionProtocol,
   type FileItem,
@@ -64,6 +66,7 @@ function modeLabel(mode: MainMode) {
 export function AppShell() {
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const [sessionMessages, setSessionMessages] = useState<AgentMessage[]>([]);
   const { connected, events, lastError, sendMessage } = useAgentStream(activeSession?.id ?? "dev-session");
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
@@ -133,7 +136,9 @@ export function AppShell() {
     async function ensureModeSession() {
       if (!project) return;
       const existingSessions = await listProjectSessions(project.id);
-      let nextSession = existingSessions.find((session) => session.mode === activeMode);
+      let nextSession =
+        existingSessions.find((session) => session.id === activeSession?.id && session.mode === activeMode) ??
+        existingSessions.find((session) => session.mode === activeMode);
       if (!nextSession) {
         nextSession = await createAgentSession(project.id, {
           mode: activeMode,
@@ -151,7 +156,41 @@ export function AppShell() {
     return () => {
       cancelled = true;
     };
-  }, [activeMode, project]);
+  }, [activeMode, activeSession?.id, project]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSessionMessages() {
+      if (!activeSession) {
+        setSessionMessages([]);
+        return;
+      }
+      const messages = await listSessionMessages(activeSession.id);
+      if (!cancelled) {
+        setSessionMessages(messages);
+      }
+    }
+
+    void loadSessionMessages();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSession]);
+
+  useEffect(() => {
+    if (!project || !activeSession) return;
+    const latestEvent = visibleEvents.at(-1);
+    if (latestEvent?.type !== "task_progress" || latestEvent.task_id !== activeSession.id) return;
+
+    async function refreshSessionState() {
+      if (!project || !activeSession) return;
+      setSessions(await listProjectSessions(project.id));
+      setSessionMessages(await listSessionMessages(activeSession.id));
+    }
+
+    void refreshSessionState();
+  }, [activeSession, project, visibleEvents]);
 
   async function activateProject(nextProject: Project, projectFiles?: FileItem[]) {
     const nextFiles = projectFiles ?? (await listWorkbenchFiles(nextProject.id));
@@ -166,6 +205,17 @@ export function AppShell() {
     setTrainingResult(null);
     setTrainingError(null);
     setLocalEvents([]);
+    setSessionMessages([]);
+  }
+
+  async function handleSelectSession(sessionId: string) {
+    const session = sessions.find((item) => item.id === sessionId);
+    if (!session) return;
+    if (session.mode === "analysis" || session.mode === "machine-learning" || session.mode === "evolution") {
+      setActiveMode(session.mode);
+    }
+    setActiveSession(session);
+    setSessionMessages(await listSessionMessages(session.id));
   }
 
   async function switchProject(projectId: string) {
@@ -361,6 +411,7 @@ export function AppShell() {
           projectPath={project?.workspace_path}
           sessions={sessions}
           activeSessionId={activeSession?.id}
+          onSelectSession={(sessionId) => void handleSelectSession(sessionId)}
           status={workspaceStatus}
         />
       </aside>
@@ -377,6 +428,7 @@ export function AppShell() {
           mode={activeMode}
           connected={connected}
           events={visibleEvents}
+          historyMessages={sessionMessages}
           lastError={lastError}
           projectId={project?.id}
           sendMessage={sendMessage}

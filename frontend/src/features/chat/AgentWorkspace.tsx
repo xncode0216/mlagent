@@ -2,12 +2,14 @@ import { Bot, CheckCircle2, Database, FileCode2, SendHorizontal, Sparkles, UserR
 import { useMemo, useState } from "react";
 
 import type { AgentStreamEvent } from "./types";
+import type { AgentMessage } from "../../lib/api";
 
 type AgentWorkspaceProps = {
   activeFile: string;
   mode: "analysis" | "machine-learning";
   connected: boolean;
   events: AgentStreamEvent[];
+  historyMessages: AgentMessage[];
   lastError: string | null;
   projectId?: string;
   sendMessage: (
@@ -71,6 +73,7 @@ export function AgentWorkspace({
   mode,
   connected,
   events,
+  historyMessages,
   lastError,
   projectId,
   sendMessage,
@@ -86,6 +89,7 @@ export function AgentWorkspace({
   );
   const progressEvents = events.filter((event) => event.type === "task_progress");
   const latestProgress = progressEvents.at(-1);
+  const streamingMessage = message.trim();
   const toolNames = useMemo(() => {
     const names = toolEvents
       .map((event) => (event.type === "tool_call_started" ? event.tool : event.result_ref ?? event.status))
@@ -120,39 +124,66 @@ export function AgentWorkspace({
       {lastError ? <div className="inline-alert">{lastError}</div> : null}
 
       <div className="conversation-stream">
-        <div className="chat-row user">
-          <div className="avatar user-avatar">
-            <UserRound size={16} />
-          </div>
-          <div className="message-card user-message">
-            <span className="message-label">你 · 10:21</span>
-            请分析 <code>{activeFile}</code> 的缺失值、字段类型和相关性，并给出可执行的数据处理建议。
-          </div>
-        </div>
-
-        <div className="chat-row agent">
-          <div className="avatar agent-avatar">
-            <Sparkles size={16} />
-          </div>
-          <div className="message-card agent-message">
-            <span className="message-label">数据分析 Agent · 10:21</span>
-            <p>
-              {message ||
-                copy.assistant}
-            </p>
-            <div className="plan-card">
-              <div className="panel-title">执行计划</div>
-              <div className="plan-grid">
-                {copy.plan.map((step, index) => (
-                  <span key={step}>
-                    <CheckCircle2 size={14} />
-                    {index + 1}. {step}
-                  </span>
-                ))}
+        {historyMessages.length > 0 ? (
+          historyMessages.map((historyMessage) => (
+            <div className={`chat-row ${historyMessage.role === "user" ? "user" : "agent"}`} key={historyMessage.id}>
+              <div className={`avatar ${historyMessage.role === "user" ? "user-avatar" : "agent-avatar"}`}>
+                {historyMessage.role === "user" ? <UserRound size={16} /> : <Sparkles size={16} />}
+              </div>
+              <div className={`message-card ${historyMessage.role === "user" ? "user-message" : "agent-message"}`}>
+                <span className="message-label">
+                  {historyMessage.role === "user" ? "你" : copy.title} · {new Date(historyMessage.created_at).toLocaleTimeString()}
+                </span>
+                <p>{historyMessage.content}</p>
               </div>
             </div>
+          ))
+        ) : (
+          <>
+            <div className="chat-row user">
+              <div className="avatar user-avatar">
+                <UserRound size={16} />
+              </div>
+              <div className="message-card user-message">
+                <span className="message-label">你 · 10:21</span>
+                请分析 <code>{activeFile}</code> 的缺失值、字段类型和相关性，并给出可执行的数据处理建议。
+              </div>
+            </div>
+
+            <div className="chat-row agent">
+              <div className="avatar agent-avatar">
+                <Sparkles size={16} />
+              </div>
+              <div className="message-card agent-message">
+                <span className="message-label">{copy.title} · 10:21</span>
+                <p>{copy.assistant}</p>
+                <div className="plan-card">
+                  <div className="panel-title">执行计划</div>
+                  <div className="plan-grid">
+                    {copy.plan.map((step, index) => (
+                      <span key={step}>
+                        <CheckCircle2 size={14} />
+                        {index + 1}. {step}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {streamingMessage ? (
+          <div className="chat-row agent">
+            <div className="avatar agent-avatar">
+              <Sparkles size={16} />
+            </div>
+            <div className="message-card agent-message">
+              <span className="message-label">{copy.title} · 正在回复</span>
+              <p>{streamingMessage}</p>
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       <section className="analysis-grid" aria-label="分析结果预览">

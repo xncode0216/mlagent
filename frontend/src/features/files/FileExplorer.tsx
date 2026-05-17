@@ -22,6 +22,7 @@ type FileExplorerProps = {
   onSelect: (path: string) => void;
   onSwitchProject: (projectId: string) => void;
   onUpload: (file: File) => Promise<void>;
+  onSelectSession: (sessionId: string) => void;
   projectName?: string;
   projectPath?: string;
   projects: Project[];
@@ -47,6 +48,7 @@ export function FileExplorer({
   onSelect,
   onSwitchProject,
   onUpload,
+  onSelectSession,
   projectName,
   projectPath,
   projects,
@@ -55,7 +57,7 @@ export function FileExplorer({
   status,
 }: FileExplorerProps) {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const visibleFiles = files.length > 0 ? files : fallbackItems;
+  const visibleFiles = (files.length > 0 ? files : fallbackItems).filter((item) => item.path !== "sessions");
 
   async function submitProject() {
     if (!newProjectName.trim()) return;
@@ -157,8 +159,10 @@ export function FileExplorer({
           <ul className="session-list">
             {sessions.slice(0, 6).map((session) => (
               <li key={session.id} className={session.id === activeSessionId ? "selected" : ""}>
-                <span>{session.title}</span>
-                <small>{session.message_count} 条消息</small>
+                <button onClick={() => onSelectSession(session.id)}>
+                  <span>{session.title}</span>
+                  <small>{session.message_count} 条消息</small>
+                </button>
               </li>
             ))}
           </ul>
