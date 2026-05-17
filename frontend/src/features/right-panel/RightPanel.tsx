@@ -95,6 +95,37 @@ function JsonTable({ value }: { value: unknown }) {
     );
   }
 
+  if ("chart_type" in value && value.chart_type === "histogram" && "bins" in value && Array.isArray(value.bins)) {
+    const bins = value.bins as Array<{ start?: number; end?: number; count?: number }>;
+    const maxCount = Math.max(1, ...bins.map((bin) => Number(bin.count ?? 0)));
+    const summary =
+      "summary" in value && value.summary && typeof value.summary === "object"
+        ? (value.summary as Record<string, unknown>)
+        : {};
+    return (
+      <div className="artifact-chart">
+        <div className="dataset-strip">
+          <span>分布字段</span>
+          <strong>{"column" in value ? String(value.column ?? "-") : "-"}</strong>
+        </div>
+        <div className="artifact-histogram" aria-label="真实数据分布图">
+          {bins.map((bin, index) => (
+            <span
+              key={`${bin.start}-${bin.end}-${index}`}
+              style={{ height: `${Math.max(8, ((bin.count ?? 0) / maxCount) * 100)}%` }}
+              title={`${Number(bin.start ?? 0).toFixed(2)} - ${Number(bin.end ?? 0).toFixed(2)}: ${bin.count ?? 0}`}
+            />
+          ))}
+        </div>
+        <div className="chart-summary">
+          <span>均值 {typeof summary.mean === "number" ? summary.mean.toFixed(2) : "-"}</span>
+          <span>中位数 {typeof summary.median === "number" ? summary.median.toFixed(2) : "-"}</span>
+          <span>非空 {String(summary.non_null_count ?? "-")}</span>
+        </div>
+      </div>
+    );
+  }
+
   if ("columns" in value && "matrix" in value && Array.isArray(value.columns) && Array.isArray(value.matrix)) {
     const columns = value.columns as string[];
     const matrix = value.matrix as number[][];

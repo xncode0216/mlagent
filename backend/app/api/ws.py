@@ -8,7 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.projects import get_registered_project
 from app.services.artifact_service import ArtifactService
-from app.tools.data_analysis import correlation_matrix, detect_missing, profile_dataset
+from app.tools.data_analysis import correlation_matrix, detect_missing, plot_distribution, profile_dataset
 
 router = APIRouter(tags=["websocket"])
 
@@ -94,6 +94,7 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                     ("dataframe", "profile.json", profile_dataset(resolution.csv_path)),
                     ("dataframe", "missing.json", detect_missing(resolution.csv_path)),
                     ("chart", "correlation.json", correlation_matrix(resolution.csv_path)),
+                    ("chart", "distribution.json", plot_distribution(resolution.csv_path)),
                 ]
                 artifact_service = ArtifactService(project_root)
                 for artifact_type, name, data in artifacts:
@@ -125,7 +126,7 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                 {"type": "tool_call_finished", "call_id": call_id, "status": "success"}
             )
 
-            text = "我会先读取数据集结构，然后分析缺失值、字段类型和相关性，并把结果放到右侧面板。"
+            text = "我会先读取数据集结构，然后分析缺失值、字段类型、分布和相关性，并把结果放到右侧面板。"
             for chunk in text:
                 await websocket.send_json(
                     {"type": "message_delta", "message_id": message_id, "delta": chunk}
