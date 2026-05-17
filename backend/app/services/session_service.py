@@ -127,6 +127,17 @@ class SessionService:
             if line.strip()
         ]
 
+    def list_events(self, session_id: str) -> list[dict[str, Any]]:
+        events_path = self.sessions_dir / session_id / "events.jsonl"
+        if not events_path.exists():
+            return []
+        events = [
+            json.loads(line)
+            for line in events_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        return [event["payload"] for event in events]
+
     def _load_sessions(self) -> dict[str, dict[str, Any]]:
         if not self.index_path.exists():
             return {}

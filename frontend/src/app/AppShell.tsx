@@ -26,6 +26,7 @@ import {
   listLessons,
   listProjectSessions,
   listProjects,
+  listSessionEvents,
   listSessionMessages,
   listTrainingRuns,
   rejectLesson,
@@ -63,10 +64,15 @@ function modeLabel(mode: MainMode) {
   }[mode];
 }
 
+function isAgentStreamEvent(value: unknown): value is AgentStreamEvent {
+  return Boolean(value && typeof value === "object" && "type" in value);
+}
+
 export function AppShell() {
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [sessionMessages, setSessionMessages] = useState<AgentMessage[]>([]);
+  const [sessionEvents, setSessionEvents] = useState<AgentStreamEvent[]>([]);
   const { connected, events, lastError, sendMessage } = useAgentStream(activeSession?.id ?? "dev-session");
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
@@ -82,7 +88,7 @@ export function AppShell() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [protocols, setProtocols] = useState<EvolutionProtocol[]>([]);
 
-  const visibleEvents = useMemo(() => [...events, ...localEvents], [events, localEvents]);
+  const visibleEvents = useMemo(() => [...sessionEvents, ...events, ...localEvents], [events, localEvents, sessionEvents]);
   const artifactCount = useMemo(
     () => visibleEvents.filter((event) => event.type === "artifact_created").length,
     [visibleEvents],
@@ -164,11 +170,16 @@ export function AppShell() {
     async function loadSessionMessages() {
       if (!activeSession) {
         setSessionMessages([]);
+        setSessionEvents([]);
         return;
       }
-      const messages = await listSessionMessages(activeSession.id);
+      const [messages, persistedEvents] = await Promise.all([
+        listSessionMessages(activeSession.id),
+        listSessionEvents(activeSession.id),
+      ]);
       if (!cancelled) {
         setSessionMessages(messages);
+        setSessionEvents(persistedEvents.filter(isAgentStreamEvent));
       }
     }
 
@@ -206,6 +217,7 @@ export function AppShell() {
     setTrainingError(null);
     setLocalEvents([]);
     setSessionMessages([]);
+    setSessionEvents([]);
   }
 
   async function handleSelectSession(sessionId: string) {
@@ -215,7 +227,12 @@ export function AppShell() {
       setActiveMode(session.mode);
     }
     setActiveSession(session);
-    setSessionMessages(await listSessionMessages(session.id));
+    const [messages, persistedEvents] = await Promise.all([
+      listSessionMessages(session.id),
+      listSessionEvents(session.id),
+    ]);
+    setSessionMessages(messages);
+    setSessionEvents(persistedEvents.filter(isAgentStreamEvent));
   }
 
   async function switchProject(projectId: string) {

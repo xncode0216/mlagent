@@ -56,3 +56,39 @@ def test_list_session_messages_after_websocket_run(tmp_path, monkeypatch):
     assert [message["role"] for message in messages] == ["user", "assistant"]
     assert messages[0]["content"] == "分析 customer_churn.csv"
     assert "缺失值" in messages[1]["content"]
+
+
+def test_list_session_events_after_websocket_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    PROJECTS.clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "event_project"}).json()
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,monthly_charges,churn\n42,70.7,1\n37,56.95,0\n",
+        encoding="utf-8",
+    )
+
+    with client.websocket_connect("/ws/sessions/session-events") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析 customer_churn.csv",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                    "mode": "analysis",
+                },
+            }
+        )
+        while True:
+            event = websocket.receive_json()
+            if event["type"] == "task_progress":
+                break
+
+    events = client.get("/api/sessions/session-events/events").json()["items"]
+    event_types = [event["type"] for event in events]
+    assert "tool_call_started" in event_types
+    assert "tool_call_finished" in event_types
+    assert "artifact_created" in event_types
+    assert event_types[-1] == "task_progress"

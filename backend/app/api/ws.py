@@ -62,14 +62,13 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
             project_id = context.get("project_id")
             active_file = context.get("active_file")
 
-            await websocket.send_json(
-                {
-                    "type": "tool_call_started",
-                    "call_id": call_id,
-                    "tool": "profile_dataset",
-                    "args": context,
-                }
-            )
+            tool_started_event = {
+                "type": "tool_call_started",
+                "call_id": call_id,
+                "tool": "profile_dataset",
+                "args": context,
+            }
+            await websocket.send_json(tool_started_event)
 
             resolution = _resolve_active_file(project_id, active_file)
             if resolution.code is not None:
@@ -96,6 +95,11 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                     project_id=project_id,
                     session_id=session_id,
                     mode=str(context.get("mode") or "analysis"),
+                )
+                session_service.append_event(
+                    session_id=session_id,
+                    event_type="tool_call_started",
+                    payload=tool_started_event,
                 )
                 if isinstance(payload.get("content"), str):
                     session_service.append_message(
@@ -141,9 +145,18 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                     await websocket.send_json(event_payload)
 
             await asyncio.sleep(0.2)
-            await websocket.send_json(
-                {"type": "tool_call_finished", "call_id": call_id, "status": "success"}
-            )
+            tool_finished_event = {"type": "tool_call_finished", "call_id": call_id, "status": "success"}
+            if isinstance(project_id, str):
+                project = get_registered_project(project_id)
+                if project is not None:
+                    session_service = SessionService(Path(project.workspace_path).resolve())
+                    if session_service.get_session(session_id) is not None:
+                        session_service.append_event(
+                            session_id=session_id,
+                            event_type="tool_call_finished",
+                            payload=tool_finished_event,
+                        )
+            await websocket.send_json(tool_finished_event)
 
             text = "我会先读取数据集结构，然后分析缺失值、字段类型、分布和相关性，并把结果放到右侧面板。"
             for chunk in text:

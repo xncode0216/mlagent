@@ -40,3 +40,9 @@ def list_project_sessions(project_id: str) -> dict[str, list[AgentSessionRead]]:
 def list_session_messages(session_id: str) -> dict[str, list[MessageRead]]:
     service = _find_session_service(session_id)
     return {"items": [MessageRead(**message) for message in service.list_messages(session_id)]}
+
+
+@router.get("/api/sessions/{session_id}/events")
+def list_session_events(session_id: str) -> dict[str, list[dict]]:
+    service = _find_session_service(session_id)
+    return {"items": service.list_events(session_id)}

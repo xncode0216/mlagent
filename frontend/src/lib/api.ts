@@ -214,6 +214,11 @@ export async function listSessionMessages(sessionId: string): Promise<AgentMessa
   return result.items;
 }
 
+export async function listSessionEvents(sessionId: string): Promise<unknown[]> {
+  const result = await request<{ items: unknown[] }>(`/api/sessions/${sessionId}/events`);
+  return result.items;
+}
+
 export async function trainBaselineModel(
   projectId: string,
   datasetPath: string,

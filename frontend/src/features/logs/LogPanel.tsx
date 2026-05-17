@@ -33,17 +33,19 @@ function eventLevel(event: AgentStreamEvent) {
 }
 
 export function LogPanel({ events }: LogPanelProps) {
+  const displayEvents = events.filter((event) => event.type !== "message_delta");
+
   return (
     <div className="log-panel">
       <div className="log-toolbar">
         <div className="panel-title">执行日志</div>
-        <span>{events.length} 条事件</span>
+        <span>{displayEvents.length} 条事件</span>
       </div>
       <div className="log-list">
-        {events.length === 0 ? (
+        {displayEvents.length === 0 ? (
           <div className="empty-state">等待 Agent 事件。执行分析、训练或经验抽取后，这里会显示工具链路、Kernel 输出和产物事件。</div>
         ) : (
-          events.map((event, index) => (
+          displayEvents.map((event, index) => (
             <div className="log-row" key={`${event.type}-${index}`}>
               <span className={`log-level ${eventLevel(event).toLowerCase()}`}>{eventLevel(event)}</span>
               <span className="log-message">{formatEventMessage(event)}</span>
