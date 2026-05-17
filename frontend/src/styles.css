@@ -715,6 +715,9 @@ button {
 .log-list {
   display: grid;
   gap: 6px;
+  max-height: min(58vh, 680px);
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .log-toolbar {
@@ -729,6 +732,46 @@ button {
   font-size: 12px;
 }
 
+.log-controls {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(150px, 1fr) 92px auto;
+  margin-bottom: 10px;
+}
+
+.log-controls input,
+.log-controls select {
+  background: #11111b;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  color: #cdd6f4;
+  font-size: 12px;
+  min-height: 30px;
+  outline: none;
+  padding: 6px 8px;
+}
+
+.log-controls input:focus,
+.log-controls select:focus {
+  border-color: rgba(137, 180, 250, 0.65);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.log-toggle {
+  align-items: center;
+  color: #a6adc8;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.log-toggle input {
+  accent-color: #2563eb;
+}
+
 .log-row {
   border: 1px solid #313244;
   border-radius: 6px;
@@ -736,6 +779,10 @@ button {
   gap: 8px;
   grid-template-columns: 140px 1fr;
   padding: 8px;
+}
+
+.log-row.with-detail {
+  grid-template-columns: 86px 1fr;
 }
 
 .log-level {
@@ -765,6 +812,32 @@ button {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+
+.log-detail {
+  grid-column: 1 / -1;
+}
+
+.log-detail summary {
+  color: #89b4fa;
+  cursor: pointer;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.log-detail pre {
+  background: rgba(24, 24, 37, 0.78);
+  border: 1px solid #313244;
+  border-radius: 6px;
+  color: #cdd6f4;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
 }
 
 .artifact-list {
