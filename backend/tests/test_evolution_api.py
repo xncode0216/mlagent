@@ -59,8 +59,10 @@ def test_adopt_and_reject_lessons(tmp_path, monkeypatch):
 
     assert adopted.status_code == 200
     assert adopted.json()["status"] == "high_confidence"
-    rule_path = tmp_path / "dev-user" / project["id"] / "evolution" / "rules" / "high-confidence"
-    assert (rule_path / f"{lesson['id']}.json").exists()
+    project_root = tmp_path / "dev-user" / project["id"]
+    lesson_path = project_root / "evolution" / "lessons" / "high-confidence"
+    assert (lesson_path / f"{lesson['id']}.json").exists()
+    assert (project_root / "evolution" / "rules" / "index.json").exists()
 
     rejected = client.post(
         f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/reject"

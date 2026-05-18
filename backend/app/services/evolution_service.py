@@ -19,6 +19,9 @@ class LessonRecord:
     evidence: dict[str, Any]
     created_at: str
     updated_at: str
+    title: str = ""
+    conditions: dict[str, Any] | None = None
+    expected_benefit: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -115,12 +118,21 @@ DEFAULT_EVOLUTION_PROTOCOLS = [
     ),
 ]
 
+LESSON_STATUS_DIRS = {
+    "pending_review": "pending",
+    "high_confidence": "high-confidence",
+    "rejected": "rejected",
+    "conflicted": "conflicts",
+}
+
 
 class EvolutionService:
     def __init__(self, project_root: Path):
         self.project_root = project_root
-        self.lessons_dir = project_root / "evolution" / "lessons"
-        self.high_confidence_dir = project_root / "evolution" / "rules" / "high-confidence"
+        self.evolution_dir = project_root / "evolution"
+        self.lessons_root = self.evolution_dir / "lessons"
+        self.rules_dir = self.evolution_dir / "rules"
+        self.rule_index_path = self.rules_dir / "index.json"
 
     def create_lesson(
         self,
@@ -131,6 +143,9 @@ class EvolutionService:
         recommendation: str,
         confidence: float,
         evidence: dict[str, Any] | None = None,
+        title: str = "",
+        conditions: dict[str, Any] | None = None,
+        expected_benefit: dict[str, Any] | None = None,
     ) -> LessonRecord:
         now = datetime.now(UTC).isoformat()
         record = LessonRecord(
@@ -145,13 +160,23 @@ class EvolutionService:
             evidence=evidence or {},
             created_at=now,
             updated_at=now,
+            title=title,
+            conditions=conditions or {},
+            expected_benefit=expected_benefit or {},
         )
         self._write_lesson(record)
         return record
 
-    def list_lessons(self) -> list[LessonRecord]:
-        self.lessons_dir.mkdir(parents=True, exist_ok=True)
-        lessons = [self._read_lesson(path) for path in self.lessons_dir.glob("*.json")]
+    def list_lessons(self, status: str | None = None) -> list[LessonRecord]:
+        self.lessons_root.mkdir(parents=True, exist_ok=True)
+        if status is not None:
+            paths = list(self._lesson_dir_for_status(status).glob("*.json"))
+        else:
+            paths = []
+            for known_status in LESSON_STATUS_DIRS:
+                paths.extend(self._lesson_dir_for_status(known_status).glob("*.json"))
+            paths.extend(self.lessons_root.glob("*.json"))
+        lessons = [self._read_lesson(path) for path in paths]
         return sorted(lessons, key=lambda lesson: lesson.created_at, reverse=True)
 
     def list_protocols(self) -> list[EvolutionProtocol]:
@@ -162,11 +187,7 @@ class EvolutionService:
         lesson.status = "high_confidence"
         lesson.updated_at = datetime.now(UTC).isoformat()
         self._write_lesson(lesson)
-        self.high_confidence_dir.mkdir(parents=True, exist_ok=True)
-        (self.high_confidence_dir / f"{lesson.id}.json").write_text(
-            json.dumps(asdict(lesson), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        self._write_rule_index()
         return lesson
 
     def reject_lesson(self, lesson_id: str) -> LessonRecord:
@@ -174,20 +195,59 @@ class EvolutionService:
         lesson.status = "rejected"
         lesson.updated_at = datetime.now(UTC).isoformat()
         self._write_lesson(lesson)
+        self._write_rule_index()
+        return lesson
+
+    def mark_conflict(self, lesson_id: str, reason: str) -> LessonRecord:
+        lesson = self.get_lesson(lesson_id)
+        lesson.status = "conflicted"
+        lesson.updated_at = datetime.now(UTC).isoformat()
+        lesson.evidence = {**lesson.evidence, "conflict_reason": reason}
+        self._write_lesson(lesson)
+        self._write_rule_index()
         return lesson
 
     def get_lesson(self, lesson_id: str) -> LessonRecord:
-        path = self.lessons_dir / f"{lesson_id}.json"
-        if not path.exists():
-            raise FileNotFoundError(lesson_id)
-        return self._read_lesson(path)
+        for status in LESSON_STATUS_DIRS:
+            path = self._lesson_dir_for_status(status) / f"{lesson_id}.json"
+            if path.exists():
+                return self._read_lesson(path)
+        legacy_path = self.lessons_root / f"{lesson_id}.json"
+        if legacy_path.exists():
+            return self._read_lesson(legacy_path)
+        raise FileNotFoundError(lesson_id)
 
     def _write_lesson(self, lesson: LessonRecord) -> None:
-        self.lessons_dir.mkdir(parents=True, exist_ok=True)
-        (self.lessons_dir / f"{lesson.id}.json").write_text(
+        target_dir = self._lesson_dir_for_status(lesson.status)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for status in LESSON_STATUS_DIRS:
+            stale_path = self._lesson_dir_for_status(status) / f"{lesson.id}.json"
+            if stale_path.exists() and stale_path.parent != target_dir:
+                stale_path.unlink()
+        legacy_path = self.lessons_root / f"{lesson.id}.json"
+        if legacy_path.exists():
+            legacy_path.unlink()
+        (target_dir / f"{lesson.id}.json").write_text(
             json.dumps(asdict(lesson), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def _write_rule_index(self) -> None:
+        self.rules_dir.mkdir(parents=True, exist_ok=True)
+        high_confidence = [
+            asdict(lesson)
+            for lesson in self.list_lessons(status="high_confidence")
+        ]
+        self.rule_index_path.write_text(
+            json.dumps({"items": high_confidence}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _lesson_dir_for_status(self, status: str) -> Path:
+        dirname = LESSON_STATUS_DIRS.get(status)
+        if dirname is None:
+            raise ValueError(f"Unsupported lesson status: {status}")
+        return self.lessons_root / dirname
 
     @staticmethod
     def _read_lesson(path: Path) -> LessonRecord:
