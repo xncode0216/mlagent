@@ -1,4 +1,15 @@
-import { Check, Database, FileCode2, FileText, Folder, FolderOpen, FolderPlus, Upload, X } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Database,
+  FileCode2,
+  FileText,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Upload,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 
 import type { AgentSession, FileItem, Project } from "../../lib/api";
@@ -15,6 +26,7 @@ const fallbackItems: FileItem[] = [
 type FileExplorerProps = {
   activePath: string;
   currentProjectId?: string;
+  expandedFolders: string[];
   files: FileItem[];
   localProjectPath: string;
   newProjectName: string;
@@ -24,6 +36,7 @@ type FileExplorerProps = {
   onOpenLocalProject: () => Promise<void>;
   onSelect: (path: string) => void;
   onSwitchProject: (projectId: string) => void;
+  onToggleFolder: (path: string) => void;
   onUpload: (file: File) => Promise<void>;
   onSelectSession: (sessionId: string) => void;
   projectName?: string;
@@ -41,9 +54,39 @@ function getFileIcon(item: FileItem) {
   return <FileText size={14} />;
 }
 
+function getParentPath(path: string) {
+  const parts = path.split("/");
+  parts.pop();
+  return parts.join("/");
+}
+
+function getDepth(path: string) {
+  return Math.max(0, path.split("/").length - 1);
+}
+
+function isVisiblePath(path: string, expandedFolders: string[]) {
+  const parent = getParentPath(path);
+  if (!parent) return true;
+  const parts = parent.split("/");
+  return parts.every((_, index) => expandedFolders.includes(parts.slice(0, index + 1).join("/")));
+}
+
+function buildVisibleTree(items: FileItem[], expandedFolders: string[]) {
+  return items
+    .filter((item) => item.path !== "sessions")
+    .filter((item) => isVisiblePath(item.path, expandedFolders))
+    .sort((a, b) => {
+      const parentCompare = getParentPath(a.path).localeCompare(getParentPath(b.path));
+      if (parentCompare !== 0) return parentCompare;
+      if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+
 export function FileExplorer({
   activePath,
   currentProjectId,
+  expandedFolders,
   files,
   localProjectPath,
   newProjectName,
@@ -53,6 +96,7 @@ export function FileExplorer({
   onOpenLocalProject,
   onSelect,
   onSwitchProject,
+  onToggleFolder,
   onUpload,
   onSelectSession,
   projectName,
@@ -64,7 +108,7 @@ export function FileExplorer({
 }: FileExplorerProps) {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
-  const visibleFiles = (files.length > 0 ? files : fallbackItems).filter((item) => item.path !== "sessions");
+  const visibleFiles = buildVisibleTree(files.length > 0 ? files : fallbackItems, expandedFolders);
 
   async function submitProject() {
     if (!newProjectName.trim()) return;
@@ -260,9 +304,22 @@ export function FileExplorer({
         <ul className="file-list">
           {visibleFiles.map((item) => (
             <li key={item.path} className={item.path === activePath ? "selected" : ""}>
-              <button onClick={() => onSelect(item.path)}>
+              <button
+                className={item.type === "directory" ? "folder-row" : ""}
+                onClick={() => (item.type === "directory" ? onToggleFolder(item.path) : onSelect(item.path))}
+                style={{ paddingLeft: `${8 + getDepth(item.path) * 14}px` }}
+                type="button"
+              >
+                {item.type === "directory" ? (
+                  <ChevronRight
+                    className={expandedFolders.includes(item.path) ? "tree-chevron expanded" : "tree-chevron"}
+                    size={13}
+                  />
+                ) : (
+                  <span className="tree-spacer" />
+                )}
                 <span className="file-icon">{getFileIcon(item)}</span>
-                <span>{item.path}</span>
+                <span>{item.name}</span>
               </button>
             </li>
           ))}

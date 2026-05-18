@@ -1487,6 +1487,23 @@ button {
   width: 100%;
 }
 
+.file-list button.folder-row {
+  font-weight: 600;
+}
+
+.tree-chevron,
+.tree-spacer {
+  color: #6c7086;
+  flex: 0 0 auto;
+  height: 13px;
+  transition: transform 0.14s ease;
+  width: 13px;
+}
+
+.tree-chevron.expanded {
+  transform: rotate(90deg);
+}
+
 .lesson-filter-bar {
   display: flex;
   flex-wrap: wrap;

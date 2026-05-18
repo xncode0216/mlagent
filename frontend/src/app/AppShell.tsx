@@ -54,10 +54,15 @@ const sampleCsv = new Blob(["age,income,churn\n42,86000,1\n37,72000,0\n55,91000,
   type: "text/csv",
 });
 
-async function listWorkbenchFiles(projectId: string) {
-  const rootFiles = await listFiles(projectId);
-  const dataFiles = await listFiles(projectId, "data");
-  return [...rootFiles, ...dataFiles];
+async function listExpandedProjectFiles(projectId: string, folders: string[]) {
+  const batches = await Promise.all([listFiles(projectId), ...folders.map((folder) => listFiles(projectId, folder))]);
+  const byPath = new Map<string, FileItem>();
+  for (const batch of batches) {
+    for (const item of batch) {
+      byPath.set(item.path, item);
+    }
+  }
+  return Array.from(byPath.values());
 }
 
 function modeLabel(mode: MainMode) {
@@ -81,6 +86,7 @@ export function AppShell() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [activeFile, setActiveFile] = useState("data/customer_churn.csv");
   const [activeMode, setActiveMode] = useState<MainMode>("analysis");
   const [newProjectName, setNewProjectName] = useState("");
@@ -104,14 +110,19 @@ export function AppShell() {
     let cancelled = false;
 
     async function loadProject(current: Project) {
-      let projectFiles = await listWorkbenchFiles(current.id);
-      if (!projectFiles.some((item) => item.path === "data/customer_churn.csv")) {
+      let rootFiles = await listFiles(current.id);
+      let dataFiles: FileItem[] = [];
+      if (rootFiles.some((item) => item.path === "data" && item.type === "directory")) {
+        dataFiles = await listFiles(current.id, "data");
+      }
+      if (!dataFiles.some((item) => item.path === "data/customer_churn.csv")) {
         await uploadProjectFile(current.id, "data/customer_churn.csv", sampleCsv);
-        projectFiles = await listWorkbenchFiles(current.id);
+        rootFiles = await listFiles(current.id);
+        dataFiles = await listFiles(current.id, "data");
       }
 
       if (!cancelled) {
-        await activateProject(current, projectFiles);
+        await activateProject(current, [...rootFiles, ...dataFiles], ["data"]);
         setWorkspaceStatus("项目文件已同步");
       }
     }
@@ -217,10 +228,11 @@ export function AppShell() {
     void refreshSessionState();
   }, [activeSession, project, visibleEvents]);
 
-  async function activateProject(nextProject: Project, projectFiles?: FileItem[]) {
-    const nextFiles = projectFiles ?? (await listWorkbenchFiles(nextProject.id));
+  async function activateProject(nextProject: Project, projectFiles?: FileItem[], folders?: string[]) {
+    const nextFiles = projectFiles ?? (await listFiles(nextProject.id));
     setProject(nextProject);
     setFiles(nextFiles);
+    setExpandedFolders(folders ?? []);
     setActiveFile(nextFiles.find((item) => item.type === "file")?.path ?? "");
     const [nextLessons, nextProtocols, nextTrainingRuns, nextSessions, nextInjectionLogs] = await Promise.all([
       listLessons(nextProject.id),
@@ -293,8 +305,29 @@ export function AppShell() {
     if (!project) return;
     const targetPath = `data/${file.name}`;
     await uploadProjectFile(project.id, targetPath, file);
-    setFiles(await listWorkbenchFiles(project.id));
+    const [rootFiles, dataFiles] = await Promise.all([listFiles(project.id), listFiles(project.id, "data")]);
+    setFiles([...rootFiles, ...dataFiles]);
+    setExpandedFolders((current) => (current.includes("data") ? current : [...current, "data"]));
     setActiveFile(targetPath);
+  }
+
+  async function handleToggleFolder(path: string) {
+    if (!project) return;
+    if (expandedFolders.includes(path)) {
+      setExpandedFolders((current) => current.filter((item) => item !== path && !item.startsWith(`${path}/`)));
+      setFiles((current) => current.filter((item) => item.path === path || !item.path.startsWith(`${path}/`)));
+      return;
+    }
+
+    const children = await listFiles(project.id, path);
+    setFiles((current) => {
+      const byPath = new Map(current.map((item) => [item.path, item]));
+      for (const child of children) {
+        byPath.set(child.path, child);
+      }
+      return Array.from(byPath.values());
+    });
+    setExpandedFolders((current) => [...current, path]);
   }
 
   async function handleTrainModel(targetColumn: string, engine: TrainingEngine, useGpu: boolean) {
@@ -315,7 +348,7 @@ export function AppShell() {
           ? await trainSklearnModel(project.id, activeFile, targetColumn, "manual-training", useGpu)
           : await trainBaselineModel(project.id, activeFile, targetColumn, "manual-training");
       setTrainingResult(result);
-      setFiles(await listWorkbenchFiles(project.id));
+      setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
       setTrainingRuns(await listTrainingRuns(project.id));
       const lesson = await extractLesson(project.id, {
         source_type: "training",
@@ -476,6 +509,7 @@ export function AppShell() {
         <FileExplorer
           activePath={activeFile}
           currentProjectId={project?.id}
+          expandedFolders={expandedFolders}
           files={files}
           localProjectPath={localProjectPath}
           newProjectName={newProjectName}
@@ -485,6 +519,7 @@ export function AppShell() {
           onOpenLocalProject={handleOpenLocalProject}
           onSelect={setActiveFile}
           onSwitchProject={(projectId) => void switchProject(projectId)}
+          onToggleFolder={(path) => void handleToggleFolder(path)}
           onUpload={handleUpload}
           projects={projects}
           projectName={project?.name}
