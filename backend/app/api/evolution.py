@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
 from app.services.evolution_service import EvolutionProtocol, EvolutionService, LessonRecord
+from app.services.lesson_extractor import LessonExtractor
+from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/api/projects/{project_id}/evolution", tags=["evolution"])
 
@@ -18,6 +20,13 @@ class LessonExtractRequest(BaseModel):
     recommendation: str = Field(min_length=1)
     confidence: float = Field(ge=0, le=1)
     evidence: dict[str, Any] = Field(default_factory=dict)
+    title: str = ""
+    conditions: dict[str, Any] = Field(default_factory=dict)
+    expected_benefit: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExtractFromSessionRequest(BaseModel):
+    session_id: str = Field(min_length=1)
 
 
 class LessonList(BaseModel):
@@ -36,9 +45,9 @@ def _project_root(project_id: str) -> Path:
 
 
 @router.get("/lessons")
-def list_lessons(project_id: str) -> LessonList:
+def list_lessons(project_id: str, status: str | None = None) -> LessonList:
     service = EvolutionService(_project_root(project_id))
-    return LessonList(items=service.list_lessons())
+    return LessonList(items=service.list_lessons(status=status))
 
 
 @router.get("/protocols")
@@ -58,7 +67,35 @@ def extract_lesson(project_id: str, payload: LessonExtractRequest) -> LessonReco
         recommendation=payload.recommendation,
         confidence=payload.confidence,
         evidence=payload.evidence,
+        title=payload.title,
+        conditions=payload.conditions,
+        expected_benefit=payload.expected_benefit,
     )
+
+
+@router.post("/lessons/extract-from-session")
+def extract_lessons_from_session(project_id: str, payload: ExtractFromSessionRequest) -> LessonList:
+    root = _project_root(project_id)
+    evolution = EvolutionService(root)
+    session_service = SessionService(root)
+    events = session_service.list_events(payload.session_id)
+    candidates = LessonExtractor(root).extract_from_session(payload.session_id, events)
+    lessons = [
+        evolution.create_lesson(
+            source_type=item["source_type"],
+            source_id=item["source_id"],
+            domain=item["domain"],
+            observation=item["observation"],
+            recommendation=item["recommendation"],
+            confidence=item["confidence"],
+            evidence=item.get("evidence", {}),
+            title=item.get("title", ""),
+            conditions=item.get("conditions", {}),
+            expected_benefit=item.get("expected_benefit", {}),
+        )
+        for item in candidates
+    ]
+    return LessonList(items=lessons)
 
 
 @router.post("/lessons/{lesson_id}/adopt")

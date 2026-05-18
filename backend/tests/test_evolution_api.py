@@ -88,3 +88,38 @@ def test_list_evolution_protocols_includes_imported_skill_mechanisms(tmp_path, m
     assert "tdd-vertical-slice" in protocol_ids
     assert "two-axis-review" in protocol_ids
     assert all(item["agent_policy"] for item in protocols)
+
+
+def test_extract_lessons_from_session_artifacts(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    root = tmp_path / "dev-user" / project["id"]
+    artifact_path = root / "results" / "session-1" / "missing.json"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_text(
+        '{"columns":{"age":{"missing_count":2,"missing_ratio":0.02}}}',
+        encoding="utf-8",
+    )
+    session_dir = root / "sessions" / "session-1"
+    session_dir.mkdir(parents=True)
+    (root / "sessions" / "index.json").write_text(
+        '{"sessions":[{"id":"session-1","project_id":"%s","mode":"analysis","title":"分析","created_at":"now","updated_at":"now","message_count":0}]}'
+        % project["id"],
+        encoding="utf-8",
+    )
+    (session_dir / "events.jsonl").write_text(
+        '{"payload":{"type":"artifact_created","trace_id":"trace-1","artifact":{"name":"missing.json","path":"results/session-1/missing.json"}}}\n',
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract-from-session",
+        json={"session_id": "session-1"},
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["status"] == "pending_review"
