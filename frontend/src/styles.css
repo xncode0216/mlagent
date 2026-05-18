@@ -1167,6 +1167,20 @@ button {
   text-align: right;
 }
 
+.file-meta-row {
+  display: flex;
+  gap: 8px;
+}
+
+.file-meta-row span {
+  background: #0f172a;
+  border: 1px solid #263244;
+  border-radius: 999px;
+  color: #a6adc8;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
 .right-panel-footer {
   border-top: 1px solid #263244;
   margin-top: 12px;

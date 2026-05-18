@@ -1,7 +1,7 @@
-import { BarChart3, Code2, Database, Download, FileText, LineChart, Play, Table2 } from "lucide-react";
+import { BarChart3, Database, Download, FileText, LineChart, Play, Table2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { readProjectFileContent, type ExperimentRun, type TrainingResult } from "../../lib/api";
+import { readProjectFileContent, type ExperimentRun, type ProjectFileContent, type TrainingResult } from "../../lib/api";
 import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
 
@@ -206,6 +206,157 @@ function ArtifactPreview({
   }
 }
 
+function formatFileSize(size?: number) {
+  if (typeof size !== "number") return "-";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function parseCsvPreview(content: string, maxRows = 50) {
+  const rows: string[][] = [];
+  let current = "";
+  let row: string[] = [];
+  let quoted = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+    const next = content[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (char === "," && !quoted) {
+      row.push(current);
+      current = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(current);
+      rows.push(row);
+      row = [];
+      current = "";
+      if (rows.length > maxRows) break;
+      continue;
+    }
+    current += char;
+  }
+
+  if (current || row.length > 0) {
+    row.push(current);
+    rows.push(row);
+  }
+
+  const [headers = [], ...body] = rows.filter((item) => item.some((cell) => cell.length > 0));
+  return { headers, rows: body.slice(0, maxRows) };
+}
+
+function CsvFilePreview({ content }: { content: string }) {
+  const preview = useMemo(() => parseCsvPreview(content), [content]);
+  if (preview.headers.length === 0) return <div className="empty-state compact-empty">CSV 文件为空。</div>;
+
+  return (
+    <div className="data-preview">
+      <table>
+        <thead>
+          <tr>
+            {preview.headers.map((header, index) => (
+              <th key={`${header}-${index}`}>{header || `列 ${index + 1}`}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {preview.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {preview.headers.map((_, columnIndex) => (
+                <td key={columnIndex}>{row[columnIndex] ?? ""}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ActiveFilePreview({
+  activeFile,
+  mode,
+  projectId,
+}: {
+  activeFile: string;
+  mode: "code" | "data";
+  projectId?: string;
+}) {
+  const [fileContent, setFileContent] = useState<ProjectFileContent | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId || !activeFile) {
+      setFileContent(null);
+      return;
+    }
+
+    let cancelled = false;
+    setFileContent(null);
+    setError(null);
+    readProjectFileContent(projectId, activeFile)
+      .then((result) => {
+        if (!cancelled) setFileContent(result);
+      })
+      .catch((nextError) => {
+        if (!cancelled) {
+          setError(nextError instanceof Error ? nextError.message : "文件读取失败");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFile, projectId]);
+
+  if (!projectId) return <div className="empty-state">请选择项目后查看文件内容。</div>;
+  if (!activeFile) return <div className="empty-state">请选择一个文件。</div>;
+  if (error) return <div className="empty-state">{error.includes("415") ? "当前文件是二进制内容，暂不支持直接预览。" : error}</div>;
+  if (!fileContent) return <div className="empty-state">正在读取 {activeFile}...</div>;
+
+  const isCsv = activeFile.toLowerCase().endsWith(".csv") || fileContent.mime_type === "text/csv";
+  const isJson = activeFile.toLowerCase().endsWith(".json") || fileContent.mime_type === "application/json";
+
+  return (
+    <div className={mode === "data" ? "data-workspace" : "code-workspace"}>
+      <div className="dataset-strip">
+        <span>当前文件</span>
+        <strong title={fileContent.path}>{fileContent.path}</strong>
+      </div>
+      <div className="file-meta-row">
+        <span>{fileContent.mime_type}</span>
+        <span>{formatFileSize(fileContent.size)}</span>
+      </div>
+      {mode === "data" && isCsv ? <CsvFilePreview content={fileContent.content} /> : null}
+      {mode === "data" && isJson ? (
+        (() => {
+          try {
+            return <JsonTable value={JSON.parse(fileContent.content)} />;
+          } catch {
+            return <pre className="json-preview">{fileContent.content}</pre>;
+          }
+        })()
+      ) : null}
+      {mode === "data" && !isCsv && !isJson ? (
+        <pre className="json-preview">{fileContent.content}</pre>
+      ) : null}
+      {mode === "code" ? <pre className="json-preview code-panel">{fileContent.content}</pre> : null}
+    </div>
+  );
+}
+
 function DemoChartGallery() {
   const bars = [18, 42, 68, 86, 76, 58, 35, 20, 12];
   const heatCells = Array.from({ length: 42 }, (_, index) => (index % 9 === 0 ? "hot" : index % 5 === 0 ? "warm" : ""));
@@ -258,67 +409,6 @@ function DemoChartGallery() {
           <Play size={15} />
           传给 ML Agent
         </button>
-      </div>
-    </div>
-  );
-}
-
-function CodeWorkspace({ activeFile }: { activeFile: string }) {
-  return (
-    <div className="code-workspace">
-      <div className="card-heading">
-        <Code2 size={15} />
-        可复现分析脚本
-      </div>
-      <pre className="json-preview code-panel">{`import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-df = pd.read_csv("${activeFile}")
-profile = df.describe(include="all")
-missing = df.isnull().mean().sort_values(ascending=False)
-corr = df.select_dtypes("number").corr()
-
-print(profile.head())
-print(missing.head(10))`}</pre>
-    </div>
-  );
-}
-
-function DataWorkspace({ activeFile }: { activeFile: string }) {
-  const rows = [
-    ["customer_id", "object", "0", "唯一客户编号"],
-    ["tenure", "int64", "0", "客户在网时长"],
-    ["monthly_charges", "float64", "0", "月费金额"],
-    ["total_charges", "float64", "11", "累计费用"],
-    ["churn", "category", "0", "是否流失"],
-  ];
-  return (
-    <div className="data-workspace">
-      <div className="dataset-strip">
-        <span>当前数据集</span>
-        <strong>{activeFile}</strong>
-      </div>
-      <div className="data-preview">
-        <table>
-          <thead>
-            <tr>
-              <th>字段</th>
-              <th>类型</th>
-              <th>缺失</th>
-              <th>说明</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row[0]}>
-                {row.map((cell) => (
-                  <td key={cell}>{cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );
@@ -610,7 +700,7 @@ export function RightPanel({
           {selectedArtifact ? (
             <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
           ) : (
-            <CodeWorkspace activeFile={activeFile} />
+            <ActiveFilePreview activeFile={activeFile} mode="code" projectId={projectId} />
           )}
         </>
       ) : null}
@@ -620,7 +710,7 @@ export function RightPanel({
           {selectedArtifact ? (
             <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
           ) : (
-            <DataWorkspace activeFile={activeFile} />
+            <ActiveFilePreview activeFile={activeFile} mode="data" projectId={projectId} />
           )}
         </>
       ) : null}

@@ -14,6 +14,13 @@ export type FileItem = {
   size?: number | null;
 };
 
+export type ProjectFileContent = {
+  path: string;
+  content: string;
+  size: number;
+  mime_type: string;
+};
+
 export type TrainingResult = {
   experiment_id: string;
   status: "completed";
@@ -227,8 +234,8 @@ export async function createProjectFile(
 export async function readProjectFileContent(
   projectId: string,
   path: string,
-): Promise<{ path: string; content: string }> {
-  return request<{ path: string; content: string }>(
+): Promise<ProjectFileContent> {
+  return request<ProjectFileContent>(
     `/api/projects/${projectId}/files/content?path=${encodeURIComponent(path)}`,
   );
 }

@@ -1,3 +1,4 @@
+import mimetypes
 from pathlib import Path
 from typing import Literal
 
@@ -5,7 +6,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
-from app.schemas.file import FileItem, FileList
+from app.schemas.file import FileContent, FileItem, FileList
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
@@ -62,7 +63,7 @@ def create_file(project_id: str, payload: FileCreateRequest) -> FileItem:
     if payload.type == "directory":
         target.mkdir()
     else:
-        target.write_text(payload.content, encoding="utf-8")
+        target.write_text(payload.content, encoding="utf-8", newline="")
 
     return FileItem(
         name=target.name,
@@ -94,12 +95,22 @@ async def upload_file(
 
 
 @router.get("/content")
-def read_file_content(project_id: str, path: str) -> dict[str, str]:
+def read_file_content(project_id: str, path: str) -> FileContent:
     root = _get_project_root(project_id)
     target = _resolve_project_path(root, path)
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    return {
-        "path": str(target.relative_to(root)).replace("\\", "/"),
-        "content": target.read_text(encoding="utf-8"),
-    }
+
+    data = target.read_bytes()
+    try:
+        content = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=415, detail="Binary file preview is not supported") from exc
+
+    mime_type = mimetypes.guess_type(target.name)[0] or "text/plain"
+    return FileContent(
+        path=str(target.relative_to(root)).replace("\\", "/"),
+        content=content,
+        size=len(data),
+        mime_type=mime_type,
+    )

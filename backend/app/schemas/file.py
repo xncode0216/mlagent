@@ -10,3 +10,10 @@ class FileItem(BaseModel):
 
 class FileList(BaseModel):
     items: list[FileItem]
+
+
+class FileContent(BaseModel):
+    path: str
+    content: str
+    size: int
+    mime_type: str

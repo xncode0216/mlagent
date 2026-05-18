@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -43,6 +45,8 @@ def test_upload_and_read_project_file(tmp_path, monkeypatch):
 
     assert content_response.status_code == 200
     assert content_response.json()["content"] == "age,churn\n42,1\n"
+    assert content_response.json()["size"] == len("age,churn\n42,1\n")
+    assert content_response.json()["mime_type"] == "text/csv"
 
 
 def test_upload_rejects_path_escape(tmp_path, monkeypatch):
@@ -109,3 +113,21 @@ def test_create_project_file_rejects_escape_and_existing_target(tmp_path, monkey
     assert escape_response.status_code == 400
     assert first_response.status_code == 200
     assert duplicate_response.status_code == 409
+
+
+def test_read_project_file_rejects_binary_preview(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app, raise_server_exceptions=False)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    binary_path = Path(project["workspace_path"]) / "models" / "model.pkl"
+    binary_path.write_bytes(b"\x80\x04\x95\x00\x00\x00")
+
+    response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "models/model.pkl"},
+    )
+
+    assert response.status_code == 415
+    assert response.json()["detail"] == "Binary file preview is not supported"
