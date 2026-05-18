@@ -268,6 +268,10 @@ export async function deleteProjectFile(
   );
 }
 
+export function projectFileDownloadUrl(projectId: string, path: string): string {
+  return `${API_BASE_URL}/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`;
+}
+
 export async function readProjectFileContent(
   projectId: string,
   path: string,

@@ -2,6 +2,7 @@ import {
   Check,
   ChevronRight,
   Database,
+  Download,
   FileCode2,
   FilePlus2,
   FileText,
@@ -15,7 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import type { AgentSession, FileItem, Project } from "../../lib/api";
+import { projectFileDownloadUrl, type AgentSession, type FileItem, type Project } from "../../lib/api";
 
 const fallbackItems: FileItem[] = [
   { name: "customer_churn.csv", path: "data/customer_churn.csv", type: "file" },
@@ -473,6 +474,17 @@ export function FileExplorer({
                     <span>{item.name}</span>
                   </button>
                   <div className="file-row-actions">
+                    {currentProjectId && item.type === "file" ? (
+                      <a
+                        aria-label={`下载 ${item.path}`}
+                        className="icon-button compact"
+                        download={item.name}
+                        href={projectFileDownloadUrl(currentProjectId, item.path)}
+                        title="下载"
+                      >
+                        <Download size={13} />
+                      </a>
+                    ) : null}
                     <button
                       aria-label={`重命名 ${item.path}`}
                       className="icon-button compact"

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
@@ -118,6 +119,20 @@ def search_files(project_id: str, query: str, path: str = "", max_matches: int =
                 break
 
     return FileSearchResult(items=matches[:max_matches])
+
+
+@router.get("/download")
+def download_file(project_id: str, path: str) -> FileResponse:
+    root = _get_project_root(project_id)
+    target = _resolve_project_path(root, path)
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        target,
+        media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream",
+        filename=target.name,
+    )
 
 
 @router.post("/create")

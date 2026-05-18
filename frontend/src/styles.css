@@ -257,6 +257,12 @@ button {
   width: 30px;
 }
 
+.icon-button:link,
+.icon-button:visited {
+  color: #a6adc8;
+  text-decoration: none;
+}
+
 .icon-button:hover {
   background: #1e1e2e;
   border-color: #45475a;

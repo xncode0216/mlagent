@@ -326,3 +326,43 @@ def test_search_project_files_rejects_path_escape(tmp_path, monkeypatch):
     )
 
     assert response.status_code == 400
+
+
+def test_download_project_file_returns_attachment(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "results/report.md", "type": "file", "content": "# Report\nAUC: 0.91\n"},
+    )
+
+    response = client.get(
+        f"/api/projects/{project['id']}/files/download",
+        params={"path": "results/report.md"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == "# Report\nAUC: 0.91\n"
+    assert response.headers["content-disposition"].endswith('filename="report.md"')
+
+
+def test_download_project_file_rejects_directory_and_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    directory_response = client.get(
+        f"/api/projects/{project['id']}/files/download",
+        params={"path": "results"},
+    )
+    escape_response = client.get(
+        f"/api/projects/{project['id']}/files/download",
+        params={"path": "../escape.txt"},
+    )
+
+    assert directory_response.status_code == 404
+    assert escape_response.status_code == 400
