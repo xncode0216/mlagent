@@ -7,7 +7,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
-from app.schemas.file import FileContent, FileDeleteResult, FileItem, FileList
+from app.schemas.file import FileContent, FileDeleteResult, FileItem, FileList, FileSearchMatch, FileSearchResult
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
@@ -42,10 +42,14 @@ def _resolve_project_path(root: Path, path: str) -> Path:
     return current
 
 
+def _relative_path(root: Path, target: Path) -> str:
+    return str(target.relative_to(root)).replace("\\", "/")
+
+
 def _to_file_item(root: Path, target: Path) -> FileItem:
     return FileItem(
         name=target.name,
-        path=str(target.relative_to(root)).replace("\\", "/"),
+        path=_relative_path(root, target),
         type="directory" if target.is_dir() else "file",
         size=target.stat().st_size if target.is_file() else None,
     )
@@ -62,6 +66,58 @@ def list_files(project_id: str, path: str = "") -> FileList:
     for child in sorted(current.iterdir(), key=lambda item: (item.is_file(), item.name.lower())):
         items.append(_to_file_item(root, child))
     return FileList(items=items)
+
+
+@router.get("/search")
+def search_files(project_id: str, query: str, path: str = "", max_matches: int = 50) -> FileSearchResult:
+    normalized_query = query.strip().lower()
+    if not normalized_query:
+        return FileSearchResult(items=[])
+
+    root = _get_project_root(project_id)
+    current = _resolve_project_path(root, path)
+    if not current.exists() or not current.is_dir():
+        raise HTTPException(status_code=404, detail="Directory not found")
+
+    matches: list[FileSearchMatch] = []
+    for target in sorted(current.rglob("*"), key=lambda item: _relative_path(root, item).lower()):
+        if len(matches) >= max_matches:
+            break
+        if not target.is_file():
+            continue
+
+        relative = _relative_path(root, target)
+        if normalized_query in relative.lower():
+            matches.append(
+                FileSearchMatch(
+                    path=relative,
+                    name=target.name,
+                    match_type="path",
+                    preview=relative,
+                )
+            )
+            if len(matches) >= max_matches:
+                break
+
+        try:
+            content = target.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            if normalized_query in line.lower():
+                matches.append(
+                    FileSearchMatch(
+                        path=relative,
+                        name=target.name,
+                        match_type="content",
+                        line_number=line_number,
+                        preview=line.strip()[:240],
+                    )
+                )
+                break
+
+    return FileSearchResult(items=matches[:max_matches])
 
 
 @router.post("/create")
@@ -104,7 +160,7 @@ def delete_file(project_id: str, path: str) -> FileDeleteResult:
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
-    deleted_path = str(target.relative_to(root)).replace("\\", "/")
+    deleted_path = _relative_path(root, target)
     if target.is_dir():
         shutil.rmtree(target)
     else:
@@ -143,7 +199,7 @@ def read_file_content(project_id: str, path: str) -> FileContent:
 
     mime_type = mimetypes.guess_type(target.name)[0] or "text/plain"
     return FileContent(
-        path=str(target.relative_to(root)).replace("\\", "/"),
+        path=_relative_path(root, target),
         content=content,
         size=len(data),
         mime_type=mime_type,
@@ -162,7 +218,7 @@ def update_file_content(project_id: str, payload: FileUpdateRequest) -> FileCont
     target.write_text(payload.content, encoding="utf-8", newline="")
     data = payload.content.encode("utf-8")
     return FileContent(
-        path=str(target.relative_to(root)).replace("\\", "/"),
+        path=_relative_path(root, target),
         content=payload.content,
         size=len(data),
         mime_type=mimetypes.guess_type(target.name)[0] or "text/plain",

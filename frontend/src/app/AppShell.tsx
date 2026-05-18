@@ -15,6 +15,7 @@ import type { AgentStreamEvent } from "../features/chat/types";
 import { useAgentStream } from "../features/chat/useAgentStream";
 import { EvolutionWorkspace } from "../features/evolution/EvolutionWorkspace";
 import { FileExplorer } from "../features/files/FileExplorer";
+import { SearchPanel } from "../features/files/SearchPanel";
 import { RightPanel } from "../features/right-panel/RightPanel";
 import {
   adoptLesson,
@@ -51,6 +52,7 @@ import {
 } from "../lib/api";
 
 type MainMode = "analysis" | "machine-learning" | "evolution";
+type ActivityMode = "explorer" | "search";
 type TrainingEngine = "baseline" | "sklearn";
 
 const sampleCsv = new Blob(["age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n"], {
@@ -95,6 +97,7 @@ export function AppShell() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [activeFile, setActiveFile] = useState("data/customer_churn.csv");
+  const [activeActivity, setActiveActivity] = useState<ActivityMode>("explorer");
   const [activeMode, setActiveMode] = useState<MainMode>("analysis");
   const [newProjectName, setNewProjectName] = useState("");
   const [localProjectPath, setLocalProjectPath] = useState("");
@@ -538,10 +541,20 @@ export function AppShell() {
         <div className="model-selector">Claude / DeepSeek / Local vLLM</div>
       </header>
       <aside className="activity-bar" aria-label="工作台导航">
-        <button className="active" aria-label="资源管理器" title="资源管理器">
+        <button
+          className={activeActivity === "explorer" ? "active" : ""}
+          aria-label="资源管理器"
+          title="资源管理器"
+          onClick={() => setActiveActivity("explorer")}
+        >
           <FolderOpen size={18} />
         </button>
-        <button aria-label="搜索" title="搜索">
+        <button
+          className={activeActivity === "search" ? "active" : ""}
+          aria-label="搜索"
+          title="搜索"
+          onClick={() => setActiveActivity("search")}
+        >
           <Search size={18} />
         </button>
         <button aria-label="数据源" title="数据源">
@@ -565,32 +578,36 @@ export function AppShell() {
         </button>
       </aside>
       <aside className="file-sidebar">
-        <FileExplorer
-          activePath={activeFile}
-          currentProjectId={project?.id}
-          expandedFolders={expandedFolders}
-          files={files}
-          localProjectPath={localProjectPath}
-          newProjectName={newProjectName}
-          onCreateProject={handleCreateProject}
-          onCreateFile={handleCreateFile}
-          onDeleteFile={handleDeleteFile}
-          onLocalProjectPathChange={setLocalProjectPath}
-          onNewProjectNameChange={setNewProjectName}
-          onOpenLocalProject={handleOpenLocalProject}
-          onRenameFile={handleRenameFile}
-          onSelect={setActiveFile}
-          onSwitchProject={(projectId) => void switchProject(projectId)}
-          onToggleFolder={(path) => void handleToggleFolder(path)}
-          onUpload={handleUpload}
-          projects={projects}
-          projectName={project?.name}
-          projectPath={project?.workspace_path}
-          sessions={sessions}
-          activeSessionId={activeSession?.id}
-          onSelectSession={(sessionId) => void handleSelectSession(sessionId)}
-          status={workspaceStatus}
-        />
+        {activeActivity === "explorer" ? (
+          <FileExplorer
+            activePath={activeFile}
+            currentProjectId={project?.id}
+            expandedFolders={expandedFolders}
+            files={files}
+            localProjectPath={localProjectPath}
+            newProjectName={newProjectName}
+            onCreateProject={handleCreateProject}
+            onCreateFile={handleCreateFile}
+            onDeleteFile={handleDeleteFile}
+            onLocalProjectPathChange={setLocalProjectPath}
+            onNewProjectNameChange={setNewProjectName}
+            onOpenLocalProject={handleOpenLocalProject}
+            onRenameFile={handleRenameFile}
+            onSelect={setActiveFile}
+            onSwitchProject={(projectId) => void switchProject(projectId)}
+            onToggleFolder={(path) => void handleToggleFolder(path)}
+            onUpload={handleUpload}
+            projects={projects}
+            projectName={project?.name}
+            projectPath={project?.workspace_path}
+            sessions={sessions}
+            activeSessionId={activeSession?.id}
+            onSelectSession={(sessionId) => void handleSelectSession(sessionId)}
+            status={workspaceStatus}
+          />
+        ) : (
+          <SearchPanel projectId={project?.id} onSelect={setActiveFile} />
+        )}
       </aside>
       {activeMode === "evolution" ? (
         <EvolutionWorkspace

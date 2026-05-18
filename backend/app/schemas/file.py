@@ -22,3 +22,15 @@ class FileContent(BaseModel):
 class FileDeleteResult(BaseModel):
     path: str
     deleted: bool
+
+
+class FileSearchMatch(BaseModel):
+    path: str
+    name: str
+    match_type: str
+    line_number: int | None = None
+    preview: str
+
+
+class FileSearchResult(BaseModel):
+    items: list[FileSearchMatch]

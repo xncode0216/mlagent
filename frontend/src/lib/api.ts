@@ -21,6 +21,14 @@ export type ProjectFileContent = {
   mime_type: string;
 };
 
+export type FileSearchMatch = {
+  path: string;
+  name: string;
+  match_type: "path" | "content" | string;
+  line_number?: number | null;
+  preview: string;
+};
+
 export type TrainingResult = {
   experiment_id: string;
   status: "completed";
@@ -201,6 +209,13 @@ export async function openLocalProject(path: string, name?: string): Promise<Pro
 export async function listFiles(projectId: string, path = ""): Promise<FileItem[]> {
   const query = path ? `?path=${encodeURIComponent(path)}` : "";
   const result = await request<{ items: FileItem[] }>(`/api/projects/${projectId}/files${query}`);
+  return result.items;
+}
+
+export async function searchProjectFiles(projectId: string, query: string): Promise<FileSearchMatch[]> {
+  const result = await request<{ items: FileSearchMatch[] }>(
+    `/api/projects/${projectId}/files/search?query=${encodeURIComponent(query)}`,
+  );
   return result.items;
 }
 

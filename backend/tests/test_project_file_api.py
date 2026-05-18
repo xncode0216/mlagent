@@ -275,3 +275,54 @@ def test_update_project_file_content_rejects_directory_and_path_escape(tmp_path,
 
     assert directory_response.status_code == 400
     assert escape_response.status_code == 400
+
+
+def test_search_project_files_matches_path_and_text_content(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={
+            "path": "notebooks/churn_notes.py",
+            "type": "file",
+            "content": "import pandas as pd\n# detect customer churn\n",
+        },
+    )
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={
+            "path": "agent_schema/data_agent.yaml",
+            "type": "file",
+            "content": "skills:\n  - profile_dataset\n",
+        },
+    )
+
+    response = client.get(
+        f"/api/projects/{project['id']}/files/search",
+        params={"query": "churn"},
+    )
+
+    assert response.status_code == 200
+    matches = response.json()["items"]
+    assert any(item["path"] == "notebooks/churn_notes.py" and item["match_type"] == "path" for item in matches)
+    content_match = next(item for item in matches if item["match_type"] == "content")
+    assert content_match["path"] == "notebooks/churn_notes.py"
+    assert content_match["line_number"] == 2
+    assert "detect customer churn" in content_match["preview"]
+
+
+def test_search_project_files_rejects_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    response = client.get(
+        f"/api/projects/{project['id']}/files/search",
+        params={"query": "x", "path": "../escape"},
+    )
+
+    assert response.status_code == 400
