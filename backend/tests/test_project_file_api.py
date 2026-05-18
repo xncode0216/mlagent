@@ -231,3 +231,47 @@ def test_delete_project_file_rejects_root_and_escape(tmp_path, monkeypatch):
 
     assert root_response.status_code == 400
     assert escape_response.status_code == 400
+
+
+def test_update_project_file_content_preserves_exact_text(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "agent_schema/data_agent.yaml", "type": "file", "content": "name: old\n"},
+    )
+    update_response = client.put(
+        f"/api/projects/{project['id']}/files/content",
+        json={"path": "agent_schema/data_agent.yaml", "content": "name: new\nskills:\n  - profile_dataset\n"},
+    )
+    read_response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "agent_schema/data_agent.yaml"},
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["path"] == "agent_schema/data_agent.yaml"
+    assert update_response.json()["size"] == len("name: new\nskills:\n  - profile_dataset\n")
+    assert read_response.json()["content"] == "name: new\nskills:\n  - profile_dataset\n"
+
+
+def test_update_project_file_content_rejects_directory_and_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    directory_response = client.put(
+        f"/api/projects/{project['id']}/files/content",
+        json={"path": "data", "content": "bad"},
+    )
+    escape_response = client.put(
+        f"/api/projects/{project['id']}/files/content",
+        json={"path": "../escape.txt", "content": "bad"},
+    )
+
+    assert directory_response.status_code == 400
+    assert escape_response.status_code == 400

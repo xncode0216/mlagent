@@ -1,7 +1,13 @@
 import { BarChart3, Database, Download, FileText, LineChart, Play, Table2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { readProjectFileContent, type ExperimentRun, type ProjectFileContent, type TrainingResult } from "../../lib/api";
+import {
+  readProjectFileContent,
+  updateProjectFileContent,
+  type ExperimentRun,
+  type ProjectFileContent,
+  type TrainingResult,
+} from "../../lib/api";
 import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
 
@@ -295,7 +301,9 @@ function ActiveFilePreview({
   projectId?: string;
 }) {
   const [fileContent, setFileContent] = useState<ProjectFileContent | null>(null);
+  const [draftContent, setDraftContent] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
     if (!projectId || !activeFile) {
@@ -308,7 +316,11 @@ function ActiveFilePreview({
     setError(null);
     readProjectFileContent(projectId, activeFile)
       .then((result) => {
-        if (!cancelled) setFileContent(result);
+        if (!cancelled) {
+          setFileContent(result);
+          setDraftContent(result.content);
+          setSaveState("idle");
+        }
       })
       .catch((nextError) => {
         if (!cancelled) {
@@ -320,6 +332,21 @@ function ActiveFilePreview({
       cancelled = true;
     };
   }, [activeFile, projectId]);
+
+  async function saveFile() {
+    if (!projectId || !fileContent) return;
+    setSaveState("saving");
+    setError(null);
+    try {
+      const result = await updateProjectFileContent(projectId, fileContent.path, draftContent);
+      setFileContent(result);
+      setDraftContent(result.content);
+      setSaveState("saved");
+    } catch (nextError) {
+      setSaveState("error");
+      setError(nextError instanceof Error ? nextError.message : "文件保存失败");
+    }
+  }
 
   if (!projectId) return <div className="empty-state">请选择项目后查看文件内容。</div>;
   if (!activeFile) return <div className="empty-state">请选择一个文件。</div>;
@@ -338,6 +365,8 @@ function ActiveFilePreview({
       <div className="file-meta-row">
         <span>{fileContent.mime_type}</span>
         <span>{formatFileSize(fileContent.size)}</span>
+        {mode === "code" && draftContent !== fileContent.content ? <span>未保存</span> : null}
+        {mode === "code" && saveState === "saved" ? <span>已保存</span> : null}
       </div>
       {mode === "data" && isCsv ? <CsvFilePreview content={fileContent.content} /> : null}
       {mode === "data" && isJson ? (
@@ -352,7 +381,24 @@ function ActiveFilePreview({
       {mode === "data" && !isCsv && !isJson ? (
         <pre className="json-preview">{fileContent.content}</pre>
       ) : null}
-      {mode === "code" ? <pre className="json-preview code-panel">{fileContent.content}</pre> : null}
+      {mode === "code" ? (
+        <div className="code-editor">
+          <textarea
+            aria-label="文件内容编辑器"
+            spellCheck={false}
+            value={draftContent}
+            onChange={(event) => {
+              setDraftContent(event.target.value);
+              setSaveState("idle");
+            }}
+          />
+          <div className="editor-actions">
+            <button disabled={saveState === "saving" || draftContent === fileContent.content} onClick={() => void saveFile()}>
+              {saveState === "saving" ? "保存中..." : "保存文件"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

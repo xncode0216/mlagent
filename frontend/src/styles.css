@@ -1037,6 +1037,53 @@ button {
   max-height: 420px;
 }
 
+.code-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.code-editor textarea {
+  background: #0a0a0f;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  color: #cdd6f4;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  min-height: 360px;
+  outline: none;
+  padding: 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.code-editor textarea:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18);
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.editor-actions button {
+  background: #1d4ed8;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.editor-actions button:disabled {
+  background: #172033;
+  border-color: #263244;
+  color: #6c7086;
+  cursor: not-allowed;
+}
+
 .chart-gallery {
   display: grid;
   gap: 10px;

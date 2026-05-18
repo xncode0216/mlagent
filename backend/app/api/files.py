@@ -23,6 +23,11 @@ class FileRenameRequest(BaseModel):
     new_path: str = Field(min_length=1, max_length=4096)
 
 
+class FileUpdateRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+    content: str
+
+
 def _get_project_root(project_id: str) -> Path:
     project = get_registered_project(project_id)
     if project is None:
@@ -142,4 +147,23 @@ def read_file_content(project_id: str, path: str) -> FileContent:
         content=content,
         size=len(data),
         mime_type=mime_type,
+    )
+
+
+@router.put("/content")
+def update_file_content(project_id: str, payload: FileUpdateRequest) -> FileContent:
+    root = _get_project_root(project_id)
+    target = _resolve_project_path(root, payload.path)
+    if target.exists() and target.is_dir():
+        raise HTTPException(status_code=400, detail="Target is a directory")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    target.write_text(payload.content, encoding="utf-8", newline="")
+    data = payload.content.encode("utf-8")
+    return FileContent(
+        path=str(target.relative_to(root)).replace("\\", "/"),
+        content=payload.content,
+        size=len(data),
+        mime_type=mimetypes.guess_type(target.name)[0] or "text/plain",
     )

@@ -262,6 +262,18 @@ export async function readProjectFileContent(
   );
 }
 
+export async function updateProjectFileContent(
+  projectId: string,
+  path: string,
+  content: string,
+): Promise<ProjectFileContent> {
+  return request<ProjectFileContent>(`/api/projects/${projectId}/files/content`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, content }),
+  });
+}
+
 export async function createAgentSession(
   projectId: string,
   payload: { mode: string; title?: string },
