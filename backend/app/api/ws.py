@@ -9,6 +9,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.projects import get_registered_project
 from app.services.artifact_service import ArtifactService
+from app.services.evolution_service import EvolutionService
+from app.services.lesson_extractor import LessonExtractor
+from app.services.rule_injection_service import RuleInjectionService
 from app.services.session_service import SessionService
 from app.tools.data_analysis import correlation_matrix, detect_missing, plot_distribution, profile_dataset
 
@@ -127,6 +130,30 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                         metadata={"active_file": active_file},
                     )
 
+                rule_service = RuleInjectionService(project_root)
+                match_result = rule_service.match_rules(
+                    session_id=session_id,
+                    context={
+                        "mode": str(context.get("mode") or "analysis"),
+                        "tags": ["missing-value"],
+                    },
+                )
+                rules_event = {
+                    "type": "rules_matched",
+                    "trace_id": trace_id,
+                    "matched_rules": match_result["matched_rules"],
+                    "prompt_snippet": rule_service.inject_prompt(
+                        session_id,
+                        match_result["matched_rules"],
+                    ),
+                }
+                session_service.append_event(
+                    session_id=session_id,
+                    event_type="rules_matched",
+                    payload=rules_event,
+                )
+                await websocket.send_json(rules_event)
+
                 artifacts = [
                     ("dataframe", "profile.json", profile_dataset(resolution.csv_path)),
                     ("dataframe", "missing.json", detect_missing(resolution.csv_path)),
@@ -162,6 +189,37 @@ async def session_socket(websocket: WebSocket, session_id: str) -> None:
                         payload=event_payload,
                     )
                     await websocket.send_json(event_payload)
+
+                lesson_candidates = LessonExtractor(project_root).extract_from_session(
+                    session_id,
+                    session_service.list_events(session_id),
+                )
+                evolution = EvolutionService(project_root)
+                for item in lesson_candidates:
+                    lesson = evolution.create_lesson(
+                        source_type=item["source_type"],
+                        source_id=item["source_id"],
+                        domain=item["domain"],
+                        observation=item["observation"],
+                        recommendation=item["recommendation"],
+                        confidence=item["confidence"],
+                        evidence=item.get("evidence", {}),
+                        title=item.get("title", ""),
+                        conditions=item.get("conditions", {}),
+                        expected_benefit=item.get("expected_benefit", {}),
+                    )
+                    lesson_event = {
+                        "type": "lesson_extracted",
+                        "trace_id": trace_id,
+                        "lesson_id": lesson.id,
+                        "confidence": lesson.confidence,
+                    }
+                    session_service.append_event(
+                        session_id=session_id,
+                        event_type="lesson_extracted",
+                        payload=lesson_event,
+                    )
+                    await websocket.send_json(lesson_event)
 
             await asyncio.sleep(0.2)
             tool_finished_event = {

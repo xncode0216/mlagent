@@ -106,3 +106,38 @@ def test_session_socket_emits_distribution_chart_artifact(tmp_path, monkeypatch)
     )
     assert distribution_artifact["type"] == "chart"
     assert distribution_artifact["path"] == "results/test-session/distribution.json"
+
+
+def test_session_socket_emits_rules_and_lessons(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    rows = ["age,churn"]
+    rows.extend(",1" if index in {10, 40} else f"{30 + index % 20},{index % 2}" for index in range(100))
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "\n".join(rows) + "\n",
+        encoding="utf-8",
+    )
+
+    with client.websocket_connect("/ws/sessions/evolution-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                    "mode": "analysis",
+                },
+            }
+        )
+        seen = []
+        while True:
+            event = websocket.receive_json()
+            seen.append(event["type"])
+            if event["type"] == "task_progress":
+                break
+
+    assert "rules_matched" in seen
+    assert "lesson_extracted" in seen

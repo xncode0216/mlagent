@@ -24,6 +24,16 @@ export type AgentStreamEvent =
   | ({ type: "artifact_created"; artifact: Artifact } & TraceFields)
   | ({ type: "task_progress"; task_id: string; progress: number; label: string } & TraceFields)
   | ({ type: "lesson_extracted"; lesson_id: string; confidence: number } & TraceFields)
+  | ({
+      type: "rules_matched";
+      matched_rules: Array<{
+        lesson_id: string;
+        score: number;
+        recommendation: string;
+        reason: string;
+      }>;
+      prompt_snippet: string;
+    } & TraceFields)
   | ({ type: "error"; code: string; message: string } & TraceFields);
 
 export type Artifact = {
