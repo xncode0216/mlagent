@@ -231,6 +231,28 @@ export async function createProjectFile(
   });
 }
 
+export async function renameProjectFile(
+  projectId: string,
+  path: string,
+  newPath: string,
+): Promise<FileItem> {
+  return request<FileItem>(`/api/projects/${projectId}/files/rename`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, new_path: newPath }),
+  });
+}
+
+export async function deleteProjectFile(
+  projectId: string,
+  path: string,
+): Promise<{ path: string; deleted: boolean }> {
+  return request<{ path: string; deleted: boolean }>(
+    `/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function readProjectFileContent(
   projectId: string,
   path: string,

@@ -198,7 +198,8 @@ button {
 .project-select,
 .new-project-row input,
 .open-project-row input,
-.new-entry-row input {
+.new-entry-row input,
+.rename-entry-row input {
   background: #0a0a0f;
   border: 1px solid #313244;
   border-radius: 5px;
@@ -232,6 +233,15 @@ button {
   grid-template-columns: minmax(0, 1fr) 30px 30px;
 }
 
+.rename-entry-row {
+  display: grid;
+  gap: 6px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) 30px 30px;
+  padding-bottom: 3px;
+  padding-top: 3px;
+}
+
 .icon-button {
   align-items: center;
   background: #181825;
@@ -255,6 +265,16 @@ button {
 .icon-button:disabled {
   color: #585b70;
   cursor: not-allowed;
+}
+
+.icon-button.compact {
+  height: 24px;
+  width: 24px;
+}
+
+.icon-button.danger:hover {
+  border-color: #ef4444;
+  color: #fca5a5;
 }
 
 .project-meta {
@@ -349,8 +369,11 @@ button {
 .file-list li {
   border-radius: 6px;
   color: #a6adc8;
+  display: grid;
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 28px;
 }
 
 .file-list li.selected {
@@ -358,7 +381,7 @@ button {
   color: #89b4fa;
 }
 
-.file-list button {
+.file-list .file-row-main {
   align-items: center;
   background: transparent;
   border: 0;
@@ -1508,7 +1531,25 @@ button {
   width: 100%;
 }
 
-.file-list button.folder-row {
+.file-list li:hover .file-row-actions,
+.file-list li:focus-within .file-row-actions {
+  opacity: 1;
+}
+
+.file-row-actions {
+  align-items: center;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  padding-right: 4px;
+  transition: opacity 0.12s ease;
+}
+
+.file-list li.selected .file-row-actions {
+  opacity: 1;
+}
+
+.file-list .file-row-main.folder-row {
   font-weight: 600;
 }
 

@@ -131,3 +131,103 @@ def test_read_project_file_rejects_binary_preview(tmp_path, monkeypatch):
 
     assert response.status_code == 415
     assert response.json()["detail"] == "Binary file preview is not supported"
+
+
+def test_rename_project_file_preserves_content(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    create_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notebooks/draft.py", "type": "file", "content": "print('ok')\n"},
+    )
+    rename_response = client.patch(
+        f"/api/projects/{project['id']}/files/rename",
+        json={"path": "notebooks/draft.py", "new_path": "notebooks/final.py"},
+    )
+    old_response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "notebooks/draft.py"},
+    )
+    new_response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "notebooks/final.py"},
+    )
+
+    assert create_response.status_code == 200
+    assert rename_response.status_code == 200
+    assert rename_response.json()["path"] == "notebooks/final.py"
+    assert old_response.status_code == 404
+    assert new_response.json()["content"] == "print('ok')\n"
+
+
+def test_rename_project_file_rejects_escape_and_existing_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notes.md", "type": "file"},
+    )
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "existing.md", "type": "file"},
+    )
+    escape_response = client.patch(
+        f"/api/projects/{project['id']}/files/rename",
+        json={"path": "notes.md", "new_path": "../escape.md"},
+    )
+    duplicate_response = client.patch(
+        f"/api/projects/{project['id']}/files/rename",
+        json={"path": "notes.md", "new_path": "existing.md"},
+    )
+
+    assert escape_response.status_code == 400
+    assert duplicate_response.status_code == 409
+
+
+def test_delete_project_file_and_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "results/temp/notes.md", "type": "file", "content": "remove me"},
+    )
+    delete_response = client.delete(
+        f"/api/projects/{project['id']}/files",
+        params={"path": "results/temp"},
+    )
+    list_response = client.get(
+        f"/api/projects/{project['id']}/files",
+        params={"path": "results"},
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"path": "results/temp", "deleted": True}
+    assert "temp" not in {item["name"] for item in list_response.json()["items"]}
+
+
+def test_delete_project_file_rejects_root_and_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    root_response = client.delete(
+        f"/api/projects/{project['id']}/files",
+        params={"path": ""},
+    )
+    escape_response = client.delete(
+        f"/api/projects/{project['id']}/files",
+        params={"path": "../escape"},
+    )
+
+    assert root_response.status_code == 400
+    assert escape_response.status_code == 400

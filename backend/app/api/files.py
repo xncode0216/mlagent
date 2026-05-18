@@ -1,4 +1,5 @@
 import mimetypes
+import shutil
 from pathlib import Path
 from typing import Literal
 
@@ -6,7 +7,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
-from app.schemas.file import FileContent, FileItem, FileList
+from app.schemas.file import FileContent, FileDeleteResult, FileItem, FileList
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 
@@ -15,6 +16,11 @@ class FileCreateRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
     type: Literal["file", "directory"]
     content: str = ""
+
+
+class FileRenameRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+    new_path: str = Field(min_length=1, max_length=4096)
 
 
 def _get_project_root(project_id: str) -> Path:
@@ -31,6 +37,15 @@ def _resolve_project_path(root: Path, path: str) -> Path:
     return current
 
 
+def _to_file_item(root: Path, target: Path) -> FileItem:
+    return FileItem(
+        name=target.name,
+        path=str(target.relative_to(root)).replace("\\", "/"),
+        type="directory" if target.is_dir() else "file",
+        size=target.stat().st_size if target.is_file() else None,
+    )
+
+
 @router.get("")
 def list_files(project_id: str, path: str = "") -> FileList:
     root = _get_project_root(project_id)
@@ -40,15 +55,7 @@ def list_files(project_id: str, path: str = "") -> FileList:
 
     items: list[FileItem] = []
     for child in sorted(current.iterdir(), key=lambda item: (item.is_file(), item.name.lower())):
-        item_type = "directory" if child.is_dir() else "file"
-        items.append(
-            FileItem(
-                name=child.name,
-                path=str(child.relative_to(root)).replace("\\", "/"),
-                type=item_type,
-                size=child.stat().st_size if child.is_file() else None,
-            )
-        )
+        items.append(_to_file_item(root, child))
     return FileList(items=items)
 
 
@@ -65,12 +72,39 @@ def create_file(project_id: str, payload: FileCreateRequest) -> FileItem:
     else:
         target.write_text(payload.content, encoding="utf-8", newline="")
 
-    return FileItem(
-        name=target.name,
-        path=str(target.relative_to(root)).replace("\\", "/"),
-        type="directory" if target.is_dir() else "file",
-        size=target.stat().st_size if target.is_file() else None,
-    )
+    return _to_file_item(root, target)
+
+
+@router.patch("/rename")
+def rename_file(project_id: str, payload: FileRenameRequest) -> FileItem:
+    root = _get_project_root(project_id)
+    source = _resolve_project_path(root, payload.path)
+    target = _resolve_project_path(root, payload.new_path)
+    if not source.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if target.exists():
+        raise HTTPException(status_code=409, detail="Target already exists")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    source.rename(target)
+    return _to_file_item(root, target)
+
+
+@router.delete("")
+def delete_file(project_id: str, path: str) -> FileDeleteResult:
+    root = _get_project_root(project_id)
+    target = _resolve_project_path(root, path)
+    if target == root:
+        raise HTTPException(status_code=400, detail="Cannot delete project root")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    deleted_path = str(target.relative_to(root)).replace("\\", "/")
+    if target.is_dir():
+        shutil.rmtree(target)
+    else:
+        target.unlink()
+    return FileDeleteResult(path=deleted_path, deleted=True)
 
 
 @router.post("/upload")
@@ -86,12 +120,7 @@ async def upload_file(
 
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(await file.read())
-    return FileItem(
-        name=target.name,
-        path=str(target.relative_to(root)).replace("\\", "/"),
-        type="file",
-        size=target.stat().st_size,
-    )
+    return _to_file_item(root, target)
 
 
 @router.get("/content")

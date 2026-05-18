@@ -8,6 +8,8 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Pencil,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -33,9 +35,11 @@ type FileExplorerProps = {
   newProjectName: string;
   onCreateProject: () => Promise<void>;
   onCreateFile: (path: string, type: "file" | "directory") => Promise<void>;
+  onDeleteFile: (path: string) => Promise<void>;
   onLocalProjectPathChange: (value: string) => void;
   onNewProjectNameChange: (value: string) => void;
   onOpenLocalProject: () => Promise<void>;
+  onRenameFile: (path: string, newPath: string) => Promise<void>;
   onSelect: (path: string) => void;
   onSwitchProject: (projectId: string) => void;
   onToggleFolder: (path: string) => void;
@@ -94,9 +98,11 @@ export function FileExplorer({
   newProjectName,
   onCreateProject,
   onCreateFile,
+  onDeleteFile,
   onLocalProjectPathChange,
   onNewProjectNameChange,
   onOpenLocalProject,
+  onRenameFile,
   onSelect,
   onSwitchProject,
   onToggleFolder,
@@ -114,6 +120,8 @@ export function FileExplorer({
   const [isCreatingEntry, setIsCreatingEntry] = useState(false);
   const [newEntryPath, setNewEntryPath] = useState("");
   const [newEntryType, setNewEntryType] = useState<"file" | "directory">("file");
+  const [renamingPath, setRenamingPath] = useState("");
+  const [renameTargetPath, setRenameTargetPath] = useState("");
   const visibleFiles = buildVisibleTree(files.length > 0 ? files : fallbackItems, expandedFolders);
 
   async function submitProject() {
@@ -134,6 +142,28 @@ export function FileExplorer({
     await onCreateFile(path, newEntryType);
     setNewEntryPath("");
     setIsCreatingEntry(false);
+  }
+
+  async function submitRename() {
+    const nextPath = renameTargetPath.trim().replaceAll("\\", "/");
+    if (!renamingPath || !nextPath || nextPath === renamingPath) {
+      setRenamingPath("");
+      setRenameTargetPath("");
+      return;
+    }
+    await onRenameFile(renamingPath, nextPath);
+    setRenamingPath("");
+    setRenameTargetPath("");
+  }
+
+  async function submitDelete(path: string, type: "file" | "directory") {
+    const confirmed = window.confirm(type === "directory" ? `删除文件夹 ${path} 及其内容？` : `删除文件 ${path}？`);
+    if (!confirmed) return;
+    await onDeleteFile(path);
+    if (renamingPath === path) {
+      setRenamingPath("");
+      setRenameTargetPath("");
+    }
   }
 
   return (
@@ -384,23 +414,89 @@ export function FileExplorer({
         <ul className="file-list">
           {visibleFiles.map((item) => (
             <li key={item.path} className={item.path === activePath ? "selected" : ""}>
-              <button
-                className={item.type === "directory" ? "folder-row" : ""}
-                onClick={() => (item.type === "directory" ? onToggleFolder(item.path) : onSelect(item.path))}
-                style={{ paddingLeft: `${8 + getDepth(item.path) * 14}px` }}
-                type="button"
-              >
-                {item.type === "directory" ? (
-                  <ChevronRight
-                    className={expandedFolders.includes(item.path) ? "tree-chevron expanded" : "tree-chevron"}
-                    size={13}
+              {renamingPath === item.path ? (
+                <div className="rename-entry-row" style={{ paddingLeft: `${8 + getDepth(item.path) * 14}px` }}>
+                  <input
+                    aria-label="重命名路径"
+                    autoFocus
+                    value={renameTargetPath}
+                    onChange={(event) => setRenameTargetPath(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void submitRename();
+                      if (event.key === "Escape") {
+                        setRenamingPath("");
+                        setRenameTargetPath("");
+                      }
+                    }}
                   />
-                ) : (
-                  <span className="tree-spacer" />
-                )}
-                <span className="file-icon">{getFileIcon(item)}</span>
-                <span>{item.name}</span>
-              </button>
+                  <button
+                    aria-label="确认重命名"
+                    className="icon-button"
+                    disabled={!renameTargetPath.trim()}
+                    onClick={() => void submitRename()}
+                    title="确认"
+                    type="button"
+                  >
+                    <Check size={15} />
+                  </button>
+                  <button
+                    aria-label="取消重命名"
+                    className="icon-button"
+                    onClick={() => {
+                      setRenamingPath("");
+                      setRenameTargetPath("");
+                    }}
+                    title="取消"
+                    type="button"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    className={item.type === "directory" ? "folder-row file-row-main" : "file-row-main"}
+                    onClick={() => (item.type === "directory" ? onToggleFolder(item.path) : onSelect(item.path))}
+                    style={{ paddingLeft: `${8 + getDepth(item.path) * 14}px` }}
+                    title={item.path}
+                    type="button"
+                  >
+                    {item.type === "directory" ? (
+                      <ChevronRight
+                        className={expandedFolders.includes(item.path) ? "tree-chevron expanded" : "tree-chevron"}
+                        size={13}
+                      />
+                    ) : (
+                      <span className="tree-spacer" />
+                    )}
+                    <span className="file-icon">{getFileIcon(item)}</span>
+                    <span>{item.name}</span>
+                  </button>
+                  <div className="file-row-actions">
+                    <button
+                      aria-label={`重命名 ${item.path}`}
+                      className="icon-button compact"
+                      onClick={() => {
+                        setRenamingPath(item.path);
+                        setRenameTargetPath(item.path);
+                      }}
+                      title="重命名"
+                      type="button"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      aria-label={`删除 ${item.path}`}
+                      className="icon-button compact danger"
+                      onClick={() => void submitDelete(item.path, item.type)}
+                      title="删除"
+                      type="button"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </>
+              )}
             </li>
           ))}
         </ul>

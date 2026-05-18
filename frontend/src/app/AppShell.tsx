@@ -21,6 +21,7 @@ import {
   createAgentSession,
   createProjectFile,
   createProject,
+  deleteProjectFile,
   extractLesson,
   listEvolutionInjectionLog,
   listEvolutionProtocols,
@@ -33,6 +34,7 @@ import {
   listTrainingRuns,
   markLessonConflict,
   openLocalProject,
+  renameProjectFile,
   rejectLesson,
   trainBaselineModel,
   trainSklearnModel,
@@ -64,6 +66,10 @@ async function listExpandedProjectFiles(projectId: string, folders: string[]) {
     }
   }
   return Array.from(byPath.values());
+}
+
+function parentPath(path: string) {
+  return path.split("/").slice(0, -1).join("/");
 }
 
 function modeLabel(mode: MainMode) {
@@ -313,19 +319,54 @@ export function AppShell() {
   }
 
   async function refreshExpandedFiles(extraFolders: string[] = []) {
-    if (!project) return;
+    if (!project) return [];
     const folders = Array.from(new Set([...expandedFolders, ...extraFolders]));
-    setFiles(await listExpandedProjectFiles(project.id, folders));
+    const nextFiles = await listExpandedProjectFiles(project.id, folders);
+    setFiles(nextFiles);
     setExpandedFolders(folders);
+    return nextFiles;
   }
 
   async function handleCreateFile(path: string, type: "file" | "directory") {
     if (!project) return;
     await createProjectFile(project.id, path, type);
-    const parentPath = path.split("/").slice(0, -1).join("/");
-    await refreshExpandedFiles(parentPath ? [parentPath] : []);
+    const containingFolder = parentPath(path);
+    await refreshExpandedFiles(containingFolder ? [containingFolder] : []);
     if (type === "file") {
       setActiveFile(path);
+    }
+  }
+
+  async function handleRenameFile(path: string, newPath: string) {
+    if (!project || path === newPath) return;
+    await renameProjectFile(project.id, path, newPath);
+    const nextExpandedFolders = Array.from(
+      new Set([
+        ...expandedFolders.map((folder) =>
+          folder === path || folder.startsWith(`${path}/`) ? folder.replace(path, newPath) : folder,
+        ),
+        parentPath(path),
+        parentPath(newPath),
+      ].filter(Boolean)),
+    );
+    setFiles(await listExpandedProjectFiles(project.id, nextExpandedFolders));
+    setExpandedFolders(nextExpandedFolders);
+    if (activeFile === path || activeFile.startsWith(`${path}/`)) {
+      setActiveFile(activeFile.replace(path, newPath));
+    }
+  }
+
+  async function handleDeleteFile(path: string) {
+    if (!project) return;
+    await deleteProjectFile(project.id, path);
+    const nextExpandedFolders = Array.from(
+      new Set([...expandedFolders.filter((folder) => folder !== path && !folder.startsWith(`${path}/`)), parentPath(path)].filter(Boolean)),
+    );
+    const nextFiles = await listExpandedProjectFiles(project.id, nextExpandedFolders);
+    setFiles(nextFiles);
+    setExpandedFolders(nextExpandedFolders);
+    if (activeFile === path || activeFile.startsWith(`${path}/`)) {
+      setActiveFile(nextFiles.find((item) => item.type === "file")?.path ?? "");
     }
   }
 
@@ -533,9 +574,11 @@ export function AppShell() {
           newProjectName={newProjectName}
           onCreateProject={handleCreateProject}
           onCreateFile={handleCreateFile}
+          onDeleteFile={handleDeleteFile}
           onLocalProjectPathChange={setLocalProjectPath}
           onNewProjectNameChange={setNewProjectName}
           onOpenLocalProject={handleOpenLocalProject}
+          onRenameFile={handleRenameFile}
           onSelect={setActiveFile}
           onSwitchProject={(projectId) => void switchProject(projectId)}
           onToggleFolder={(path) => void handleToggleFolder(path)}

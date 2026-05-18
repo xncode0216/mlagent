@@ -17,3 +17,8 @@ class FileContent(BaseModel):
     content: str
     size: int
     mime_type: str
+
+
+class FileDeleteResult(BaseModel):
+    path: str
+    deleted: bool
