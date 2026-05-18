@@ -7,6 +7,10 @@ class WorkspaceService:
 
     def ensure_project_root(self, user_id: str, project_id: str) -> Path:
         root = (self.workspace_root / user_id / project_id).resolve()
+        self.ensure_project_structure(root)
+        return root
+
+    def ensure_project_structure(self, root: Path) -> Path:
         root.mkdir(parents=True, exist_ok=True)
         for child in ["data", "notebooks", "results", "models", "agent_schema", "evolution", "logs"]:
             (root / child).mkdir(exist_ok=True)

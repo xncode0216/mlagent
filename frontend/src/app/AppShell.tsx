@@ -31,6 +31,7 @@ import {
   listSessionMessages,
   listTrainingRuns,
   markLessonConflict,
+  openLocalProject,
   rejectLesson,
   trainBaselineModel,
   trainSklearnModel,
@@ -83,6 +84,7 @@ export function AppShell() {
   const [activeFile, setActiveFile] = useState("data/customer_churn.csv");
   const [activeMode, setActiveMode] = useState<MainMode>("analysis");
   const [newProjectName, setNewProjectName] = useState("");
+  const [localProjectPath, setLocalProjectPath] = useState("");
   const [workspaceStatus, setWorkspaceStatus] = useState("正在连接后端项目服务...");
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
   const [trainingRuns, setTrainingRuns] = useState<ExperimentRun[]>([]);
@@ -275,6 +277,18 @@ export function AppShell() {
     setWorkspaceStatus("项目文件已同步");
   }
 
+  async function handleOpenLocalProject() {
+    const path = localProjectPath.trim();
+    if (!path) return;
+    setWorkspaceStatus("正在打开本地项目...");
+    const opened = await openLocalProject(path);
+    const nextProjects = await listProjects();
+    setProjects(nextProjects);
+    setLocalProjectPath("");
+    await activateProject(opened);
+    setWorkspaceStatus("本地项目已打开");
+  }
+
   async function handleUpload(file: File) {
     if (!project) return;
     const targetPath = `data/${file.name}`;
@@ -463,9 +477,12 @@ export function AppShell() {
           activePath={activeFile}
           currentProjectId={project?.id}
           files={files}
+          localProjectPath={localProjectPath}
           newProjectName={newProjectName}
           onCreateProject={handleCreateProject}
+          onLocalProjectPathChange={setLocalProjectPath}
           onNewProjectNameChange={setNewProjectName}
+          onOpenLocalProject={handleOpenLocalProject}
           onSelect={setActiveFile}
           onSwitchProject={(projectId) => void switchProject(projectId)}
           onUpload={handleUpload}

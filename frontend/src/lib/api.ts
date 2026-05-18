@@ -183,6 +183,14 @@ export async function createProject(name: string): Promise<Project> {
   });
 }
 
+export async function openLocalProject(path: string, name?: string): Promise<Project> {
+  return request<Project>("/api/projects/open-local", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, name: name || undefined }),
+  });
+}
+
 export async function listFiles(projectId: string, path = ""): Promise<FileItem[]> {
   const query = path ? `?path=${encodeURIComponent(path)}` : "";
   const result = await request<{ items: FileItem[] }>(`/api/projects/${projectId}/files${query}`);

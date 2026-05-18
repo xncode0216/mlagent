@@ -5,6 +5,11 @@ class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
 
 
+class ProjectOpenLocal(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+
+
 class ProjectRead(BaseModel):
     id: str
     owner_id: str

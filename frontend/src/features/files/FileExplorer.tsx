@@ -1,4 +1,4 @@
-import { Check, Database, FileCode2, FileText, Folder, FolderPlus, Upload, X } from "lucide-react";
+import { Check, Database, FileCode2, FileText, Folder, FolderOpen, FolderPlus, Upload, X } from "lucide-react";
 import { useState } from "react";
 
 import type { AgentSession, FileItem, Project } from "../../lib/api";
@@ -16,9 +16,12 @@ type FileExplorerProps = {
   activePath: string;
   currentProjectId?: string;
   files: FileItem[];
+  localProjectPath: string;
   newProjectName: string;
   onCreateProject: () => Promise<void>;
+  onLocalProjectPathChange: (value: string) => void;
   onNewProjectNameChange: (value: string) => void;
+  onOpenLocalProject: () => Promise<void>;
   onSelect: (path: string) => void;
   onSwitchProject: (projectId: string) => void;
   onUpload: (file: File) => Promise<void>;
@@ -42,9 +45,12 @@ export function FileExplorer({
   activePath,
   currentProjectId,
   files,
+  localProjectPath,
   newProjectName,
   onCreateProject,
+  onLocalProjectPathChange,
   onNewProjectNameChange,
+  onOpenLocalProject,
   onSelect,
   onSwitchProject,
   onUpload,
@@ -57,12 +63,19 @@ export function FileExplorer({
   status,
 }: FileExplorerProps) {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [isOpeningProject, setIsOpeningProject] = useState(false);
   const visibleFiles = (files.length > 0 ? files : fallbackItems).filter((item) => item.path !== "sessions");
 
   async function submitProject() {
     if (!newProjectName.trim()) return;
     await onCreateProject();
     setIsCreatingProject(false);
+  }
+
+  async function submitLocalProject() {
+    if (!localProjectPath.trim()) return;
+    await onOpenLocalProject();
+    setIsOpeningProject(false);
   }
 
   return (
@@ -73,15 +86,32 @@ export function FileExplorer({
             <span className="sidebar-kicker">EXPLORER</span>
             <strong>工作区</strong>
           </div>
-          <button
-            aria-label="新建项目"
-            className="icon-button"
-            onClick={() => setIsCreatingProject(true)}
-            title="新建项目"
-            type="button"
-          >
-            <FolderPlus size={15} />
-          </button>
+          <div className="workspace-actions">
+            <button
+              aria-label="新建项目"
+              className="icon-button"
+              onClick={() => {
+                setIsOpeningProject(false);
+                setIsCreatingProject(true);
+              }}
+              title="新建项目"
+              type="button"
+            >
+              <FolderPlus size={15} />
+            </button>
+            <button
+              aria-label="打开本地项目"
+              className="icon-button"
+              onClick={() => {
+                setIsCreatingProject(false);
+                setIsOpeningProject(true);
+              }}
+              title="打开本地项目"
+              type="button"
+            >
+              <FolderOpen size={15} />
+            </button>
+          </div>
         </div>
 
         <label className="field-label" htmlFor="project-select">
@@ -133,6 +163,47 @@ export function FileExplorer({
               onClick={() => {
                 onNewProjectNameChange("");
                 setIsCreatingProject(false);
+              }}
+              title="取消"
+              type="button"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        ) : null}
+
+        {isOpeningProject ? (
+          <div className="open-project-row">
+            <input
+              aria-label="本地项目路径"
+              autoFocus
+              placeholder="例如 C:\\Projects\\sales_churn_analysis"
+              value={localProjectPath}
+              onChange={(event) => onLocalProjectPathChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void submitLocalProject();
+                if (event.key === "Escape") {
+                  onLocalProjectPathChange("");
+                  setIsOpeningProject(false);
+                }
+              }}
+            />
+            <button
+              aria-label="打开本地项目"
+              className="icon-button"
+              disabled={!localProjectPath.trim()}
+              onClick={() => void submitLocalProject()}
+              title="打开"
+              type="button"
+            >
+              <Check size={15} />
+            </button>
+            <button
+              aria-label="取消打开本地项目"
+              className="icon-button"
+              onClick={() => {
+                onLocalProjectPathChange("");
+                setIsOpeningProject(false);
               }}
               title="取消"
               type="button"

@@ -1,10 +1,11 @@
-from uuid import uuid4
 from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 
 from app.core.config import get_settings
-from app.schemas.project import ProjectCreate, ProjectRead
+from app.schemas.project import ProjectCreate, ProjectOpenLocal, ProjectRead
 from app.services.project_registry_service import ProjectRegistryService
 from app.services.workspace_service import WorkspaceService
 
@@ -55,6 +56,39 @@ def create_project(payload: ProjectCreate) -> ProjectRead:
     )
     PROJECTS[project_id] = project
     ProjectRegistryService(settings.workspace_root, settings.dev_user_id).save_project(project)
+    return project
+
+
+@router.post("/open-local")
+def open_local_project(payload: ProjectOpenLocal) -> ProjectRead:
+    settings = get_settings()
+    root = Path(payload.path).expanduser().resolve()
+    if not root.exists() or not root.is_dir():
+        raise HTTPException(status_code=400, detail="Local project path must be an existing directory")
+
+    registry = ProjectRegistryService(settings.workspace_root, settings.dev_user_id)
+    projects = registry.load_projects()
+    workspace_path = str(root)
+    existing = next(
+        (project for project in projects.values() if Path(project.workspace_path).resolve() == root),
+        None,
+    )
+    if existing is not None:
+        PROJECTS[existing.id] = existing
+        return existing
+
+    WorkspaceService(settings.workspace_root).ensure_project_structure(root)
+    now = datetime.now(UTC).isoformat()
+    project = ProjectRead(
+        id=uuid4().hex,
+        owner_id=settings.dev_user_id,
+        name=payload.name or root.name,
+        workspace_path=workspace_path,
+        created_at=now,
+        updated_at=now,
+    )
+    PROJECTS[project.id] = project
+    registry.save_project(project)
     return project
 
 
