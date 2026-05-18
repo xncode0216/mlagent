@@ -89,6 +89,9 @@ export function AgentWorkspace({
   );
   const progressEvents = events.filter((event) => event.type === "task_progress");
   const latestProgress = progressEvents.at(-1);
+  const latestRuleMatch = [...events]
+    .reverse()
+    .find((event): event is Extract<AgentStreamEvent, { type: "rules_matched" }> => event.type === "rules_matched");
   const streamingMessage = message.trim();
   const toolNames = useMemo(() => {
     const names = toolEvents
@@ -225,6 +228,18 @@ export function AgentWorkspace({
       </section>
 
       <div className="tool-strip">
+        {latestRuleMatch && latestRuleMatch.matched_rules.length > 0 ? (
+          <div className="matched-rules-panel">
+            <strong>命中的历史经验</strong>
+            <div>
+              {latestRuleMatch.matched_rules.map((rule) => (
+                <span key={rule.lesson_id}>
+                  {rule.lesson_id.slice(0, 8)} · {Math.round(rule.score * 100)}%
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {toolNames.map((tool, index) => (
           <span key={`${tool}-${index}`} className="tool-chip">
             {tool}

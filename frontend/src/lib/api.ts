@@ -98,6 +98,8 @@ export type ExperimentRun = {
   created_at: string;
 };
 
+export type LessonStatus = "pending_review" | "high_confidence" | "rejected" | "conflicted";
+
 export type Lesson = {
   id: string;
   source_type: string;
@@ -106,8 +108,11 @@ export type Lesson = {
   observation: string;
   recommendation: string;
   confidence: number;
-  status: "pending_review" | "high_confidence" | "rejected";
+  status: LessonStatus;
   evidence: Record<string, unknown>;
+  title?: string;
+  conditions?: Record<string, unknown>;
+  expected_benefit?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };
@@ -288,6 +293,9 @@ export async function extractLesson(
     recommendation: string;
     confidence: number;
     evidence?: Record<string, unknown>;
+    title?: string;
+    conditions?: Record<string, unknown>;
+    expected_benefit?: Record<string, unknown>;
   },
 ): Promise<Lesson> {
   return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/extract`, {
@@ -306,5 +314,17 @@ export async function adoptLesson(projectId: string, lessonId: string): Promise<
 export async function rejectLesson(projectId: string, lessonId: string): Promise<Lesson> {
   return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/${lessonId}/reject`, {
     method: "POST",
+  });
+}
+
+export async function markLessonConflict(
+  projectId: string,
+  lessonId: string,
+  reason: string,
+): Promise<Lesson> {
+  return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/${lessonId}/conflict`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
   });
 }

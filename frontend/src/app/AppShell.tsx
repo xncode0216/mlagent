@@ -29,6 +29,7 @@ import {
   listSessionEvents,
   listSessionMessages,
   listTrainingRuns,
+  markLessonConflict,
   rejectLesson,
   trainBaselineModel,
   trainSklearnModel,
@@ -365,6 +366,12 @@ export function AppShell() {
     setLessons(await listLessons(project.id));
   }
 
+  async function handleMarkLessonConflict(lessonId: string, reason: string) {
+    if (!project) return;
+    await markLessonConflict(project.id, lessonId, reason);
+    setLessons(await listLessons(project.id));
+  }
+
   return (
     <div className="app-shell">
       <header className="top-nav">
@@ -437,6 +444,7 @@ export function AppShell() {
           lessons={lessons}
           protocols={protocols}
           onAdopt={handleAdoptLesson}
+          onMarkConflict={handleMarkLessonConflict}
           onReject={handleRejectLesson}
         />
       ) : (
