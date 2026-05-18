@@ -123,3 +123,74 @@ def test_extract_lessons_from_session_artifacts(tmp_path, monkeypatch):
     items = response.json()["items"]
     assert len(items) == 1
     assert items[0]["status"] == "pending_review"
+
+
+def test_match_rules_api_writes_injection_log(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract",
+        json={
+            "source_type": "analysis",
+            "source_id": "session-1",
+            "domain": ["data-analysis", "missing-value"],
+            "observation": "age has low missing ratio",
+            "recommendation": "Use median imputation",
+            "confidence": 0.82,
+            "conditions": {
+                "task_modes": ["analysis"],
+                "feature_type": "numeric",
+                "missing_ratio_range": [0, 0.05],
+            },
+            "evidence": {},
+        },
+    ).json()
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/adopt")
+
+    response = client.post(
+        f"/api/projects/{project['id']}/evolution/rules/match",
+        json={
+            "session_id": "session-2",
+            "context": {
+                "mode": "analysis",
+                "feature_type": "numeric",
+                "missing_ratio": 0.02,
+                "tags": ["missing-value"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["matched_rules"]
+    assert lesson["id"] in response.json()["prompt_snippet"]
+    log_response = client.get(f"/api/projects/{project['id']}/evolution/injection-log")
+    assert log_response.json()["items"]
+
+
+def test_mark_lesson_conflict_api(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract",
+        json={
+            "source_type": "analysis",
+            "source_id": "session-1",
+            "domain": ["data-analysis"],
+            "observation": "Leakage fields were removed.",
+            "recommendation": "Remove leakage fields before training.",
+            "confidence": 0.9,
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/conflict",
+        json={"reason": "Conflicts with current dataset contract"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "conflicted"
+    assert response.json()["evidence"]["conflict_reason"] == "Conflicts with current dataset contract"

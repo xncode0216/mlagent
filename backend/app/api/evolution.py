@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.api.projects import get_registered_project
 from app.services.evolution_service import EvolutionProtocol, EvolutionService, LessonRecord
 from app.services.lesson_extractor import LessonExtractor
+from app.services.rule_injection_service import RuleInjectionService
 from app.services.session_service import SessionService
 
 router = APIRouter(prefix="/api/projects/{project_id}/evolution", tags=["evolution"])
@@ -27,6 +28,15 @@ class LessonExtractRequest(BaseModel):
 
 class ExtractFromSessionRequest(BaseModel):
     session_id: str = Field(min_length=1)
+
+
+class ConflictRequest(BaseModel):
+    reason: str = Field(min_length=1)
+
+
+class RuleMatchRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 class LessonList(BaseModel):
@@ -114,3 +124,32 @@ def reject_lesson(project_id: str, lesson_id: str) -> LessonRecord:
         return service.reject_lesson(lesson_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Lesson not found") from exc
+
+
+@router.post("/lessons/{lesson_id}/conflict")
+def mark_lesson_conflict(
+    project_id: str,
+    lesson_id: str,
+    payload: ConflictRequest,
+) -> LessonRecord:
+    service = EvolutionService(_project_root(project_id))
+    try:
+        return service.mark_conflict(lesson_id, payload.reason)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Lesson not found") from exc
+
+
+@router.post("/rules/match")
+def match_rules(project_id: str, payload: RuleMatchRequest) -> dict[str, Any]:
+    service = RuleInjectionService(_project_root(project_id))
+    result = service.match_rules(payload.session_id, payload.context)
+    result["prompt_snippet"] = service.inject_prompt(
+        payload.session_id,
+        result["matched_rules"],
+    )
+    return result
+
+
+@router.get("/injection-log")
+def list_injection_log(project_id: str) -> dict[str, list[dict[str, Any]]]:
+    return {"items": RuleInjectionService(_project_root(project_id)).list_injection_log()}
