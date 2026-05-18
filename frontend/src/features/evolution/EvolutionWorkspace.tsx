@@ -9,10 +9,11 @@ import {
   XCircle,
 } from "lucide-react";
 
-import type { EvolutionProtocol, Lesson, LessonStatus } from "../../lib/api";
+import type { EvolutionInjectionLog, EvolutionProtocol, Lesson, LessonStatus } from "../../lib/api";
 
 type EvolutionWorkspaceProps = {
   lessons: Lesson[];
+  injectionLogs: EvolutionInjectionLog[];
   protocols: EvolutionProtocol[];
   onAdopt: (lessonId: string) => Promise<void>;
   onReject: (lessonId: string) => Promise<void>;
@@ -40,6 +41,7 @@ function filterLabel(status: LessonStatus | "all") {
 
 export function EvolutionWorkspace({
   lessons,
+  injectionLogs,
   protocols,
   onAdopt,
   onReject,
@@ -189,6 +191,29 @@ export function EvolutionWorkspace({
               ) : null}
             </article>
           ) : null}
+
+          <section className="injection-audit-panel">
+            <div className="card-heading">
+              <ShieldCheck size={15} />
+              规则注入审计
+            </div>
+            {injectionLogs.length === 0 ? (
+              <div className="empty-state compact-empty">还没有规则注入记录。运行一次分析或训练任务后，这里会显示命中的历史经验。</div>
+            ) : (
+              <div className="injection-log-list">
+                {injectionLogs.slice(0, 6).map((entry, index) => (
+                  <article className="injection-log-card" key={`${entry.session_id}-${entry.created_at}-${index}`}>
+                    <div>
+                      <strong>{entry.session_id}</strong>
+                      <span>{entry.matched_rules.length} 条规则</span>
+                    </div>
+                    <p>{entry.snippet || "本次未命中可注入规则，已记录审计事件。"}</p>
+                    <small>{new Date(entry.created_at).toLocaleString()}</small>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
 
           <div className="card-heading">
             <ShieldCheck size={15} />

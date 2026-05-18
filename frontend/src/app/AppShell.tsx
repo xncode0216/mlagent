@@ -21,6 +21,7 @@ import {
   createAgentSession,
   createProject,
   extractLesson,
+  listEvolutionInjectionLog,
   listEvolutionProtocols,
   listFiles,
   listLessons,
@@ -36,6 +37,7 @@ import {
   uploadProjectFile,
   type AgentSession,
   type AgentMessage,
+  type EvolutionInjectionLog,
   type ExperimentRun,
   type EvolutionProtocol,
   type FileItem,
@@ -88,6 +90,7 @@ export function AppShell() {
   const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [protocols, setProtocols] = useState<EvolutionProtocol[]>([]);
+  const [injectionLogs, setInjectionLogs] = useState<EvolutionInjectionLog[]>([]);
 
   const visibleEvents = useMemo(() => [...sessionEvents, ...events, ...localEvents], [events, localEvents, sessionEvents]);
   const artifactCount = useMemo(
@@ -197,8 +200,16 @@ export function AppShell() {
 
     async function refreshSessionState() {
       if (!project || !activeSession) return;
-      setSessions(await listProjectSessions(project.id));
-      setSessionMessages(await listSessionMessages(activeSession.id));
+      const [nextSessions, nextMessages, nextLessons, nextInjectionLogs] = await Promise.all([
+        listProjectSessions(project.id),
+        listSessionMessages(activeSession.id),
+        listLessons(project.id),
+        listEvolutionInjectionLog(project.id),
+      ]);
+      setSessions(nextSessions);
+      setSessionMessages(nextMessages);
+      setLessons(nextLessons);
+      setInjectionLogs(nextInjectionLogs);
     }
 
     void refreshSessionState();
@@ -209,10 +220,18 @@ export function AppShell() {
     setProject(nextProject);
     setFiles(nextFiles);
     setActiveFile(nextFiles.find((item) => item.type === "file")?.path ?? "");
-    setLessons(await listLessons(nextProject.id));
-    setProtocols(await listEvolutionProtocols(nextProject.id));
-    setTrainingRuns(await listTrainingRuns(nextProject.id));
-    setSessions(await listProjectSessions(nextProject.id));
+    const [nextLessons, nextProtocols, nextTrainingRuns, nextSessions, nextInjectionLogs] = await Promise.all([
+      listLessons(nextProject.id),
+      listEvolutionProtocols(nextProject.id),
+      listTrainingRuns(nextProject.id),
+      listProjectSessions(nextProject.id),
+      listEvolutionInjectionLog(nextProject.id),
+    ]);
+    setLessons(nextLessons);
+    setProtocols(nextProtocols);
+    setTrainingRuns(nextTrainingRuns);
+    setSessions(nextSessions);
+    setInjectionLogs(nextInjectionLogs);
     setActiveSession(null);
     setTrainingResult(null);
     setTrainingError(null);
@@ -304,7 +323,12 @@ export function AppShell() {
           engine: result.engine,
         },
       });
-      setLessons(await listLessons(project.id));
+      const [nextLessons, nextInjectionLogs] = await Promise.all([
+        listLessons(project.id),
+        listEvolutionInjectionLog(project.id),
+      ]);
+      setLessons(nextLessons);
+      setInjectionLogs(nextInjectionLogs);
       setLocalEvents((current) => [
         ...current,
         {
@@ -357,19 +381,34 @@ export function AppShell() {
   async function handleAdoptLesson(lessonId: string) {
     if (!project) return;
     await adoptLesson(project.id, lessonId);
-    setLessons(await listLessons(project.id));
+    const [nextLessons, nextInjectionLogs] = await Promise.all([
+      listLessons(project.id),
+      listEvolutionInjectionLog(project.id),
+    ]);
+    setLessons(nextLessons);
+    setInjectionLogs(nextInjectionLogs);
   }
 
   async function handleRejectLesson(lessonId: string) {
     if (!project) return;
     await rejectLesson(project.id, lessonId);
-    setLessons(await listLessons(project.id));
+    const [nextLessons, nextInjectionLogs] = await Promise.all([
+      listLessons(project.id),
+      listEvolutionInjectionLog(project.id),
+    ]);
+    setLessons(nextLessons);
+    setInjectionLogs(nextInjectionLogs);
   }
 
   async function handleMarkLessonConflict(lessonId: string, reason: string) {
     if (!project) return;
     await markLessonConflict(project.id, lessonId, reason);
-    setLessons(await listLessons(project.id));
+    const [nextLessons, nextInjectionLogs] = await Promise.all([
+      listLessons(project.id),
+      listEvolutionInjectionLog(project.id),
+    ]);
+    setLessons(nextLessons);
+    setInjectionLogs(nextInjectionLogs);
   }
 
   return (
@@ -442,6 +481,7 @@ export function AppShell() {
       {activeMode === "evolution" ? (
         <EvolutionWorkspace
           lessons={lessons}
+          injectionLogs={injectionLogs}
           protocols={protocols}
           onAdopt={handleAdoptLesson}
           onMarkConflict={handleMarkLessonConflict}

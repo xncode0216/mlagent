@@ -128,6 +128,20 @@ export type EvolutionProtocol = {
   stability: "stable" | "experimental";
 };
 
+export type EvolutionRuleMatch = {
+  lesson_id: string;
+  score: number;
+  recommendation: string;
+  reason: string;
+};
+
+export type EvolutionInjectionLog = {
+  session_id: string;
+  matched_rules: EvolutionRuleMatch[];
+  snippet: string;
+  created_at: string;
+};
+
 export type AgentSession = {
   id: string;
   project_id: string;
@@ -280,6 +294,13 @@ export async function listLessons(projectId: string): Promise<Lesson[]> {
 
 export async function listEvolutionProtocols(projectId: string): Promise<EvolutionProtocol[]> {
   const result = await request<{ items: EvolutionProtocol[] }>(`/api/projects/${projectId}/evolution/protocols`);
+  return result.items;
+}
+
+export async function listEvolutionInjectionLog(projectId: string): Promise<EvolutionInjectionLog[]> {
+  const result = await request<{ items: EvolutionInjectionLog[] }>(
+    `/api/projects/${projectId}/evolution/injection-log`,
+  );
   return result.items;
 }
 
