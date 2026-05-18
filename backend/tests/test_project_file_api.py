@@ -59,3 +59,53 @@ def test_upload_rejects_path_escape(tmp_path, monkeypatch):
     )
 
     assert upload_response.status_code == 400
+
+
+def test_create_project_file_and_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    folder_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notebooks/experiments", "type": "directory"},
+    )
+    file_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notebooks/experiments/eda.py", "type": "file", "content": "# EDA\n"},
+    )
+
+    assert folder_response.status_code == 200
+    assert folder_response.json()["type"] == "directory"
+    assert file_response.status_code == 200
+    assert file_response.json()["path"] == "notebooks/experiments/eda.py"
+    content_response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "notebooks/experiments/eda.py"},
+    )
+    assert content_response.json()["content"] == "# EDA\n"
+
+
+def test_create_project_file_rejects_escape_and_existing_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    escape_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "../escape.txt", "type": "file"},
+    )
+    first_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notes.md", "type": "file"},
+    )
+    duplicate_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notes.md", "type": "file"},
+    )
+
+    assert escape_response.status_code == 400
+    assert first_response.status_code == 200
+    assert duplicate_response.status_code == 409

@@ -1,11 +1,19 @@
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
 from app.schemas.file import FileItem, FileList
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
+
+
+class FileCreateRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+    type: Literal["file", "directory"]
+    content: str = ""
 
 
 def _get_project_root(project_id: str) -> Path:
@@ -41,6 +49,27 @@ def list_files(project_id: str, path: str = "") -> FileList:
             )
         )
     return FileList(items=items)
+
+
+@router.post("/create")
+def create_file(project_id: str, payload: FileCreateRequest) -> FileItem:
+    root = _get_project_root(project_id)
+    target = _resolve_project_path(root, payload.path)
+    if target.exists():
+        raise HTTPException(status_code=409, detail="Target already exists")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if payload.type == "directory":
+        target.mkdir()
+    else:
+        target.write_text(payload.content, encoding="utf-8")
+
+    return FileItem(
+        name=target.name,
+        path=str(target.relative_to(root)).replace("\\", "/"),
+        type="directory" if target.is_dir() else "file",
+        size=target.stat().st_size if target.is_file() else None,
+    )
 
 
 @router.post("/upload")

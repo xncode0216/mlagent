@@ -211,6 +211,19 @@ export async function uploadProjectFile(
   });
 }
 
+export async function createProjectFile(
+  projectId: string,
+  path: string,
+  type: "file" | "directory",
+  content = "",
+): Promise<FileItem> {
+  return request<FileItem>(`/api/projects/${projectId}/files/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, type, content }),
+  });
+}
+
 export async function readProjectFileContent(
   projectId: string,
   path: string,

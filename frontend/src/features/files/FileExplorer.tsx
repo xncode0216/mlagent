@@ -3,6 +3,7 @@ import {
   ChevronRight,
   Database,
   FileCode2,
+  FilePlus2,
   FileText,
   Folder,
   FolderOpen,
@@ -31,6 +32,7 @@ type FileExplorerProps = {
   localProjectPath: string;
   newProjectName: string;
   onCreateProject: () => Promise<void>;
+  onCreateFile: (path: string, type: "file" | "directory") => Promise<void>;
   onLocalProjectPathChange: (value: string) => void;
   onNewProjectNameChange: (value: string) => void;
   onOpenLocalProject: () => Promise<void>;
@@ -91,6 +93,7 @@ export function FileExplorer({
   localProjectPath,
   newProjectName,
   onCreateProject,
+  onCreateFile,
   onLocalProjectPathChange,
   onNewProjectNameChange,
   onOpenLocalProject,
@@ -108,6 +111,9 @@ export function FileExplorer({
 }: FileExplorerProps) {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
+  const [isCreatingEntry, setIsCreatingEntry] = useState(false);
+  const [newEntryPath, setNewEntryPath] = useState("");
+  const [newEntryType, setNewEntryType] = useState<"file" | "directory">("file");
   const visibleFiles = buildVisibleTree(files.length > 0 ? files : fallbackItems, expandedFolders);
 
   async function submitProject() {
@@ -120,6 +126,14 @@ export function FileExplorer({
     if (!localProjectPath.trim()) return;
     await onOpenLocalProject();
     setIsOpeningProject(false);
+  }
+
+  async function submitEntry() {
+    const path = newEntryPath.trim().replaceAll("\\", "/");
+    if (!path) return;
+    await onCreateFile(path, newEntryType);
+    setNewEntryPath("");
+    setIsCreatingEntry(false);
   }
 
   return (
@@ -287,20 +301,86 @@ export function FileExplorer({
       <section className="file-section" aria-label="项目文件">
         <div className="section-header">
           <span className="panel-title">项目文件</span>
-          <label className="icon-button upload-button" aria-label="上传 CSV" title="上传 CSV">
-            <Upload size={15} />
-            <input
-              accept=".csv,text/csv"
-              type="file"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void onUpload(file);
-                event.currentTarget.value = "";
+          <div className="workspace-actions">
+            <button
+              aria-label="新建文件"
+              className="icon-button"
+              onClick={() => {
+                setNewEntryType("file");
+                setIsCreatingEntry(true);
               }}
-            />
-          </label>
+              title="新建文件"
+              type="button"
+            >
+              <FilePlus2 size={15} />
+            </button>
+            <button
+              aria-label="新建文件夹"
+              className="icon-button"
+              onClick={() => {
+                setNewEntryType("directory");
+                setIsCreatingEntry(true);
+              }}
+              title="新建文件夹"
+              type="button"
+            >
+              <FolderPlus size={15} />
+            </button>
+            <label className="icon-button upload-button" aria-label="上传 CSV" title="上传 CSV">
+              <Upload size={15} />
+              <input
+                accept=".csv,text/csv"
+                type="file"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void onUpload(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </div>
         </div>
         <div className="sidebar-status">{status}</div>
+        {isCreatingEntry ? (
+          <div className="new-entry-row">
+            <input
+              aria-label={newEntryType === "file" ? "新文件路径" : "新文件夹路径"}
+              autoFocus
+              placeholder={newEntryType === "file" ? "例如 notebooks/eda.py" : "例如 data/raw"}
+              value={newEntryPath}
+              onChange={(event) => setNewEntryPath(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void submitEntry();
+                if (event.key === "Escape") {
+                  setNewEntryPath("");
+                  setIsCreatingEntry(false);
+                }
+              }}
+            />
+            <button
+              aria-label={newEntryType === "file" ? "创建文件" : "创建文件夹"}
+              className="icon-button"
+              disabled={!newEntryPath.trim()}
+              onClick={() => void submitEntry()}
+              title="创建"
+              type="button"
+            >
+              <Check size={15} />
+            </button>
+            <button
+              aria-label="取消新建"
+              className="icon-button"
+              onClick={() => {
+                setNewEntryPath("");
+                setIsCreatingEntry(false);
+              }}
+              title="取消"
+              type="button"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        ) : null}
         <ul className="file-list">
           {visibleFiles.map((item) => (
             <li key={item.path} className={item.path === activePath ? "selected" : ""}>

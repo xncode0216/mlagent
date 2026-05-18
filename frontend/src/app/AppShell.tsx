@@ -19,6 +19,7 @@ import { RightPanel } from "../features/right-panel/RightPanel";
 import {
   adoptLesson,
   createAgentSession,
+  createProjectFile,
   createProject,
   extractLesson,
   listEvolutionInjectionLog,
@@ -311,6 +312,23 @@ export function AppShell() {
     setActiveFile(targetPath);
   }
 
+  async function refreshExpandedFiles(extraFolders: string[] = []) {
+    if (!project) return;
+    const folders = Array.from(new Set([...expandedFolders, ...extraFolders]));
+    setFiles(await listExpandedProjectFiles(project.id, folders));
+    setExpandedFolders(folders);
+  }
+
+  async function handleCreateFile(path: string, type: "file" | "directory") {
+    if (!project) return;
+    await createProjectFile(project.id, path, type);
+    const parentPath = path.split("/").slice(0, -1).join("/");
+    await refreshExpandedFiles(parentPath ? [parentPath] : []);
+    if (type === "file") {
+      setActiveFile(path);
+    }
+  }
+
   async function handleToggleFolder(path: string) {
     if (!project) return;
     if (expandedFolders.includes(path)) {
@@ -514,6 +532,7 @@ export function AppShell() {
           localProjectPath={localProjectPath}
           newProjectName={newProjectName}
           onCreateProject={handleCreateProject}
+          onCreateFile={handleCreateFile}
           onLocalProjectPathChange={setLocalProjectPath}
           onNewProjectNameChange={setNewProjectName}
           onOpenLocalProject={handleOpenLocalProject}

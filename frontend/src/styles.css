@@ -197,7 +197,8 @@ button {
 
 .project-select,
 .new-project-row input,
-.open-project-row input {
+.open-project-row input,
+.new-entry-row input {
   background: #0a0a0f;
   border: 1px solid #313244;
   border-radius: 5px;
@@ -220,6 +221,12 @@ button {
 }
 
 .open-project-row {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 30px 30px;
+}
+
+.new-entry-row {
   display: grid;
   gap: 6px;
   grid-template-columns: minmax(0, 1fr) 30px 30px;
