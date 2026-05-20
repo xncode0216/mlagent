@@ -143,6 +143,19 @@ export type EvolutionProtocol = {
   stability: "stable" | "experimental";
 };
 
+export type AnalysisReportResult = {
+  artifact: {
+    id: string;
+    project_id: string;
+    session_id: string;
+    type: "report";
+    name: string;
+    path: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  };
+};
+
 export type EvolutionRuleMatch = {
   lesson_id: string;
   score: number;
@@ -290,6 +303,18 @@ export async function updateProjectFileContent(
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, content }),
+  });
+}
+
+export async function generateAnalysisReport(
+  projectId: string,
+  datasetPath: string,
+  sessionId = "manual-analysis",
+): Promise<AnalysisReportResult> {
+  return request<AnalysisReportResult>(`/api/projects/${projectId}/analysis/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataset_path: datasetPath, session_id: sessionId }),
   });
 }
 

@@ -23,6 +23,7 @@ type RightPanelProps = {
   trainingError: string | null;
   trainingResult: TrainingResult | null;
   trainingRuns: ExperimentRun[];
+  onGenerateReport: () => Promise<void>;
   onTrainModel: (targetColumn: string, engine: TrainingEngine, useGpu: boolean) => Promise<void>;
 };
 
@@ -403,9 +404,19 @@ function ActiveFilePreview({
   );
 }
 
-function DemoChartGallery() {
+function DemoChartGallery({ onGenerateReport }: { onGenerateReport: () => Promise<void> }) {
   const bars = [18, 42, 68, 86, 76, 58, 35, 20, 12];
   const heatCells = Array.from({ length: 42 }, (_, index) => (index % 9 === 0 ? "hot" : index % 5 === 0 ? "warm" : ""));
+  const [submitting, setSubmitting] = useState(false);
+
+  async function generateReport() {
+    setSubmitting(true);
+    try {
+      await onGenerateReport();
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="chart-gallery">
@@ -443,9 +454,9 @@ function DemoChartGallery() {
         </div>
       </section>
       <div className="panel-actions">
-        <button>
+        <button disabled={submitting} onClick={() => void generateReport()}>
           <FileText size={15} />
-          生成报告
+          {submitting ? "生成中..." : "生成报告"}
         </button>
         <button>
           <Database size={15} />
@@ -666,6 +677,7 @@ export function RightPanel({
   trainingError,
   trainingResult,
   trainingRuns,
+  onGenerateReport,
   onTrainModel,
 }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("图表");
@@ -675,7 +687,7 @@ export function RightPanel({
   const artifacts = useMemo(() => artifactEvents(events), [events]);
   const chartArtifacts = artifacts.filter((artifact) => artifact.type === "chart");
   const dataArtifacts = artifacts.filter((artifact) => artifact.type === "dataframe");
-  const codeArtifacts = artifacts.filter((artifact) => artifact.type === "code");
+  const codeArtifacts = artifacts.filter((artifact) => ["code", "markdown", "report"].includes(artifact.type));
   const activeArtifacts =
     activeTab === "图表" ? chartArtifacts : activeTab === "数据" ? dataArtifacts : codeArtifacts;
 
@@ -736,7 +748,7 @@ export function RightPanel({
           {selectedArtifact ? (
             <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
           ) : (
-            <DemoChartGallery />
+            <DemoChartGallery onGenerateReport={onGenerateReport} />
           )}
         </>
       ) : null}

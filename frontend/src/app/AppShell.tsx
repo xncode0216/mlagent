@@ -24,6 +24,7 @@ import {
   createProject,
   deleteProjectFile,
   extractLesson,
+  generateAnalysisReport,
   listEvolutionInjectionLog,
   listEvolutionProtocols,
   listFiles,
@@ -498,6 +499,39 @@ export function AppShell() {
     setInjectionLogs(nextInjectionLogs);
   }
 
+  async function handleGenerateReport() {
+    if (!project) return;
+    const sessionId = activeSession?.id ?? "manual-analysis";
+    const result = await generateAnalysisReport(project.id, activeFile, sessionId);
+    const reportFolder = parentPath(result.artifact.path);
+    const nextFolders = Array.from(new Set([...expandedFolders, "results", reportFolder].filter(Boolean)));
+    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
+    setExpandedFolders(nextFolders);
+    setLocalEvents((current) => [
+      ...current,
+      {
+        type: "artifact_created",
+        artifact: {
+          id: result.artifact.id,
+          project_id: project.id,
+          session_id: sessionId,
+          type: "report",
+          name: result.artifact.name,
+          path: result.artifact.path,
+          metadata: result.artifact.metadata,
+          created_at: result.artifact.created_at,
+        },
+      },
+      {
+        type: "task_progress",
+        task_id: sessionId,
+        progress: 1,
+        label: "分析报告已生成",
+      },
+    ]);
+    setActiveFile(result.artifact.path);
+  }
+
   async function handleRejectLesson(lessonId: string) {
     if (!project) return;
     await rejectLesson(project.id, lessonId);
@@ -639,6 +673,7 @@ export function AppShell() {
         trainingError={trainingError}
         trainingResult={trainingResult}
         trainingRuns={trainingRuns}
+        onGenerateReport={handleGenerateReport}
         onTrainModel={handleTrainModel}
       />
       <footer className="status-bar">

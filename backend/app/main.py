@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.data_analysis import router as data_analysis_router
 from app.api.evolution import router as evolution_router
 from app.api.files import router as files_router
 from app.api.health import router as health_router
@@ -27,6 +28,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(projects_router)
 app.include_router(files_router)
+app.include_router(data_analysis_router)
 app.include_router(machine_learning_router)
 app.include_router(evolution_router)
 app.include_router(sessions_router)
