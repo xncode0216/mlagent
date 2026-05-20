@@ -97,3 +97,46 @@ def test_clean_dataset_rejects_path_escape(tmp_path, monkeypatch):
     )
 
     assert response.status_code == 400
+
+
+def test_handoff_dataset_to_ml_writes_handoff_artifact(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    dataset_path = Path(project["workspace_path"]) / "data" / "customer_churn_cleaned.csv"
+    dataset_path.write_text(
+        "customer_id,monthly_charges,total_charges,churn\n1,29.85,100.0,No\n2,56.95,300.0,Yes\n",
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/handoff-to-ml",
+        json={"dataset_path": "data/customer_churn_cleaned.csv", "session_id": "handoff-session"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "machine-learning"
+    assert payload["dataset_path"] == "data/customer_churn_cleaned.csv"
+    assert payload["recommended_target_column"] == "churn"
+    assert payload["artifact"]["path"] == "results/handoff-session/ml_handoff.json"
+
+    handoff_path = Path(project["workspace_path"]) / payload["artifact"]["path"]
+    handoff = handoff_path.read_text(encoding="utf-8")
+    assert "customer_churn_cleaned.csv" in handoff
+    assert "churn" in handoff
+
+
+def test_handoff_dataset_to_ml_rejects_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/handoff-to-ml",
+        json={"dataset_path": "../escape.csv", "session_id": "handoff-session"},
+    )
+
+    assert response.status_code == 400

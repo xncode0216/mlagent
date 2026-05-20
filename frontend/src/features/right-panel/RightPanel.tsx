@@ -23,8 +23,10 @@ type RightPanelProps = {
   trainingError: string | null;
   trainingResult: TrainingResult | null;
   trainingRuns: ExperimentRun[];
+  suggestedTargetColumn?: string;
   onCleanDataset: () => Promise<void>;
   onGenerateReport: () => Promise<void>;
+  onTransferToMl: () => Promise<void>;
   onTrainModel: (targetColumn: string, engine: TrainingEngine, useGpu: boolean) => Promise<void>;
 };
 
@@ -408,13 +410,15 @@ function ActiveFilePreview({
 function DemoChartGallery({
   onCleanDataset,
   onGenerateReport,
+  onTransferToMl,
 }: {
   onCleanDataset: () => Promise<void>;
   onGenerateReport: () => Promise<void>;
+  onTransferToMl: () => Promise<void>;
 }) {
   const bars = [18, 42, 68, 86, 76, 58, 35, 20, 12];
   const heatCells = Array.from({ length: 42 }, (_, index) => (index % 9 === 0 ? "hot" : index % 5 === 0 ? "warm" : ""));
-  const [submitting, setSubmitting] = useState<"report" | "clean" | null>(null);
+  const [submitting, setSubmitting] = useState<"report" | "clean" | "handoff" | null>(null);
 
   async function generateReport() {
     setSubmitting("report");
@@ -429,6 +433,15 @@ function DemoChartGallery({
     setSubmitting("clean");
     try {
       await onCleanDataset();
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function transferToMl() {
+    setSubmitting("handoff");
+    try {
+      await onTransferToMl();
     } finally {
       setSubmitting(null);
     }
@@ -478,9 +491,9 @@ function DemoChartGallery({
           <Database size={15} />
           {submitting === "clean" ? "清洗中..." : "清洗数据"}
         </button>
-        <button>
+        <button disabled={submitting !== null} onClick={() => void transferToMl()}>
           <Play size={15} />
-          传给 ML Agent
+          {submitting === "handoff" ? "交接中..." : "传给 ML Agent"}
         </button>
       </div>
     </div>
@@ -493,6 +506,7 @@ function TrainingPanel({
   error,
   result,
   runs,
+  suggestedTargetColumn,
   onTrainModel,
 }: {
   activeFile: string;
@@ -500,6 +514,7 @@ function TrainingPanel({
   error: string | null;
   result: TrainingResult | null;
   runs: ExperimentRun[];
+  suggestedTargetColumn?: string;
   onTrainModel: (targetColumn: string, engine: TrainingEngine, useGpu: boolean) => Promise<void>;
 }) {
   const [targetColumn, setTargetColumn] = useState("churn");
@@ -513,6 +528,12 @@ function TrainingPanel({
     : [];
   const confusionMatrix = selectedRun?.metrics.confusion_matrix;
   const confusionLabels = confusionMatrix ? Object.keys(confusionMatrix) : [];
+
+  useEffect(() => {
+    if (suggestedTargetColumn) {
+      setTargetColumn(suggestedTargetColumn);
+    }
+  }, [suggestedTargetColumn]);
 
   async function submitTraining() {
     setSubmitting(true);
@@ -693,8 +714,10 @@ export function RightPanel({
   trainingError,
   trainingResult,
   trainingRuns,
+  suggestedTargetColumn,
   onCleanDataset,
   onGenerateReport,
+  onTransferToMl,
   onTrainModel,
 }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("图表");
@@ -765,7 +788,11 @@ export function RightPanel({
           {selectedArtifact ? (
             <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
           ) : (
-            <DemoChartGallery onCleanDataset={onCleanDataset} onGenerateReport={onGenerateReport} />
+            <DemoChartGallery
+              onCleanDataset={onCleanDataset}
+              onGenerateReport={onGenerateReport}
+              onTransferToMl={onTransferToMl}
+            />
           )}
         </>
       ) : null}
@@ -796,6 +823,7 @@ export function RightPanel({
           error={trainingError}
           result={trainingResult}
           runs={trainingRuns}
+          suggestedTargetColumn={suggestedTargetColumn}
           onTrainModel={onTrainModel}
         />
       ) : null}

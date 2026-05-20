@@ -26,6 +26,7 @@ import {
   deleteProjectFile,
   extractLesson,
   generateAnalysisReport,
+  handoffDatasetToMl,
   listEvolutionInjectionLog,
   listEvolutionProtocols,
   listFiles,
@@ -107,6 +108,7 @@ export function AppShell() {
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
   const [trainingRuns, setTrainingRuns] = useState<ExperimentRun[]>([]);
   const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [suggestedTargetColumn, setSuggestedTargetColumn] = useState("churn");
   const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [protocols, setProtocols] = useState<EvolutionProtocol[]>([]);
@@ -261,6 +263,7 @@ export function AppShell() {
     setActiveSession(null);
     setTrainingResult(null);
     setTrainingError(null);
+    setSuggestedTargetColumn("churn");
     setLocalEvents([]);
     setSessionMessages([]);
     setSessionEvents([]);
@@ -573,6 +576,43 @@ export function AppShell() {
     setActiveFile(result.cleaned_data_artifact.path);
   }
 
+  async function handleTransferToMl() {
+    if (!project) return;
+    const sessionId = activeSession?.id ?? "manual-analysis";
+    const result = await handoffDatasetToMl(project.id, activeFile, sessionId);
+    const handoffFolder = parentPath(result.artifact.path);
+    const nextFolders = Array.from(new Set([...expandedFolders, "results", handoffFolder].filter(Boolean)));
+    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
+    setExpandedFolders(nextFolders);
+    setSuggestedTargetColumn(result.recommended_target_column || "churn");
+    setActiveMode("machine-learning");
+    setLocalEvents((current) => [
+      ...current,
+      {
+        type: "artifact_created",
+        artifact: {
+          id: result.artifact.id,
+          project_id: project.id,
+          session_id: sessionId,
+          type: result.artifact.type,
+          name: result.artifact.name,
+          path: result.artifact.path,
+          metadata: {
+            ...result.artifact.metadata,
+            target_candidates: result.target_candidates,
+          },
+          created_at: result.artifact.created_at,
+        },
+      },
+      {
+        type: "task_progress",
+        task_id: sessionId,
+        progress: 1,
+        label: `已传给 ML Agent，推荐目标列 ${result.recommended_target_column || "待确认"}`,
+      },
+    ]);
+  }
+
   async function handleRejectLesson(lessonId: string) {
     if (!project) return;
     await rejectLesson(project.id, lessonId);
@@ -714,8 +754,10 @@ export function AppShell() {
         trainingError={trainingError}
         trainingResult={trainingResult}
         trainingRuns={trainingRuns}
+        suggestedTargetColumn={suggestedTargetColumn}
         onCleanDataset={handleCleanDataset}
         onGenerateReport={handleGenerateReport}
+        onTransferToMl={handleTransferToMl}
         onTrainModel={handleTrainModel}
       />
       <footer className="status-bar">

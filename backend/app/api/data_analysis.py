@@ -1,5 +1,7 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -18,6 +20,11 @@ class AnalysisReportRequest(BaseModel):
 
 
 class CleanDatasetRequest(BaseModel):
+    dataset_path: str = Field(min_length=1, max_length=4096)
+    session_id: str = Field(default="manual-analysis", min_length=1, max_length=128)
+
+
+class HandoffToMlRequest(BaseModel):
     dataset_path: str = Field(min_length=1, max_length=4096)
     session_id: str = Field(default="manual-analysis", min_length=1, max_length=128)
 
@@ -107,6 +114,48 @@ def _artifact_payload(
     }
 
 
+def _target_candidates(df: pd.DataFrame) -> list[dict[str, Any]]:
+    target_hints = {"target", "label", "churn", "default", "fraud", "y"}
+    candidates: list[dict[str, Any]] = []
+    row_count = max(1, len(df))
+    for index, column in enumerate(df.columns):
+        series = df[column]
+        lower_name = column.lower()
+        unique_count = int(series.nunique(dropna=True))
+        missing_ratio = float(series.isna().mean()) if len(series) else 0.0
+        score = 0.0
+        reasons: list[str] = []
+
+        if lower_name in target_hints:
+            score += 0.7
+            reasons.append("字段名匹配常见目标列")
+        if any(hint in lower_name for hint in target_hints - {"y"}):
+            score += 0.25
+            reasons.append("字段名包含建模目标语义")
+        if 1 < unique_count <= max(20, row_count * 0.2):
+            score += 0.2
+            reasons.append("唯一值数量适合作为监督学习目标")
+        if index == len(df.columns) - 1:
+            score += 0.15
+            reasons.append("位于数据集最后一列")
+        if lower_name.endswith(("_id", "id")):
+            score -= 0.4
+            reasons.append("疑似标识符字段")
+
+        candidates.append(
+            {
+                "column": column,
+                "score": round(max(0.0, min(score, 1.0)), 4),
+                "dtype": str(series.dtype),
+                "unique_count": unique_count,
+                "missing_ratio": missing_ratio,
+                "reason": "；".join(reasons) or "可作为备选目标列，需要用户确认",
+            }
+        )
+
+    return sorted(candidates, key=lambda item: item["score"], reverse=True)
+
+
 @router.post("/report")
 def generate_analysis_report(project_id: str, payload: AnalysisReportRequest) -> dict:
     root = _get_project_root(project_id)
@@ -133,6 +182,47 @@ def generate_analysis_report(project_id: str, payload: AnalysisReportRequest) ->
             _relative_path(root, report_path),
             {"dataset_path": payload.dataset_path},
         )
+    }
+
+
+@router.post("/handoff-to-ml")
+def handoff_to_ml(project_id: str, payload: HandoffToMlRequest) -> dict:
+    root = _get_project_root(project_id)
+    dataset = _resolve_project_path(root, payload.dataset_path)
+    if not dataset.exists() or not dataset.is_file():
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    df = pd.read_csv(dataset)
+    candidates = _target_candidates(df)
+    recommended_target = candidates[0]["column"] if candidates else ""
+    handoff = {
+        "mode": "machine-learning",
+        "dataset_path": payload.dataset_path,
+        "recommended_target_column": recommended_target,
+        "target_candidates": candidates,
+        "row_count": int(len(df)),
+        "column_count": int(len(df.columns)),
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+    result_dir = root / "results" / payload.session_id
+    result_dir.mkdir(parents=True, exist_ok=True)
+    handoff_path = result_dir / "ml_handoff.json"
+    handoff_path.write_text(json.dumps(handoff, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return {
+        **handoff,
+        "artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "training",
+            handoff_path.name,
+            _relative_path(root, handoff_path),
+            {
+                "dataset_path": payload.dataset_path,
+                "recommended_target_column": recommended_target,
+            },
+        ),
     }
 
 

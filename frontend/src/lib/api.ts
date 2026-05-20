@@ -183,6 +183,33 @@ export type CleanDatasetResult = {
   };
 };
 
+export type MlHandoffResult = {
+  mode: "machine-learning";
+  dataset_path: string;
+  recommended_target_column: string;
+  target_candidates: Array<{
+    column: string;
+    score: number;
+    dtype: string;
+    unique_count: number;
+    missing_ratio: number;
+    reason: string;
+  }>;
+  row_count: number;
+  column_count: number;
+  created_at: string;
+  artifact: {
+    id: string;
+    project_id: string;
+    session_id: string;
+    type: "training";
+    name: string;
+    path: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  };
+};
+
 export type EvolutionRuleMatch = {
   lesson_id: string;
   score: number;
@@ -351,6 +378,18 @@ export async function cleanAnalysisDataset(
   sessionId = "manual-analysis",
 ): Promise<CleanDatasetResult> {
   return request<CleanDatasetResult>(`/api/projects/${projectId}/analysis/clean`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataset_path: datasetPath, session_id: sessionId }),
+  });
+}
+
+export async function handoffDatasetToMl(
+  projectId: string,
+  datasetPath: string,
+  sessionId = "manual-analysis",
+): Promise<MlHandoffResult> {
+  return request<MlHandoffResult>(`/api/projects/${projectId}/analysis/handoff-to-ml`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dataset_path: datasetPath, session_id: sessionId }),
