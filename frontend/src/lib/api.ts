@@ -156,6 +156,33 @@ export type AnalysisReportResult = {
   };
 };
 
+export type CleanDatasetResult = {
+  cleaned_data_artifact: {
+    id: string;
+    project_id: string;
+    session_id: string;
+    type: "dataframe";
+    name: string;
+    path: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  };
+  script_artifact: {
+    id: string;
+    project_id: string;
+    session_id: string;
+    type: "code";
+    name: string;
+    path: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  };
+  fill_values: {
+    numeric: Record<string, number>;
+    categorical: Record<string, string>;
+  };
+};
+
 export type EvolutionRuleMatch = {
   lesson_id: string;
   score: number;
@@ -312,6 +339,18 @@ export async function generateAnalysisReport(
   sessionId = "manual-analysis",
 ): Promise<AnalysisReportResult> {
   return request<AnalysisReportResult>(`/api/projects/${projectId}/analysis/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataset_path: datasetPath, session_id: sessionId }),
+  });
+}
+
+export async function cleanAnalysisDataset(
+  projectId: string,
+  datasetPath: string,
+  sessionId = "manual-analysis",
+): Promise<CleanDatasetResult> {
+  return request<CleanDatasetResult>(`/api/projects/${projectId}/analysis/clean`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dataset_path: datasetPath, session_id: sessionId }),

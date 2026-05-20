@@ -19,6 +19,7 @@ import { SearchPanel } from "../features/files/SearchPanel";
 import { RightPanel } from "../features/right-panel/RightPanel";
 import {
   adoptLesson,
+  cleanAnalysisDataset,
   createAgentSession,
   createProjectFile,
   createProject,
@@ -532,6 +533,46 @@ export function AppShell() {
     setActiveFile(result.artifact.path);
   }
 
+  async function handleCleanDataset() {
+    if (!project) return;
+    const sessionId = activeSession?.id ?? "manual-analysis";
+    const result = await cleanAnalysisDataset(project.id, activeFile, sessionId);
+    const nextFolders = Array.from(
+      new Set([
+        ...expandedFolders,
+        "results",
+        parentPath(result.cleaned_data_artifact.path),
+        "notebooks",
+      ].filter(Boolean)),
+    );
+    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
+    setExpandedFolders(nextFolders);
+    setLocalEvents((current) => [
+      ...current,
+      {
+        type: "artifact_created",
+        artifact: {
+          ...result.cleaned_data_artifact,
+          metadata: {
+            ...result.cleaned_data_artifact.metadata,
+            fill_values: result.fill_values,
+          },
+        },
+      },
+      {
+        type: "artifact_created",
+        artifact: result.script_artifact,
+      },
+      {
+        type: "task_progress",
+        task_id: sessionId,
+        progress: 1,
+        label: "清洗数据已生成",
+      },
+    ]);
+    setActiveFile(result.cleaned_data_artifact.path);
+  }
+
   async function handleRejectLesson(lessonId: string) {
     if (!project) return;
     await rejectLesson(project.id, lessonId);
@@ -673,6 +714,7 @@ export function AppShell() {
         trainingError={trainingError}
         trainingResult={trainingResult}
         trainingRuns={trainingRuns}
+        onCleanDataset={handleCleanDataset}
         onGenerateReport={handleGenerateReport}
         onTrainModel={handleTrainModel}
       />

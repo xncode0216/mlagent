@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
@@ -12,6 +13,11 @@ router = APIRouter(prefix="/api/projects/{project_id}/analysis", tags=["analysis
 
 
 class AnalysisReportRequest(BaseModel):
+    dataset_path: str = Field(min_length=1, max_length=4096)
+    session_id: str = Field(default="manual-analysis", min_length=1, max_length=128)
+
+
+class CleanDatasetRequest(BaseModel):
     dataset_path: str = Field(min_length=1, max_length=4096)
     session_id: str = Field(default="manual-analysis", min_length=1, max_length=128)
 
@@ -81,6 +87,26 @@ def _render_report(dataset_path: str, profile: dict, missing: dict, correlation:
     )
 
 
+def _artifact_payload(
+    project_id: str,
+    session_id: str,
+    artifact_type: str,
+    name: str,
+    path: str,
+    metadata: dict | None = None,
+) -> dict:
+    return {
+        "id": uuid4().hex,
+        "project_id": project_id,
+        "session_id": session_id,
+        "type": artifact_type,
+        "name": name,
+        "path": path,
+        "metadata": metadata or {},
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+
 @router.post("/report")
 def generate_analysis_report(project_id: str, payload: AnalysisReportRequest) -> dict:
     root = _get_project_root(project_id)
@@ -97,18 +123,93 @@ def generate_analysis_report(project_id: str, payload: AnalysisReportRequest) ->
     report_dir.mkdir(parents=True, exist_ok=True)
     report_path = report_dir / "analysis_report.md"
     report_path.write_text(report, encoding="utf-8", newline="")
-    created_at = datetime.now(UTC).isoformat()
-    artifact_id = uuid4().hex
 
     return {
-        "artifact": {
-            "id": artifact_id,
-            "project_id": project_id,
-            "session_id": payload.session_id,
-            "type": "report",
-            "name": report_path.name,
-            "path": _relative_path(root, report_path),
-            "metadata": {"dataset_path": payload.dataset_path},
-            "created_at": created_at,
-        }
+        "artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "report",
+            report_path.name,
+            _relative_path(root, report_path),
+            {"dataset_path": payload.dataset_path},
+        )
+    }
+
+
+@router.post("/clean")
+def clean_dataset(project_id: str, payload: CleanDatasetRequest) -> dict:
+    root = _get_project_root(project_id)
+    dataset = _resolve_project_path(root, payload.dataset_path)
+    if not dataset.exists() or not dataset.is_file():
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    df = pd.read_csv(dataset)
+    cleaned = df.copy()
+    numeric_fill_values: dict[str, float] = {}
+    categorical_fill_values: dict[str, str] = {}
+    for column in cleaned.columns:
+        if not cleaned[column].isna().any():
+            continue
+        if pd.api.types.is_numeric_dtype(cleaned[column]):
+            fill_value = float(cleaned[column].median()) if cleaned[column].notna().any() else 0.0
+            numeric_fill_values[column] = fill_value
+            cleaned[column] = cleaned[column].fillna(fill_value)
+        else:
+            mode = cleaned[column].mode(dropna=True)
+            fill_value = str(mode.iloc[0]) if not mode.empty else "__missing__"
+            categorical_fill_values[column] = fill_value
+            cleaned[column] = cleaned[column].fillna(fill_value)
+
+    result_dir = root / "results" / payload.session_id
+    result_dir.mkdir(parents=True, exist_ok=True)
+    cleaned_path = result_dir / f"{dataset.stem}_cleaned.csv"
+    cleaned.to_csv(cleaned_path, index=False)
+
+    script_dir = root / "notebooks"
+    script_dir.mkdir(parents=True, exist_ok=True)
+    script_path = script_dir / f"{payload.session_id}_cleaning.py"
+    script = [
+        "import pandas as pd",
+        "",
+        f"df = pd.read_csv({payload.dataset_path!r})",
+    ]
+    for column, fill_value in numeric_fill_values.items():
+        script.append(f"df[{column!r}] = df[{column!r}].fillna({fill_value!r})")
+    for column, fill_value in categorical_fill_values.items():
+        script.append(f"df[{column!r}] = df[{column!r}].fillna({fill_value!r})")
+    script.extend(
+        [
+            f"df.to_csv({_relative_path(root, cleaned_path)!r}, index=False)",
+            "",
+        ]
+    )
+    script_path.write_text("\n".join(script), encoding="utf-8", newline="")
+
+    return {
+        "cleaned_data_artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "dataframe",
+            cleaned_path.name,
+            _relative_path(root, cleaned_path),
+            {
+                "dataset_path": payload.dataset_path,
+                "fill_values": {
+                    "numeric": numeric_fill_values,
+                    "categorical": categorical_fill_values,
+                },
+            },
+        ),
+        "script_artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "code",
+            script_path.name,
+            _relative_path(root, script_path),
+            {"dataset_path": payload.dataset_path},
+        ),
+        "fill_values": {
+            "numeric": numeric_fill_values,
+            "categorical": categorical_fill_values,
+        },
     }

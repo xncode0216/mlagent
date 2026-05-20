@@ -23,6 +23,7 @@ type RightPanelProps = {
   trainingError: string | null;
   trainingResult: TrainingResult | null;
   trainingRuns: ExperimentRun[];
+  onCleanDataset: () => Promise<void>;
   onGenerateReport: () => Promise<void>;
   onTrainModel: (targetColumn: string, engine: TrainingEngine, useGpu: boolean) => Promise<void>;
 };
@@ -404,17 +405,32 @@ function ActiveFilePreview({
   );
 }
 
-function DemoChartGallery({ onGenerateReport }: { onGenerateReport: () => Promise<void> }) {
+function DemoChartGallery({
+  onCleanDataset,
+  onGenerateReport,
+}: {
+  onCleanDataset: () => Promise<void>;
+  onGenerateReport: () => Promise<void>;
+}) {
   const bars = [18, 42, 68, 86, 76, 58, 35, 20, 12];
   const heatCells = Array.from({ length: 42 }, (_, index) => (index % 9 === 0 ? "hot" : index % 5 === 0 ? "warm" : ""));
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<"report" | "clean" | null>(null);
 
   async function generateReport() {
-    setSubmitting(true);
+    setSubmitting("report");
     try {
       await onGenerateReport();
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
+    }
+  }
+
+  async function cleanDataset() {
+    setSubmitting("clean");
+    try {
+      await onCleanDataset();
+    } finally {
+      setSubmitting(null);
     }
   }
 
@@ -454,13 +470,13 @@ function DemoChartGallery({ onGenerateReport }: { onGenerateReport: () => Promis
         </div>
       </section>
       <div className="panel-actions">
-        <button disabled={submitting} onClick={() => void generateReport()}>
+        <button disabled={submitting !== null} onClick={() => void generateReport()}>
           <FileText size={15} />
-          {submitting ? "生成中..." : "生成报告"}
+          {submitting === "report" ? "生成中..." : "生成报告"}
         </button>
-        <button>
+        <button disabled={submitting !== null} onClick={() => void cleanDataset()}>
           <Database size={15} />
-          清洗数据
+          {submitting === "clean" ? "清洗中..." : "清洗数据"}
         </button>
         <button>
           <Play size={15} />
@@ -677,6 +693,7 @@ export function RightPanel({
   trainingError,
   trainingResult,
   trainingRuns,
+  onCleanDataset,
   onGenerateReport,
   onTrainModel,
 }: RightPanelProps) {
@@ -748,7 +765,7 @@ export function RightPanel({
           {selectedArtifact ? (
             <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
           ) : (
-            <DemoChartGallery onGenerateReport={onGenerateReport} />
+            <DemoChartGallery onCleanDataset={onCleanDataset} onGenerateReport={onGenerateReport} />
           )}
         </>
       ) : null}

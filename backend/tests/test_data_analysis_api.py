@@ -26,6 +26,7 @@ def test_generate_analysis_report_writes_markdown_artifact(tmp_path, monkeypatch
     payload = response.json()
     assert payload["artifact"]["type"] == "report"
     assert payload["artifact"]["path"] == "results/report-session/analysis_report.md"
+    assert payload["artifact"]["metadata"]["dataset_path"] == "data/customer_churn.csv"
     report_path = Path(project["workspace_path"]) / payload["artifact"]["path"]
     report = report_path.read_text(encoding="utf-8")
     assert "# 数据分析报告" in report
@@ -44,6 +45,55 @@ def test_generate_analysis_report_rejects_path_escape(tmp_path, monkeypatch):
     response = client.post(
         f"/api/projects/{project['id']}/analysis/report",
         json={"dataset_path": "../escape.csv", "session_id": "report-session"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_clean_dataset_writes_cleaned_csv_and_script(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    dataset_path = Path(project["workspace_path"]) / "data" / "customer_churn.csv"
+    dataset_path.write_text(
+        "id,age,contract,churn\n1,42,Month-to-month,1\n2,,One year,0\n3,55,,0\n",
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/clean",
+        json={"dataset_path": "data/customer_churn.csv", "session_id": "clean-session"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cleaned_data_artifact"]["path"] == "results/clean-session/customer_churn_cleaned.csv"
+    assert payload["cleaned_data_artifact"]["metadata"]["dataset_path"] == "data/customer_churn.csv"
+    assert payload["cleaned_data_artifact"]["metadata"]["fill_values"]["numeric"]["age"] == 48.5
+    assert payload["script_artifact"]["path"] == "notebooks/clean-session_cleaning.py"
+
+    cleaned_path = Path(project["workspace_path"]) / payload["cleaned_data_artifact"]["path"]
+    cleaned = cleaned_path.read_text(encoding="utf-8")
+    assert ",48.5," in cleaned
+    assert "Month-to-month" in cleaned
+    assert ",0\n" in cleaned
+
+    script_path = Path(project["workspace_path"]) / payload["script_artifact"]["path"]
+    script = script_path.read_text(encoding="utf-8")
+    assert "fillna" in script
+    assert "customer_churn_cleaned.csv" in script
+
+
+def test_clean_dataset_rejects_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/clean",
+        json={"dataset_path": "../escape.csv", "session_id": "clean-session"},
     )
 
     assert response.status_code == 400
