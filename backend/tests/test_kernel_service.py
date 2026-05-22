@@ -13,6 +13,18 @@ from app.services.kernel_service import (
 import app.services.kernel_service as kernel_service
 
 
+def is_docker_running() -> bool:
+    docker_exe = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
+    if not shutil.which(docker_exe):
+        return False
+    try:
+        import subprocess
+        res = subprocess.run([docker_exe, "ps"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+
 def test_executes_python_and_returns_stdout():
     service = LocalPythonKernelService()
     result = service.execute("print('hello mlagent')")
@@ -82,10 +94,7 @@ def test_docker_kernel_adds_gpu_flag_when_requested(monkeypatch, tmp_path: Path)
     assert "all" in captured_command
 
 
-@pytest.mark.skipif(
-    shutil.which("docker") is None and not os.environ.get("MLAGENT_DOCKER_EXE"),
-    reason="Docker CLI is not available",
-)
+@pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
 def test_jupyter_kernel_service_executes_in_docker(tmp_path: Path):
     docker_executable = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
     service = JupyterKernelService(
@@ -98,10 +107,7 @@ def test_jupyter_kernel_service_executes_in_docker(tmp_path: Path):
     assert result.stdout.strip() == "hello docker kernel"
 
 
-@pytest.mark.skipif(
-    shutil.which("docker") is None and not os.environ.get("MLAGENT_DOCKER_EXE"),
-    reason="Docker CLI is not available",
-)
+@pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
 def test_jupyter_kernel_service_reads_workspace_csv(tmp_path: Path):
     docker_executable = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
     (tmp_path / "data.csv").write_text("a,b\n1,2\n3,4\n", encoding="utf-8")

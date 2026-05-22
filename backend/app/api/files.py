@@ -3,6 +3,8 @@ import shutil
 from pathlib import Path
 from typing import Literal
 
+mimetypes.add_type("text/csv", ".csv")
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field

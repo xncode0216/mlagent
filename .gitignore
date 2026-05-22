@@ -31,4 +31,5 @@ docker/volumes/
 # Superpowers brainstorming cache
 .superpowers/
 .claude/
+.codex-runs/
 .demo-server*.log

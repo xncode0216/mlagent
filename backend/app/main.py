@@ -7,6 +7,7 @@ from app.api.files import router as files_router
 from app.api.health import router as health_router
 from app.api.machine_learning import router as machine_learning_router
 from app.api.projects import router as projects_router
+from app.api.resources import router as resources_router
 from app.api.sessions import router as sessions_router
 from app.api.ws import router as ws_router
 
@@ -31,5 +32,6 @@ app.include_router(files_router)
 app.include_router(data_analysis_router)
 app.include_router(machine_learning_router)
 app.include_router(evolution_router)
+app.include_router(resources_router)
 app.include_router(sessions_router)
 app.include_router(ws_router)

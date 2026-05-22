@@ -4,6 +4,18 @@ import shutil
 
 import pytest
 
+
+def is_docker_running() -> bool:
+    docker_exe = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
+    if not shutil.which(docker_exe):
+        return False
+    try:
+        import subprocess
+        res = subprocess.run([docker_exe, "ps"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        return res.returncode == 0
+    except Exception:
+        return False
+
 from app.services.kernel_service import KernelExecutionResult
 from app.services.kernel_service import JupyterKernelService
 from app.tools.machine_learning.train_sklearn import train_sklearn_classifier
@@ -82,10 +94,7 @@ def test_train_sklearn_classifier_rejects_kernel_errors(tmp_path: Path):
         )
 
 
-@pytest.mark.skipif(
-    shutil.which("docker") is None and not os.environ.get("MLAGENT_DOCKER_EXE"),
-    reason="Docker CLI is not available",
-)
+@pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
 def test_train_sklearn_classifier_runs_in_docker_kernel(tmp_path: Path):
     dataset_path = tmp_path / "data" / "training.csv"
     dataset_path.parent.mkdir()

@@ -10,6 +10,7 @@ from app.api.projects import get_registered_project
 from app.core.config import get_settings
 from app.services.artifact_service import ArtifactService
 from app.services.experiment_service import ExperimentService
+from app.services.gpu_scheduler_service import gpu_scheduler
 from app.services.kernel_service import create_kernel_service
 from app.tools.machine_learning import train_baseline_classifier, train_sklearn_classifier
 
@@ -147,22 +148,26 @@ def train_baseline(project_id: str, payload: TrainBaselineRequest) -> dict[str, 
 
 
 @router.post("/train-sklearn")
-def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, Any]:
+async def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, Any]:
     root = _project_root(project_id)
     _resolve_project_file(root, payload.dataset_path)
     settings = get_settings()
     experiment_id = uuid4().hex
     model_name = f"sklearn_{_safe_name(payload.target_column)}_model.pkl"
     model_path = f"models/{model_name}"
-    kernel_service = create_kernel_service(
-        backend=settings.kernel_backend,
-        image=settings.kernel_image,
-        workspace_root=root,
-        docker_executable=settings.docker_executable,
-        use_gpu=payload.use_gpu,
-    )
+
+    if payload.use_gpu:
+        await gpu_scheduler.acquire_gpu(experiment_id, project_id)
 
     try:
+        kernel_service = create_kernel_service(
+            backend=settings.kernel_backend,
+            image=settings.kernel_image,
+            workspace_root=root,
+            docker_executable=settings.docker_executable,
+            use_gpu=payload.use_gpu,
+        )
+
         result = _json_safe(train_sklearn_classifier(
             workspace_root=root,
             dataset_path=payload.dataset_path,
@@ -174,6 +179,9 @@ def train_sklearn(project_id: str, payload: TrainSklearnRequest) -> dict[str, An
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if payload.use_gpu:
+            await gpu_scheduler.release_gpu(experiment_id)
 
     artifact_service = ArtifactService(root)
     metrics_artifact = artifact_service.write_json(

@@ -726,6 +726,7 @@ export function AppShell() {
       </aside>
       {activeMode === "evolution" ? (
         <EvolutionWorkspace
+          projectId={project?.id ?? ""}
           lessons={lessons}
           injectionLogs={injectionLogs}
           protocols={protocols}

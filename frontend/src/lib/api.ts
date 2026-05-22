@@ -533,3 +533,54 @@ export async function markLessonConflict(
     body: JSON.stringify({ reason }),
   });
 }
+
+export type KnowledgeGraphNode = {
+  id: string;
+  label: string;
+  type: "column" | "experiment" | "rule";
+  properties: Record<string, unknown>;
+};
+
+export type KnowledgeGraphEdge = {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+  type: "produces" | "uses" | "triggers" | "supports";
+};
+
+export type AdvancedInsight = {
+  type: "knowledge_gap" | "surprise_connection";
+  title: string;
+  description: string;
+  meta: Record<string, unknown>;
+};
+
+export type KnowledgeGraphResult = {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+  insights: AdvancedInsight[];
+};
+
+export type GPUStatus = {
+  status: "idle" | "busy";
+  active_task: {
+    task_id: string;
+    project_id: string;
+    started_at: string;
+  } | null;
+  queue: Array<{
+    task_id: string;
+    project_id: string;
+    requested_at: string;
+  }>;
+  queue_length: number;
+};
+
+export async function getKnowledgeGraph(projectId: string): Promise<KnowledgeGraphResult> {
+  return request<KnowledgeGraphResult>(`/api/projects/${projectId}/evolution/graph`);
+}
+
+export async function getGPUStatus(projectId: string): Promise<GPUStatus> {
+  return request<GPUStatus>(`/api/projects/${projectId}/resources/gpu/status`);
+}
