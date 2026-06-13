@@ -24,6 +24,8 @@ from app.services.task_state_service import (
     recovery_policy,
     write_task_state,
 )
+from app.services.llm import LLMClient, LLMError, get_llm_client, llm_is_configured
+from app.services.llm_intent import classify_intent_with_llm
 from app.tools.data_analysis import (
     correlation_matrix,
     data_quality_profile,
@@ -311,15 +313,24 @@ def _render_transformation_report(summary: dict[str, Any]) -> str:
     )
 
 
+def _default_llm_client() -> LLMClient | None:
+    """Build the configured LLM client, or None when no LLM is configured."""
+    try:
+        return get_llm_client() if llm_is_configured() else None
+    except LLMError:
+        return None
+
+
 class AgentOrchestrator:
-    def __init__(self, *, session_id: str):
+    def __init__(self, *, session_id: str, llm_client: LLMClient | None = None):
         self.session_id = session_id
         self.trace_id = uuid4().hex
         self.message_id = uuid4().hex
         self.session_service: SessionService | None = None
+        self._llm_client = llm_client if llm_client is not None else _default_llm_client()
 
     async def run(self, *, content: str, context: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
-        intent = self._classify_intent(content)
+        intent = await self._resolve_intent(content)
         if intent == "abandon_last_failure":
             async for event in self._run_abandon_last_failure(content=content, context=context):
                 yield event
@@ -896,6 +907,17 @@ class AgentOrchestrator:
         if any(term in text for term in modeling_terms):
             return "prepare_for_modeling"
         return "analysis_overview"
+
+    async def _resolve_intent(self, content: str) -> str:
+        """Use the LLM router when configured, else the keyword classifier.
+
+        The keyword result is always computed and used as the fallback, so
+        behavior is unchanged when no LLM is configured or the LLM call fails.
+        """
+        keyword_intent = self._classify_intent(content)
+        if self._llm_client is None:
+            return keyword_intent
+        return await classify_intent_with_llm(self._llm_client, content, fallback=keyword_intent)
 
     def _resolve_project_session_context(
         self,
