@@ -8,7 +8,7 @@ Covers OpenAI, DeepSeek, and self-hosted vLLM (all expose
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import httpx
@@ -21,6 +21,7 @@ from app.services.llm.base import (
     LLMResponseError,
     ToolCall,
     ToolSpec,
+    sse_payload,
 )
 
 DEFAULT_BASE_URLS = {
@@ -177,3 +178,44 @@ class OpenAICompatibleClient(LLMClient):
                 f"Provider '{self.provider}' returned {response.status_code}: {response.text[:500]}"
             )
         return self._parse_response(response.json())
+
+    async def stream(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        tools: Sequence[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[str]:
+        payload = self._build_payload(
+            messages,
+            tools,
+            self._temperature if temperature is None else temperature,
+            self._max_tokens if max_tokens is None else max_tokens,
+        )
+        payload["stream"] = True
+        headers = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+
+        async with httpx.AsyncClient(transport=self._transport, timeout=self._timeout) as client:
+            async with client.stream(
+                "POST", f"{self._base_url}/chat/completions", json=payload, headers=headers
+            ) as response:
+                if response.status_code >= 400:
+                    body = (await response.aread()).decode("utf-8", "replace")
+                    raise LLMResponseError(
+                        f"Provider '{self.provider}' returned {response.status_code}: {body[:500]}"
+                    )
+                async for line in response.aiter_lines():
+                    data = sse_payload(line)
+                    if data is None:
+                        continue
+                    if data == "[DONE]":
+                        break
+                    try:
+                        delta = json.loads(data)["choices"][0]["delta"].get("content")
+                    except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+                        continue
+                    if delta:
+                        yield delta

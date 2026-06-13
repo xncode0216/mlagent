@@ -7,7 +7,8 @@ blocks, and tool results are sent back as ``tool_result`` blocks in a user turn.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import json
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import httpx
@@ -20,6 +21,7 @@ from app.services.llm.base import (
     LLMResponseError,
     ToolCall,
     ToolSpec,
+    sse_payload,
 )
 
 _EMPTY_SCHEMA = {"type": "object", "properties": {}}
@@ -162,3 +164,45 @@ class AnthropicClient(LLMClient):
                 f"Provider 'anthropic' returned {response.status_code}: {response.text[:500]}"
             )
         return self._parse_response(response.json())
+
+    async def stream(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        tools: Sequence[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[str]:
+        payload = self._build_payload(
+            messages,
+            tools,
+            self._temperature if temperature is None else temperature,
+            self._max_tokens if max_tokens is None else max_tokens,
+        )
+        payload["stream"] = True
+        headers = {
+            "x-api-key": self._api_key,
+            "anthropic-version": self._anthropic_version,
+            "Content-Type": "application/json",
+        }
+        async with httpx.AsyncClient(transport=self._transport, timeout=self._timeout) as client:
+            async with client.stream(
+                "POST", f"{self._base_url}/v1/messages", json=payload, headers=headers
+            ) as response:
+                if response.status_code >= 400:
+                    body = (await response.aread()).decode("utf-8", "replace")
+                    raise LLMResponseError(
+                        f"Provider 'anthropic' returned {response.status_code}: {body[:500]}"
+                    )
+                async for line in response.aiter_lines():
+                    data = sse_payload(line)
+                    if data is None or data == "[DONE]":
+                        continue
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    if event.get("type") == "content_block_delta":
+                        text = (event.get("delta") or {}).get("text")
+                        if text:
+                            yield text

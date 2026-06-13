@@ -9,7 +9,7 @@ the provider. See ``docs/production-readiness-review.md`` P0-1.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -102,3 +102,31 @@ class LLMClient(ABC):
         max_tokens: int | None = None,
     ) -> ChatResult:
         """Run one chat completion, optionally exposing tools for function calling."""
+
+    async def stream(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        tools: Sequence[ToolSpec] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[str]:
+        """Yield assistant text chunks.
+
+        Default implementation emits the full ``complete`` content as one chunk;
+        providers override this with true token streaming.
+        """
+        result = await self.complete(
+            messages, tools=tools, temperature=temperature, max_tokens=max_tokens
+        )
+        if result.content:
+            yield result.content
+
+
+def sse_payload(line: str) -> str | None:
+    """Return the payload of a Server-Sent-Events ``data:`` line, else None."""
+
+    stripped = line.strip()
+    if not stripped or not stripped.startswith("data:"):
+        return None
+    return stripped[len("data:") :].strip()

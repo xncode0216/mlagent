@@ -24,7 +24,7 @@ from app.services.task_state_service import (
     recovery_policy,
     write_task_state,
 )
-from app.services.llm import LLMClient, LLMError, get_llm_client, llm_is_configured
+from app.services.llm import ChatMessage, LLMClient, LLMError, get_llm_client, llm_is_configured
 from app.services.llm_intent import classify_intent_with_llm
 from app.tools.data_analysis import (
     correlation_matrix,
@@ -1363,6 +1363,47 @@ class AgentOrchestrator:
                 metadata={"message_id": self.message_id},
             )
 
+    async def _emit_llm_message(
+        self,
+        *,
+        messages: list[ChatMessage],
+        fallback_text: str,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream a real LLM reply as message_delta events.
+
+        Falls back to ``fallback_text`` when no LLM is configured or the call
+        fails before producing any text, so this path always yields a reply.
+        """
+        if self._llm_client is None:
+            async for event in self._emit_assistant_message(fallback_text):
+                yield event
+            return
+
+        collected: list[str] = []
+        try:
+            async for chunk in self._llm_client.stream(messages, max_tokens=600):
+                collected.append(chunk)
+                yield {
+                    "type": "message_delta",
+                    "trace_id": self.trace_id,
+                    "message_id": self.message_id,
+                    "delta": chunk,
+                }
+        except LLMError:
+            if not collected:
+                async for event in self._emit_assistant_message(fallback_text):
+                    yield event
+                return
+
+        text = "".join(collected) or fallback_text
+        if self.session_service is not None and self.session_service.get_session(self.session_id):
+            self.session_service.append_message(
+                session_id=self.session_id,
+                role="assistant",
+                content=text,
+                metadata={"message_id": self.message_id},
+            )
+
     async def _emit_resolution_error(
         self,
         *,
@@ -1419,9 +1460,11 @@ class AgentOrchestrator:
         yield self._record(self._rules_event(agent_context))
 
         artifact_service = ArtifactService(agent_context.project_root)
+        profile_data = profile_dataset(agent_context.csv_path)
+        missing_data = detect_missing(agent_context.csv_path)
         artifacts = [
-            ("dataframe", "profile.json", profile_dataset(agent_context.csv_path)),
-            ("dataframe", "missing.json", detect_missing(agent_context.csv_path)),
+            ("dataframe", "profile.json", profile_data),
+            ("dataframe", "missing.json", missing_data),
             ("chart", "correlation.json", correlation_matrix(agent_context.csv_path)),
             ("chart", "distribution.json", plot_distribution(agent_context.csv_path)),
         ]
@@ -1456,12 +1499,22 @@ class AgentOrchestrator:
         finished_event = self._tool_finished(call_id=call_id, started_at=started_at)
         yield self._record(finished_event)
 
-        text = (
+        fallback_text = (
             "I inspected the dataset structure, missing values, column types, "
             "distributions, and correlations. The generated artifacts are ready "
             "in the inspector."
         )
-        async for event in self._emit_assistant_message(text):
+        summary = json.dumps({"profile": profile_data, "missing": missing_data}, default=str)[:2000]
+        messages = [
+            ChatMessage.system(
+                "You are MLAgent's senior data analyst. Using only the computed "
+                "results provided, summarize the dataset for the user concretely "
+                "(rows, columns, notable missing rates and correlations) and suggest "
+                "1-3 next steps. Do not invent values."
+            ),
+            ChatMessage.user(f"My request: {content}\n\nComputed results (JSON):\n{summary}"),
+        ]
+        async for event in self._emit_llm_message(messages=messages, fallback_text=fallback_text):
             yield event
 
         yield self._record(
