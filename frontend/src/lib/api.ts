@@ -917,3 +917,21 @@ export async function cancelGPUTask(projectId: string, taskId: string): Promise<
     { method: "POST" },
   );
 }
+
+export type LlmProviderInfo = {
+  id: string;
+  label: string;
+  active: boolean;
+};
+
+export type LlmStatus = {
+  configured: boolean;
+  provider: string;
+  provider_label: string;
+  model: string;
+  providers: LlmProviderInfo[];
+};
+
+export async function getLlmStatus(): Promise<LlmStatus> {
+  return request<LlmStatus>("/api/llm/status");
+}

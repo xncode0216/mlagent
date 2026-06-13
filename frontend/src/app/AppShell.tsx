@@ -26,6 +26,7 @@ import { useAgentStream } from "../features/chat/useAgentStream";
 import { EvolutionWorkspace } from "../features/evolution/EvolutionWorkspace";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
+import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
 import { RightPanel } from "../features/right-panel/RightPanel";
 import {
   adoptLesson,
@@ -1652,7 +1653,7 @@ export function AppShell() {
             Evolution Knowledge
           </button>
         </nav>
-        <div className="model-selector">Claude / DeepSeek / Local vLLM</div>
+        <ModelStatusIndicator />
       </header>
       <aside className="activity-bar" aria-label="Workspace navigation">
         {activityPanels
