@@ -2,7 +2,7 @@ import asyncio
 import csv
 import hashlib
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,7 +24,21 @@ from app.services.task_state_service import (
     recovery_policy,
     write_task_state,
 )
-from app.services.llm import ChatMessage, LLMClient, LLMError, get_llm_client, llm_is_configured
+from app.services.llm import (
+    ChatMessage,
+    LLMClient,
+    LLMError,
+    ToolCall,
+    ToolSpec,
+    get_llm_client,
+    llm_is_configured,
+)
+from app.services.llm_agent import (
+    ToolCallFinished,
+    ToolCallStarted,
+    ToolExecutor,
+    run_tool_phase,
+)
 from app.services.llm_intent import classify_intent_with_llm
 from app.tools.data_analysis import (
     correlation_matrix,
@@ -319,6 +333,59 @@ def _default_llm_client() -> LLMClient | None:
         return get_llm_client() if llm_is_configured() else None
     except LLMError:
         return None
+
+
+_ANALYSIS_AGENT_PROMPT = (
+    "You are MLAgent's senior data analyst. Use the provided tools to inspect the "
+    "active dataset, then give the user a concrete, grounded summary that references "
+    "real numbers (rows, columns, notable missing rates and correlations) and 1-3 "
+    "next steps. Call tools when you need facts; never invent values."
+)
+
+# Read-only tools the analysis agent may call. Each operates on the session's
+# active dataset, so they advertise an empty argument schema.
+_AGENT_TOOL_FUNCS: dict[str, Callable[[Path], Any]] = {
+    "profile_dataset": profile_dataset,
+    "detect_missing": detect_missing,
+    "correlation_matrix": correlation_matrix,
+}
+_AGENT_TOOL_SPECS: list[ToolSpec] = [
+    ToolSpec(
+        name="profile_dataset",
+        description=(
+            "Profile the active dataset: row/column counts, dtypes, target "
+            "candidates, and data-quality flags."
+        ),
+        parameters={"type": "object", "properties": {}},
+    ),
+    ToolSpec(
+        name="detect_missing",
+        description="Per-column missing-value counts and rates for the active dataset.",
+        parameters={"type": "object", "properties": {}},
+    ),
+    ToolSpec(
+        name="correlation_matrix",
+        description="Pairwise correlation matrix of the active dataset's numeric columns.",
+        parameters={"type": "object", "properties": {}},
+    ),
+]
+
+
+def _build_analysis_tools(csv_path: Path) -> tuple[list[ToolSpec], ToolExecutor]:
+    """Bind the read-only analysis tools to one dataset for the agent loop.
+
+    Returns the specs advertised to the model plus an executor that runs the
+    matching deterministic function and returns a truncated JSON string (capped so a
+    large profile can't blow the model's context window).
+    """
+
+    async def execute(call: ToolCall) -> str:
+        func = _AGENT_TOOL_FUNCS.get(call.name)
+        if func is None:
+            return f"ERROR: unknown tool '{call.name}'"
+        return json.dumps(func(csv_path), default=str)[:1500]
+
+    return _AGENT_TOOL_SPECS, execute
 
 
 class AgentOrchestrator:
@@ -1404,6 +1471,72 @@ class AgentOrchestrator:
                 metadata={"message_id": self.message_id},
             )
 
+    async def _run_agentic_answer(
+        self,
+        *,
+        agent_context: AgentContext,
+        content: str,
+        fallback_text: str,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Let the LLM autonomously call read-only tools, then stream its answer.
+
+        Drives :func:`run_tool_phase` so the model decides which dataset tools to
+        run, surfaces each call as the orchestrator's standard
+        ``tool_call_started`` / ``tool_call_finished`` events, then streams the
+        final grounded reply over the tool-augmented conversation. Any LLM failure
+        falls back to ``fallback_text`` so the turn always yields a reply. The
+        deterministic profile artifacts created by the caller remain the inspector's
+        source of truth; this loop adds the reasoning layer on top.
+        """
+        if self._llm_client is None:
+            async for event in self._emit_assistant_message(fallback_text):
+                yield event
+            return
+
+        tools, execute = _build_analysis_tools(agent_context.csv_path)
+        conversation: list[ChatMessage] = [
+            ChatMessage.system(_ANALYSIS_AGENT_PROMPT),
+            ChatMessage.user(content),
+        ]
+        started_at: dict[str, float] = {}
+        try:
+            async for event in run_tool_phase(
+                self._llm_client,
+                conversation=conversation,
+                tools=tools,
+                execute=execute,
+            ):
+                if isinstance(event, ToolCallStarted):
+                    started_at[event.call_id] = perf_counter()
+                    yield self._record(
+                        {
+                            "type": "tool_call_started",
+                            "trace_id": self.trace_id,
+                            "call_id": event.call_id,
+                            "tool": event.call.name,
+                            "args": event.call.arguments,
+                            "started_at": _utc_now(),
+                        }
+                    )
+                elif isinstance(event, ToolCallFinished):
+                    yield self._record(
+                        self._tool_finished(
+                            call_id=event.call_id,
+                            started_at=started_at.get(event.call_id, perf_counter()),
+                            status="error" if event.error else "success",
+                            error=event.output if event.error else None,
+                        )
+                    )
+        except LLMError:
+            async for event in self._emit_assistant_message(fallback_text):
+                yield event
+            return
+
+        async for event in self._emit_llm_message(
+            messages=conversation, fallback_text=fallback_text
+        ):
+            yield event
+
     async def _emit_resolution_error(
         self,
         *,
@@ -1504,17 +1637,14 @@ class AgentOrchestrator:
             "distributions, and correlations. The generated artifacts are ready "
             "in the inspector."
         )
-        summary = json.dumps({"profile": profile_data, "missing": missing_data}, default=str)[:2000]
-        messages = [
-            ChatMessage.system(
-                "You are MLAgent's senior data analyst. Using only the computed "
-                "results provided, summarize the dataset for the user concretely "
-                "(rows, columns, notable missing rates and correlations) and suggest "
-                "1-3 next steps. Do not invent values."
-            ),
-            ChatMessage.user(f"My request: {content}\n\nComputed results (JSON):\n{summary}"),
-        ]
-        async for event in self._emit_llm_message(messages=messages, fallback_text=fallback_text):
+        # When an LLM is configured, let it autonomously call the read-only tools
+        # and stream a grounded answer; otherwise emit the deterministic fallback.
+        # The profile/missing artifacts above remain the inspector's source of truth.
+        async for event in self._run_agentic_answer(
+            agent_context=agent_context,
+            content=content,
+            fallback_text=fallback_text,
+        ):
             yield event
 
         yield self._record(
