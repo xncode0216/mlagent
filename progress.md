@@ -664,3 +664,16 @@
 - Tests added: `tests/test_observability.py` (request-id header present, echoed when supplied, structured non-leaking 500) and `tests/test_config.py` (CORS default + comma-separated/list parsing). Existing `test_cors_allows_vite_dev_port_5173` still passes against the settings-driven CORS.
 - Verification: `backend\.venv\Scripts\python.exe -m pytest -q` -> `130 passed, 3 skipped`; `... -m ruff check app tests` -> `All checks passed!`.
 - Decision/handoff: P0-1 (real LLM router) and P0-2 (auth/multi-tenancy) need product decisions before implementation (LLM provider + key source; auth strategy/user store), so they are flagged for the user rather than started blind. Autonomous next slices available: P1-4 (CI workflow) and P1-7 (remove hardcoded frontend demo data).
+
+## 2026-06-13 LLM Adapter Layer (P0-1, multi-provider)
+
+- User chose P0-1 next with a multi-provider adapter approach; branch kept local for now. Implemented the provider-agnostic LLM layer first (the foundation the keyword-routed `AgentOrchestrator` needs before it can reason via an LLM), decoupled from the orchestrator so it lands safely and fully tested.
+- Added `app/services/llm/`:
+  - `base.py`: `LLMClient` ABC + normalized `ChatMessage` / `ToolSpec` / `ToolCall` / `ChatResult` dataclasses + typed errors (`LLMError`, `LLMNotConfiguredError`, `LLMResponseError`).
+  - `openai_compat.py`: `OpenAICompatibleClient` covering OpenAI, DeepSeek, and self-hosted vLLM (same `POST {base_url}/chat/completions` + `tools` function-calling shape); pure `_build_payload`/`_parse_response` for easy unit testing.
+  - `anthropic.py`: `AnthropicClient` for the Messages API (top-level `system`, `input_schema` tools, `tool_use`/`tool_result` blocks).
+  - `factory.py`: `get_llm_client(settings)` provider selection (+ default base URLs, vLLM-without-key) and `llm_is_configured(settings)`.
+- Config: added `MLAGENT_LLM_*` settings (provider/model/api_key/base_url/temperature/max_tokens/timeout) to `Settings`; documented in `backend/.env.example`; keys are env-only. Promoted `httpx` to a runtime dependency in `pyproject.toml`.
+- Tests: `tests/test_llm.py` (13) cover payload shaping, content + tool-call parsing for both provider shapes, `complete()` over `httpx.MockTransport` (no network, driven by `asyncio.run` like `test_gpu_scheduling.py`), factory provider selection, vLLM-without-key, and unconfigured/unknown-provider errors.
+- Verification: `backend\.venv\Scripts\python.exe -m pytest -q` -> `143 passed, 3 skipped`; `... -m ruff check app tests` -> `All checks passed!`.
+- Next slice: wire `get_llm_client()` into `AgentOrchestrator.run()` (line ~321) as an LLM intent/planning + tool-selection step, behind config, falling back to the existing deterministic keyword routing when `llm_is_configured()` is False — so the app keeps working with or without an LLM key. Then add streaming and make the frontend model selector real.

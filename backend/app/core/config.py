@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     kernel_pids_limit: int = 512
     kernel_workspace_mount_mode: str = "rw"
     gpu_acquire_timeout_seconds: float = 30.0
+    llm_provider: str = ""
+    llm_model: str = ""
+    llm_api_key: str = ""
+    llm_base_url: str = ""
+    llm_temperature: float = 0.2
+    llm_max_tokens: int = 1024
+    llm_timeout_seconds: float = 60.0
 
     @field_validator("cors_origins", mode="before")
     @classmethod
