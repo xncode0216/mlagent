@@ -156,7 +156,7 @@ MLAgent 是一个**工程纪律优秀、数据/ML 工作流建模扎实的高质
 | **无 CI/CD** | 无 `.github/workflows` | lint/test/build 全靠人工，回归易漏 |
 | **巨型文件** | 编排器 4058、AppShell 1844、RightPanel 2112、CSS 3181 | 认知负荷与合并冲突高 |
 | **演示数据混入产品代码** | `AgentWorkspace.tsx` 硬编码 `sampleRows`、假聊天、模板代码 | 真实/演示边界模糊，易误导用户 |
-| **机密入码** | `config.py:10` 默认 DB 账密明文；`backend/.env` 入仓 | 凭据管理不合规 |
+| **配置/机密治理** | `config.py` 默认 DB 账密明文；CORS 源硬编码于 `main.py`；无 `.env.example`（`.env` 本身已被 `.gitignore` 忽略，未入仓） | 配置外置与凭据治理不足 |
 
 ---
 
@@ -272,7 +272,7 @@ CSS 仅有 4 个断点（1180/900/620/480），核心布局是**固定宽度网�
 | 认证/授权 | 无；`dev-user` 硬编码 | 🔴 上线阻断项 |
 | 多租户隔离 | 无；按 user_id 拼路径但 user 固定 | 🔴 |
 | CORS | 硬编码 localhost，`allow_methods/headers=*` + `allow_credentials=True` | 🟡 仅适配本地 |
-| 机密管理 | DB 账密入码、`.env` 入仓 | 🔴 |
+| 机密管理 | DB 账密默认值入码；CORS 硬编码；缺 `.env.example`（`.env` 已 gitignore，未入仓） | 🟡 |
 | 输入/路径校验 | 文件 API 有部分校验，但 `findings.md` 自承 Docker 路径校验测试缺失 | 🟡 |
 | 可观测性 | 后端 0 日志、无 metrics、无 tracing | 🔴 |
 | CI/CD | 无 workflow | 🔴 |
@@ -291,7 +291,7 @@ CSS 仅有 4 个断点（1180/900/620/480），核心布局是**固定宽度网�
 | P0-1 | **接入真实 LLM Router** | 在编排器与"关键词路由"之间插入 LLM 意图/计划层：新增 `services/llm/` 适配 OpenAI/Anthropic/DeepSeek/兼容 vLLM，工具以 function-calling 暴露；保留现有确定性执行器作为"工具实现层"。把顶栏静态模型文本改为真实可切换选择器。 | L |
 | P0-2 | **认证与多租户** | 引入 JWT（或企业 SSO/OIDC）；新增 `get_current_user` 依赖替换所有 `dev_user_id`；workspace 路径、会话、产物全部按真实 user 隔离与鉴权。 | M |
 | P0-3 | **后端可观测性底座** | 接入 `logging`（结构化 JSON）+ 请求中间件（trace-id）+ `main.py` 全局 `exception_handler` 统一错误响应；关键失败路径补 `try/except` 与用户可读错误。 | M |
-| P0-4 | **机密治理** | `.env` 移出仓库（`.gitignore` + `.env.example`）；DB/LLM Key 走环境变量或密钥管理；CORS 源改为配置项。 | S |
+| P0-4 | **配置/机密治理** | 新增 `.env.example`；DB/LLM Key 走环境变量或密钥管理；CORS 源改为配置项（`.env` 已被 gitignore，无需移除）。 | S |
 
 ### P1 —— 生产硬化 + 体验跃迁
 

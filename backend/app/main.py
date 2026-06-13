@@ -10,17 +10,18 @@ from app.api.projects import router as projects_router
 from app.api.resources import router as resources_router
 from app.api.sessions import router as sessions_router
 from app.api.ws import router as ws_router
+from app.core.config import get_settings
+from app.core.observability import install_observability
 
-app = FastAPI(title="MLAgent API")
+settings = get_settings()
+
+app = FastAPI(title=settings.app_name)
+
+install_observability(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
