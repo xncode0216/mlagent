@@ -355,3 +355,37 @@ This table turns the Codex-style Data/ML IDE direction into execution-ready proj
 - The current local Python execution path must keep working for development and existing tests.
 - Vite/esbuild frontend test/build commands need to run outside the sandbox on this Windows host because config loading probes a denied parent path.
 - If browser smoke needs local servers in the current already-open Codex session, prefix that shell command with process-level `PATH`/`Path` normalization. For future sessions, start Codex through the desktop `Codex Clean Env` shortcut to avoid the duplicate environment variable.
+
+## Production-Readiness Remediation Backlog (2026-06-13 Review)
+
+Source of truth: full diagnostic in `docs/production-readiness-review.md` (Chinese), with run-time screenshots in `docs/review-assets/`. This backlog converts the review's gap findings into trackable tasks. Size key: **S** ≈ days, **M** ≈ 1–2 weeks, **L** ≈ 3+ weeks (single-dev).
+
+Headline gap: the implemented product is a single-user, deterministic (non-LLM), filesystem-backed MVP, while `design-spec.md` describes an LLM-driven, multi-tenant, Postgres/Redis-backed platform. Remediation closes that gap along four lines — real LLM capability, auth/multi-tenancy, frontend modernization, and observability. Recommended order: P0-2/P0-3/P0-4 first (small, high-value, makes the system trustworthy to run) → P0-1 (LLM, makes the product live up to its name) → P1-4/P1-7/P1-2 in parallel (fastest user-visible wins) → P1-1/P1-3/P1-6 mid-line refactors → P2 polish.
+
+### P0 — Blockers (the product is not what the spec claims without these)
+
+- [ ] **P0-1 Real LLM router** (L). Evidence: `agent_orchestrator_service.py` (4058 lines) routes via keyword/intent matching (`_detect_intent`, `modeling_terms`); no `openai`/`anthropic`/`httpx` model call exists in the repo; the top-bar "Claude / DeepSeek / Local vLLM" is static text (`AppShell.tsx:1655`). Fix: add `services/llm/` adapters (OpenAI/Anthropic/DeepSeek/vLLM-compatible) with function-calling tool exposure; keep current deterministic executors as the tool-implementation layer; turn the model selector into a real control.
+- [ ] **P0-2 AuthN/Z + multi-tenancy** (M). Evidence: `dev_user_id = "dev-user"` hardcoded across APIs (`config.py:12`, `api/projects.py`); no auth middleware in `main.py`. Fix: introduce JWT or enterprise SSO/OIDC; add a `get_current_user` dependency replacing all `dev_user_id`; isolate and authorize workspace/session/artifact access per real user.
+- [ ] **P0-3 Backend observability** (M). Evidence: `grep "import logging"` in `backend/app` = 0; no global exception handler; only 26 `except` clauses app-wide. Fix: structured (JSON) logging + request trace-id middleware + `main.py` `exception_handler` for uniform error responses; cover kernel/train/file-IO failure paths with try/except and user-readable errors.
+- [ ] **P0-4 Secrets governance** (S). Evidence: default DB credentials in code (`config.py:10`); `backend/.env` is tracked. Fix: remove `.env` from VCS (+ `.env.example`); load DB/LLM keys from env/secret store; make CORS origins a config value (`main.py:16-27`).
+
+### P1 — Production hardening + UX leap
+
+- [ ] **P1-1 Frontend state architecture** (L). Evidence: `zustand` and `@tanstack/react-query` are dependencies but used 0× in `src/`; all state lives in `AppShell.tsx` (1844 lines) via ~100 `useState` + 30+ props drilled to `AgentWorkspace`. Fix: adopt react-query for server data (cache/invalidate/retry/optimistic) and zustand for global UI state; decompose `AppShell` and lift data fetching out of components.
+- [ ] **P1-2 Rich chat + real charts** (M). Evidence: agent messages render through plain `<p>{content}</p>` (no Markdown/highlight/streaming); charts are hand-built SVG/div color blocks plus a `DemoChartGallery` placeholder (`RightPanel.tsx`). Fix: add Markdown rendering + code highlighting + streaming to chat; introduce a charting library (Plotly.js / ECharts / Recharts) to replace the color blocks.
+- [ ] **P1-3 Persistence decision** (L). Evidence: `models/{artifact,project,session}.py` are never imported by business code; Redis has 0 references; the real store is filesystem JSON. Fix (pick one and follow through): (a) activate Postgres so `models/` truly back projects/sessions/artifacts (+ Alembic migrations), or (b) commit to filesystem-first and delete the PG/Redis/ORM dead code to stop misleading readers. Recommend (a).
+- [ ] **P1-4 CI/CD** (S). Evidence: no `.github/workflows`. Fix: PR gates — backend `ruff` + `pytest`; frontend `eslint` + `tsc` + `vitest` + `build`.
+- [ ] **P1-5 Test reinforcement** (M). Evidence: 14 frontend tests are all `.ts` logic; `*.test.tsx` = 0; no E2E. Fix: add `@testing-library/react` rendering tests for core components; add a Playwright golden-path (reuse the dist + static-serve approach validated in this review).
+- [ ] **P1-6 Decompose backend orchestrator** (M). Evidence: `agent_orchestrator_service.py` = 4058 lines (43% of backend app). Fix: split into intent classification / workflow orchestration / per-stage executors / artifact assembly modules.
+- [ ] **P1-7 Remove hardcoded demo data** (S). Evidence: `AgentWorkspace.tsx` hardcodes a sample table (Telco), a fake empty-state conversation, and template code. Fix: drive empty/loading states from real artifacts; delete demo content.
+
+### P2 — SaaS-grade polish ("quality amplifiers")
+
+- [ ] **P2-1 Design-token system** (M). Evidence: `styles.css` = 3181 lines, 495 selectors, **0** `var(--*)`, 397 raw hex (58 distinct). Fix: collapse colors/spacing/radius/z-index into `:root` tokens, enable light/brand theming; split CSS by feature or adopt CSS Modules.
+- [ ] **P2-2 Motion & loading states** (M). Evidence: 0 `@keyframes`, 2 `transition` declarations; no skeletons/optimistic UI. Fix: a shared transition system, skeleton loaders, optimistic updates, stage/artifact micro-animations.
+- [ ] **P2-3 Responsive rework or explicit desktop-only** (S–M). Evidence: fixed-width grid `48px 286px minmax(420px,1fr) 420px` breaks below ~900px (review screenshots show per-character vertical wrapping of file paths and horizontal overflow of top-bar/center). Fix: rework breakpoints for graceful degradation, or add a `min-width` guard + friendly "use a wider window" message.
+- [ ] **P2-4 Information design** (S). Evidence: raw UUIDs and long result paths surfaced directly in cockpit cards; empty states are bare. Fix: friendly names + copy buttons, empty-state guidance/illustration, progressive disclosure of long paths.
+- [ ] **P2-5 Command palette (⌘K) + slash commands** (M). Evidence: composer placeholder hints `/` commands but no palette exists. Fix: build a command palette and keyboard-shortcut system.
+- [ ] **P2-6 Knowledge-graph visualization upgrade** (M). Evidence: the graph is hand-built SVG (`EvolutionWorkspace.tsx`). Fix: use a mature graph library (Cytoscape / visx / d3-force) for layout, zoom, and clustering.
+- [ ] **P2-7 Accessibility audit** (S–M). Evidence: aria attributes present (57 `aria-label`, 16 `role`) but no focus management/`:focus-visible` system, no contrast audit, no a11y automated checks. Fix: focus traps/management, `:focus-visible`, WCAG AA contrast, automated a11y testing.
+- [ ] **P2-8 Bundle performance** (S). Evidence: `dist` ships a single 415KB JS chunk (no splitting). Fix: route-level code splitting and lazy loading.
