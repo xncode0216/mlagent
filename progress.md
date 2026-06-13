@@ -726,3 +726,13 @@
 - 工程过程注记：两次用 bash heredoc 跑生成脚本时出现“输出显示成功但文件系统实际未变更”的异常（`git status` 干净、目标文件不存在）。靠 `git status`/`ls`/`grep` 事实核查识别后，改用“先 Write 脚本落盘再 `python file.py` 执行”的可靠方式完成切片 3，避免在虚假成功状态上继续。
 - 成果：facade 由 4263 → 3229 行（累计 −1034，约 −24%），逻辑分布到 8 个内聚子模块（`contexts/support/artifacts/tools/intent/commands/runs` + `__init__`，共 ~1248 行）。每个切片均 `pytest -q` → `169 passed, 3 skipped`、`ruff check app tests` → clean。三个切片分别本地提交（`refactor(backend):`）。
 - 剩余（后续，已在 plan 中）：切片 4 把 15 个 `_run_*` stage runner 经 `StageRunnersMixin` 外移、切片 5 把流式/消息 + 事件 helper 经 `MessagingMixin` 外移，使 `AgentOrchestrator` 收敛为薄分发器（`__init__`/`run`/`respond_to_approval`/`resume_step`/`_resolve_intent`/`_resolve_*context`）。
+
+## 2026-06-14 拆分后端编排器（P1-6，切片 4–5，拆到底）
+
+- 目标：用 **mixin** 模式把剩下两大块高度 `self` 耦合的方法外移，完成 P1-6——orchestrator 收敛为薄分发器。
+- mixin 安全机制：方法在类里是 4 空格缩进；移到另一个 mixin 类里仍保持 4 空格缩进 → **方法体零改动**。`self` 经 MRO（`AgentOrchestrator` → `StageRunnersMixin` → `MessagingMixin` → `object`）解析，方法间互调（`self._stage_event`/`self._record` 等跨 mixin 调用）不受影响。
+- 切片 4（commit）：`stages.py`——`StageRunnersMixin`，15 个 `_run_*` stage runner（`_run_configure_ingest` … `_run_configure_learning`、`_run_prepare_for_modeling`、`_run_approved_preprocessing_execution`、`_run_analysis_overview`、`_run_continue_from_failure`、`_run_abandon_last_failure`）。
+- 切片 5（commit `b4f39c3`）：`messaging.py`——`MessagingMixin`，15 个流式/消息 + 事件 + artifact 构建 helper（`_append_user_message`/`_emit_assistant_message`/`_emit_llm_message`/`_run_agentic_answer`/`_emit_resolution_error`/`_record`/`_stage_event`/`_rules_event`/`_lesson_events`/`_tool_started`/`_tool_finished` + 四个 `_build_*_artifact`）。facade 改为 `class AgentOrchestrator(StageRunnersMixin, MessagingMixin)`，并保留对 `_build_analysis_tools` 的显式 re-export（冗余别名，供 `test_llm_agent` import）。
+- 子模块 import 用 **ast 最小化**：解析 facade 的 import 成 `{绑定名: 来源}` 注册表，对每个 mixin 取「类体里实际被 `Load` 的 `Name`」∩ 注册表，只 emit 用到的 import → 无 F401、无 F821。顺手清掉了切片 4 误留在 `stages.py` 的 4 个未用 stdlib import（`asyncio`/`csv`/`hashlib`/`json`）和一个被局部变量遮蔽的 `profile_props` import（切片 5 提交里一并修正）。
+- 成果：facade **4263 → 703 行**（累计 −3560，约 **−83%**），逻辑分布到 9 个内聚子模块（`contexts/support/artifacts/tools/intent/commands/runs/stages/messaging`）。最终验证 `ruff check app tests` → All checks passed、`pytest -q` → **169 passed, 3 skipped**，MRO 与公共 API 不变。P1-6 完成，本地提交（`refactor(backend):`），分支先留本地未推。
+- 工程过程注记（沿用前一阶段经验）：本机 shell 输出层间歇性「伪造成功并注入文本」，故全程以 **Read 工具 + python 子进程把结果写文件再读** 作为地面真相，提交用 `git commit -F <消息文件>`（不用 heredoc），import 清理用 ast 自算（不依赖被污染欺骗的 `ruff --fix`）。
