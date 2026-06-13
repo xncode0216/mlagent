@@ -6,6 +6,28 @@
 
 本文把 UI demo 中已经出现的产品能力拆成可开发功能，并给出推荐开发顺序。目标是让后续实现时避免“先画界面、再临时补能力”的漂移，保证前端交互、后端 API、Agent 编排、Kernel 执行和自进化知识系统能按依赖逐层落地。
 
+## 1.1 当前实现进度（2026-05-22）
+
+当前项目已经从静态 UI demo 推进为可运行的前后端工作台，核心骨架、项目文件管理、Agent 会话、右侧结果面板、数据分析/机器学习 MVP、自进化知识 MVP 已进入可验证阶段。
+
+| 阶段 | 状态 | 已落地能力 | 后续重点 |
+|---|---|---|---|
+| Phase 0-2 项目骨架与 IDE 工作台 | 已完成 MVP | React/Vite 前端、FastAPI 后端、三栏 IDE 布局、顶部模式切换、左侧项目/文件区、右侧图表/代码/数据/训练/日志面板 | 继续做视觉一致性和响应式细节 |
+| Phase 3 Agent 会话与 WebSocket | 已完成 MVP | 会话列表、历史消息、事件流、任务进度、产物事件、日志面板联动 | 增加中止/重试/长任务恢复体验 |
+| Phase 4 Kernel 执行 | 已完成本地与接口层，Docker/Jupyter 持续完善 | `KernelServiceProtocol`、本地执行、测试覆盖，Docker/Jupyter 真实沙箱作为后续硬化方向 | 强化容器隔离、资源限制、Kernel 池管理 |
+| Phase 5 数据分析 Agent MVP | 已完成 MVP | CSV 加载、profile、缺失值检测、报告生成、清洗产物、右侧图表/数据/代码同步 | 扩展 Excel/Parquet、大文件采样、更多分析工具 |
+| Phase 6 机器学习 Agent MVP | 已完成 MVP | baseline/sklearn 训练、模型对比、产物保存、训练记录、可选 GPU 参数链路 | 增强 AutoML、特征工程流水线、模型导出与推理入口 |
+| Phase 7 日志与可观测性 | 已完成 MVP | 右侧日志面板、事件筛选、JSONL 导出、工具/Kernal/Artifact 事件可视化 | 引入 trace id、耗时聚合、异常详情跳转 |
+| Phase 8 自进化知识 MVP | 已完成主要闭环 | 候选经验抽取、采纳/拒绝/冲突、规则索引、规则命中、注入日志、协议展示、前端审核工作区 | 增加更多经验模板和人工审核批处理 |
+| Phase 9 GPU 调度 | 部分完成 | GPU 调度服务、状态 API、队列测试、前端训练参数可传 `use_gpu` | 接入真实 GPU worker、取消/超时释放、前端排队状态 |
+| Phase 10 知识图谱与高级洞察 | 部分完成 | `/evolution/graph` API、图谱节点/边、知识空白/惊奇连接、前端图谱/洞察视图、空态和错误态 | 将节点定位到文件/实验/日志，增加图谱布局和证据面板 |
+
+最近一次验证结果：
+
+- 后端：`.venv\Scripts\python.exe -m pytest -q`，结果 `73 passed, 3 skipped`。
+- 前端：`npm test`、`npm run lint`、`npx tsc -b --pretty false`、`npm run build` 均通过。
+- 浏览器：Edge headless 打开 `http://127.0.0.1:5174/`，进入“自进化知识 -> 自进化知识图谱 & 高级洞察”截图验证通过。
+
 ## 2. UI Demo 视觉参考
 
 | 编号 | 页面 | 图片 |

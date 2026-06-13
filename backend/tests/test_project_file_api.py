@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -43,6 +45,8 @@ def test_upload_and_read_project_file(tmp_path, monkeypatch):
 
     assert content_response.status_code == 200
     assert content_response.json()["content"] == "age,churn\n42,1\n"
+    assert content_response.json()["size"] == len("age,churn\n42,1\n")
+    assert content_response.json()["mime_type"] == "text/csv"
 
 
 def test_upload_rejects_path_escape(tmp_path, monkeypatch):
@@ -59,3 +63,306 @@ def test_upload_rejects_path_escape(tmp_path, monkeypatch):
     )
 
     assert upload_response.status_code == 400
+
+
+def test_create_project_file_and_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    folder_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notebooks/experiments", "type": "directory"},
+    )
+    file_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notebooks/experiments/eda.py", "type": "file", "content": "# EDA\n"},
+    )
+
+    assert folder_response.status_code == 200
+    assert folder_response.json()["type"] == "directory"
+    assert file_response.status_code == 200
+    assert file_response.json()["path"] == "notebooks/experiments/eda.py"
+    content_response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "notebooks/experiments/eda.py"},
+    )
+    assert content_response.json()["content"] == "# EDA\n"
+
+
+def test_create_project_file_rejects_escape_and_existing_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    escape_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "../escape.txt", "type": "file"},
+    )
+    first_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notes.md", "type": "file"},
+    )
+    duplicate_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notes.md", "type": "file"},
+    )
+
+    assert escape_response.status_code == 400
+    assert first_response.status_code == 200
+    assert duplicate_response.status_code == 409
+
+
+def test_read_project_file_rejects_binary_preview(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app, raise_server_exceptions=False)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    binary_path = Path(project["workspace_path"]) / "models" / "model.pkl"
+    binary_path.write_bytes(b"\x80\x04\x95\x00\x00\x00")
+
+    response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "models/model.pkl"},
+    )
+
+    assert response.status_code == 415
+    assert response.json()["detail"] == "Binary file preview is not supported"
+
+
+def test_rename_project_file_preserves_content(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    create_response = client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notebooks/draft.py", "type": "file", "content": "print('ok')\n"},
+    )
+    rename_response = client.patch(
+        f"/api/projects/{project['id']}/files/rename",
+        json={"path": "notebooks/draft.py", "new_path": "notebooks/final.py"},
+    )
+    old_response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "notebooks/draft.py"},
+    )
+    new_response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "notebooks/final.py"},
+    )
+
+    assert create_response.status_code == 200
+    assert rename_response.status_code == 200
+    assert rename_response.json()["path"] == "notebooks/final.py"
+    assert old_response.status_code == 404
+    assert new_response.json()["content"] == "print('ok')\n"
+
+
+def test_rename_project_file_rejects_escape_and_existing_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "notes.md", "type": "file"},
+    )
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "existing.md", "type": "file"},
+    )
+    escape_response = client.patch(
+        f"/api/projects/{project['id']}/files/rename",
+        json={"path": "notes.md", "new_path": "../escape.md"},
+    )
+    duplicate_response = client.patch(
+        f"/api/projects/{project['id']}/files/rename",
+        json={"path": "notes.md", "new_path": "existing.md"},
+    )
+
+    assert escape_response.status_code == 400
+    assert duplicate_response.status_code == 409
+
+
+def test_delete_project_file_and_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "results/temp/notes.md", "type": "file", "content": "remove me"},
+    )
+    delete_response = client.delete(
+        f"/api/projects/{project['id']}/files",
+        params={"path": "results/temp"},
+    )
+    list_response = client.get(
+        f"/api/projects/{project['id']}/files",
+        params={"path": "results"},
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"path": "results/temp", "deleted": True}
+    assert "temp" not in {item["name"] for item in list_response.json()["items"]}
+
+
+def test_delete_project_file_rejects_root_and_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    root_response = client.delete(
+        f"/api/projects/{project['id']}/files",
+        params={"path": ""},
+    )
+    escape_response = client.delete(
+        f"/api/projects/{project['id']}/files",
+        params={"path": "../escape"},
+    )
+
+    assert root_response.status_code == 400
+    assert escape_response.status_code == 400
+
+
+def test_update_project_file_content_preserves_exact_text(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "agent_schema/data_agent.yaml", "type": "file", "content": "name: old\n"},
+    )
+    update_response = client.put(
+        f"/api/projects/{project['id']}/files/content",
+        json={"path": "agent_schema/data_agent.yaml", "content": "name: new\nskills:\n  - profile_dataset\n"},
+    )
+    read_response = client.get(
+        f"/api/projects/{project['id']}/files/content",
+        params={"path": "agent_schema/data_agent.yaml"},
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["path"] == "agent_schema/data_agent.yaml"
+    assert update_response.json()["size"] == len("name: new\nskills:\n  - profile_dataset\n")
+    assert read_response.json()["content"] == "name: new\nskills:\n  - profile_dataset\n"
+
+
+def test_update_project_file_content_rejects_directory_and_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    directory_response = client.put(
+        f"/api/projects/{project['id']}/files/content",
+        json={"path": "data", "content": "bad"},
+    )
+    escape_response = client.put(
+        f"/api/projects/{project['id']}/files/content",
+        json={"path": "../escape.txt", "content": "bad"},
+    )
+
+    assert directory_response.status_code == 400
+    assert escape_response.status_code == 400
+
+
+def test_search_project_files_matches_path_and_text_content(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={
+            "path": "notebooks/churn_notes.py",
+            "type": "file",
+            "content": "import pandas as pd\n# detect customer churn\n",
+        },
+    )
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={
+            "path": "agent_schema/data_agent.yaml",
+            "type": "file",
+            "content": "skills:\n  - profile_dataset\n",
+        },
+    )
+
+    response = client.get(
+        f"/api/projects/{project['id']}/files/search",
+        params={"query": "churn"},
+    )
+
+    assert response.status_code == 200
+    matches = response.json()["items"]
+    assert any(item["path"] == "notebooks/churn_notes.py" and item["match_type"] == "path" for item in matches)
+    content_match = next(item for item in matches if item["match_type"] == "content")
+    assert content_match["path"] == "notebooks/churn_notes.py"
+    assert content_match["line_number"] == 2
+    assert "detect customer churn" in content_match["preview"]
+
+
+def test_search_project_files_rejects_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    response = client.get(
+        f"/api/projects/{project['id']}/files/search",
+        params={"query": "x", "path": "../escape"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_download_project_file_returns_attachment(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    client.post(
+        f"/api/projects/{project['id']}/files/create",
+        json={"path": "results/report.md", "type": "file", "content": "# Report\nAUC: 0.91\n"},
+    )
+
+    response = client.get(
+        f"/api/projects/{project['id']}/files/download",
+        params={"path": "results/report.md"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == "# Report\nAUC: 0.91\n"
+    assert response.headers["content-disposition"].endswith('filename="report.md"')
+
+
+def test_download_project_file_rejects_directory_and_path_escape(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+
+    directory_response = client.get(
+        f"/api/projects/{project['id']}/files/download",
+        params={"path": "results"},
+    )
+    escape_response = client.get(
+        f"/api/projects/{project['id']}/files/download",
+        params={"path": "../escape.txt"},
+    )
+
+    assert directory_response.status_code == 404
+    assert escape_response.status_code == 400

@@ -23,6 +23,10 @@ class ExperimentService:
         candidate_runs: list[dict[str, Any]],
         model_artifact: dict[str, Any],
         metrics_artifact: dict[str, Any],
+        evaluation_report_artifact: dict[str, Any] | None = None,
+        prediction_samples_artifact: dict[str, Any] | None = None,
+        preprocessing_plan_artifact: dict[str, Any] | None = None,
+        preprocessing_plan: dict[str, Any] | None = None,
         best_model_name: str | None = None,
     ) -> dict[str, Any]:
         created_at = datetime.now(UTC).isoformat()
@@ -42,6 +46,14 @@ class ExperimentService:
             "metrics_artifact": metrics_artifact,
             "created_at": created_at,
         }
+        if evaluation_report_artifact is not None:
+            record["evaluation_report_artifact"] = evaluation_report_artifact
+        if prediction_samples_artifact is not None:
+            record["prediction_samples_artifact"] = prediction_samples_artifact
+        if preprocessing_plan_artifact is not None:
+            record["preprocessing_plan_artifact"] = preprocessing_plan_artifact
+        if preprocessing_plan is not None:
+            record["preprocessing_plan"] = preprocessing_plan
         self.runs_dir.mkdir(parents=True, exist_ok=True)
         path = self.runs_dir / f"{experiment_id}.json"
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -60,3 +72,13 @@ class ExperimentService:
         if not path.exists() or not path.is_file():
             return None
         return json.loads(path.read_text(encoding="utf-8"))
+
+    def update_run(self, experiment_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+        record = self.get_run(experiment_id)
+        if record is None:
+            raise FileNotFoundError(experiment_id)
+        record.update(updates)
+        self.runs_dir.mkdir(parents=True, exist_ok=True)
+        path = self.runs_dir / f"{experiment_id}.json"
+        path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        return record

@@ -50,6 +50,28 @@ def _metrics(y_true: list[Any], y_pred: list[Any]) -> dict[str, Any]:
     }
 
 
+def _prediction_samples(df: pd.DataFrame, target_column: str, y_pred: list[Any], limit: int = 50) -> list[dict[str, Any]]:
+    samples: list[dict[str, Any]] = []
+    feature_columns = [column for column in df.columns if column != target_column]
+    for row_index, (_, row) in enumerate(df.iterrows()):
+        actual = row[target_column]
+        predicted = y_pred[row_index]
+        is_error = bool(pd.isna(actual) != pd.isna(predicted) or (not pd.isna(actual) and actual != predicted))
+        samples.append(
+            {
+                "row_index": row_index,
+                "actual": None if pd.isna(actual) else str(actual),
+                "predicted": None if pd.isna(predicted) else str(predicted),
+                "is_error": is_error,
+                "features": {
+                    column: (None if pd.isna(row[column]) else row[column])
+                    for column in feature_columns[:12]
+                },
+            }
+        )
+    return sorted(samples, key=lambda sample: (not sample["is_error"], sample["row_index"]))[:limit]
+
+
 def train_baseline_classifier(csv_path: Path, target_column: str) -> dict[str, Any]:
     df = pd.read_csv(csv_path)
     if target_column not in df.columns:
@@ -118,5 +140,6 @@ def train_baseline_classifier(csv_path: Path, target_column: str) -> dict[str, A
         "model_name": "baseline_classifier",
         "model": best_model,
         "metrics": _metrics(y_true, best_predictions),
+        "prediction_samples": _prediction_samples(df, target_column, best_predictions),
         "runs": sorted(runs, key=lambda run: run["metrics"]["accuracy"]),
     }

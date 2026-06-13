@@ -27,6 +27,11 @@ def test_train_baseline_classifier_finds_numeric_threshold(tmp_path: Path):
     assert result["runs"][0]["metrics"]["accuracy"] == 0.5
     assert result["runs"][1]["metrics"]["accuracy"] == 1.0
     assert result["runs"][2]["metrics"]["accuracy"] == 1.0
+    assert result["prediction_samples"][0]["row_index"] == 0
+    assert result["prediction_samples"][0]["actual"] == "no"
+    assert result["prediction_samples"][0]["predicted"] == "no"
+    assert result["prediction_samples"][0]["is_error"] is False
+    assert result["prediction_samples"][0]["features"]["score"] == 0.1
 
 
 def test_train_baseline_classifier_rejects_missing_target(tmp_path: Path):

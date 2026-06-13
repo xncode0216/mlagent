@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     kernel_backend: str = "local"
     kernel_image: str = "mlagent-kernel:dev"
     docker_executable: str = "docker"
+    kernel_memory_limit: str = "2g"
+    kernel_cpu_limit: str = "2"
+    kernel_pids_limit: int = 512
+    kernel_workspace_mount_mode: str = "rw"
+    gpu_acquire_timeout_seconds: float = 30.0
 
     model_config = SettingsConfigDict(env_prefix="MLAGENT_", env_file=".env")
 

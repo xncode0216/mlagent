@@ -12,6 +12,7 @@ workspaces/
 # Node
 node_modules/
 .npm-cache/
+.vite/
 dist/
 .next/
 *.tsbuildinfo
@@ -30,4 +31,6 @@ docker/volumes/
 # Superpowers brainstorming cache
 .superpowers/
 .claude/
+.codex-runs/
+.codex-skill-build/
 .demo-server*.log

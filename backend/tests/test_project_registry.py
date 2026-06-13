@@ -57,3 +57,40 @@ def test_project_registry_allows_file_api_after_memory_clear(tmp_path, monkeypat
     assert files_response.status_code == 200
     names = {item["name"] for item in files_response.json()["items"]}
     assert "data" in names
+
+
+def test_open_local_project_registers_existing_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path / "registry"))
+    get_settings.cache_clear()
+    PROJECTS.clear()
+    client = TestClient(app)
+    local_root = tmp_path / "local-sales-project"
+    (local_root / "data").mkdir(parents=True)
+    (local_root / "data" / "customer_churn.csv").write_text("age,churn\n42,1\n", encoding="utf-8")
+
+    response = client.post(
+        "/api/projects/open-local",
+        json={"path": str(local_root), "name": "Local Sales"},
+    )
+
+    assert response.status_code == 200
+    project = response.json()
+    assert project["name"] == "Local Sales"
+    assert project["workspace_path"] == str(local_root.resolve())
+    files_response = client.get(f"/api/projects/{project['id']}/files", params={"path": "data"})
+    assert files_response.status_code == 200
+    assert files_response.json()["items"][0]["path"] == "data/customer_churn.csv"
+
+
+def test_open_local_project_rejects_missing_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path / "registry"))
+    get_settings.cache_clear()
+    PROJECTS.clear()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/projects/open-local",
+        json={"path": str(tmp_path / "missing-project")},
+    )
+
+    assert response.status_code == 400

@@ -46,6 +46,13 @@ def test_experiment_service_records_and_lists_runs(tmp_path: Path):
             "path": "results/manual/sklearn_training_metrics.json",
             "created_at": "2026-05-14T00:01:00+00:00",
         },
+        evaluation_report_artifact={
+            "id": "report-2",
+            "type": "report",
+            "name": "model_evaluation_report.md",
+            "path": "results/manual/model_evaluation_report.md",
+            "created_at": "2026-05-14T00:01:01+00:00",
+        },
     )
 
     assert first["best_model_name"] == "baseline"
@@ -54,4 +61,5 @@ def test_experiment_service_records_and_lists_runs(tmp_path: Path):
     assert [run["experiment_id"] for run in service.list_runs()] == ["run-2", "run-1"]
     assert service.list_runs()[0]["use_gpu"] is True
     assert service.get_run("run-2")["model"]["feature_importance"][0]["feature"] == "score"
+    assert service.get_run("run-2")["evaluation_report_artifact"]["path"] == "results/manual/model_evaluation_report.md"
     assert service.get_run("missing") is None

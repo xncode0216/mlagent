@@ -10,3 +10,27 @@ class FileItem(BaseModel):
 
 class FileList(BaseModel):
     items: list[FileItem]
+
+
+class FileContent(BaseModel):
+    path: str
+    content: str
+    size: int
+    mime_type: str
+
+
+class FileDeleteResult(BaseModel):
+    path: str
+    deleted: bool
+
+
+class FileSearchMatch(BaseModel):
+    path: str
+    name: str
+    match_type: str
+    line_number: int | None = None
+    preview: str
+
+
+class FileSearchResult(BaseModel):
+    items: list[FileSearchMatch]
