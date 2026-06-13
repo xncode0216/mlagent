@@ -1,0 +1,7 @@
+interface:
+  display_name: "MLAgent Frontend Product Designer"
+  short_description: "MLAgent product UI optimization agent"
+  brand_color: "#89B4FA"
+  default_prompt: "Use $mlagent-frontend-product-designer to design, review, and implement product-grade MLAgent frontend improvements."
+policy:
+  allow_implicit_invocation: true

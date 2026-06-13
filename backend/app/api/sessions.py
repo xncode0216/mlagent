@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from app.api.projects import get_registered_project, list_registered_projects
 from app.schemas.session import AgentSessionCreate, AgentSessionRead, MessageRead
 from app.services.session_service import SessionService
+from app.services.task_state_service import delete_task_state, list_task_states
 
 router = APIRouter(tags=["sessions"])
 
@@ -47,6 +48,21 @@ def list_session_messages(session_id: str) -> dict[str, list[MessageRead]]:
 def list_session_events(session_id: str) -> dict[str, list[dict]]:
     service = _find_session_service(session_id)
     return {"items": service.list_events(session_id)}
+
+
+@router.get("/api/sessions/{session_id}/task-states")
+def list_session_task_states(session_id: str) -> dict[str, list[dict]]:
+    service = _find_session_service(session_id)
+    return {"items": list_task_states(project_root=service.project_root, session_id=session_id)}
+
+
+@router.delete("/api/sessions/{session_id}/task-states/{stage}")
+def abandon_session_task_state(session_id: str, stage: str) -> dict[str, str | bool]:
+    service = _find_session_service(session_id)
+    before = list_task_states(project_root=service.project_root, session_id=session_id)
+    existed = any(state.get("stage") == stage for state in before)
+    delete_task_state(project_root=service.project_root, session_id=session_id, stage=stage)
+    return {"session_id": session_id, "stage": stage, "deleted": existed}
 
 
 @router.get("/api/sessions/{session_id}/log")

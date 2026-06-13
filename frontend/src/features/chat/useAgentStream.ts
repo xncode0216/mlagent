@@ -5,8 +5,35 @@ import type { AgentStreamEvent } from "./types";
 type MessageContext = {
   projectId?: string;
   activeFile?: string;
+  experimentId?: string | null;
   mode?: string;
+  preprocessingPlanPath?: string | null;
+  targetColumn?: string;
+  trainingDatasetPath?: string;
 };
+
+type ApprovalResponse = {
+  approvalId: string;
+  decision: "execute" | "revise" | string;
+  context: MessageContext;
+};
+
+type ResumeStepRequest = {
+  stage: string;
+  context: MessageContext;
+};
+
+function wireContext(context: MessageContext) {
+  return {
+    project_id: context.projectId,
+    active_file: context.activeFile,
+    experiment_id: context.experimentId,
+    mode: context.mode,
+    preprocessing_plan_path: context.preprocessingPlanPath,
+    target_column: context.targetColumn,
+    training_dataset_path: context.trainingDatasetPath,
+  };
+}
 
 export function useAgentStream(sessionId: string) {
   const socketRef = useRef<WebSocket | null>(null);
@@ -22,37 +49,60 @@ export function useAgentStream(sessionId: string) {
       setConnected(true);
       setLastError(null);
     };
-    socket.onerror = () => setLastError("WebSocket 连接失败，请确认后端服务已启动。");
+    socket.onerror = () => setLastError("WebSocket connection failed. Confirm the backend service is running.");
     socket.onclose = () => setConnected(false);
     socket.onmessage = (message) => {
       try {
         setEvents((current) => [...current, JSON.parse(message.data) as AgentStreamEvent]);
       } catch {
-        setLastError("收到无法解析的 Agent 事件。");
+        setLastError("Received an Agent event that could not be parsed.");
       }
     };
     return () => socket.close();
   }, [sessionId]);
 
-  function sendMessage(content: string, context: MessageContext) {
+  function sendSocketPayload(payload: Record<string, unknown>, errorMessage: string) {
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
-      setLastError("WebSocket 尚未连接，消息没有发送。");
+      setLastError(errorMessage);
       return;
     }
+    socket.send(JSON.stringify(payload));
+  }
 
-    socket.send(
-      JSON.stringify({
+  function sendMessage(content: string, context: MessageContext) {
+    sendSocketPayload(
+      {
         type: "user_message",
         content,
-        context: {
-          project_id: context.projectId,
-          active_file: context.activeFile,
-          mode: context.mode,
-        },
-      }),
+        context: wireContext(context),
+      },
+      "WebSocket is not connected; the message was not sent.",
     );
   }
 
-  return { connected, events, lastError, sendMessage };
+  function sendApprovalResponse({ approvalId, decision, context }: ApprovalResponse) {
+    sendSocketPayload(
+      {
+        type: "approval_response",
+        approval_id: approvalId,
+        decision,
+        context: wireContext(context),
+      },
+      "WebSocket is not connected; the approval response was not sent.",
+    );
+  }
+
+  function sendResumeStep({ stage, context }: ResumeStepRequest) {
+    sendSocketPayload(
+      {
+        type: "resume_step",
+        stage,
+        context: wireContext(context),
+      },
+      "WebSocket is not connected; the step was not resumed.",
+    );
+  }
+
+  return { connected, events, lastError, sendApprovalResponse, sendMessage, sendResumeStep };
 }

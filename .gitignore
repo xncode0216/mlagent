@@ -32,4 +32,5 @@ docker/volumes/
 .superpowers/
 .claude/
 .codex-runs/
+.codex-skill-build/
 .demo-server*.log

@@ -9,13 +9,34 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
-from app.tools.data_analysis import correlation_matrix, detect_missing, profile_dataset
+from app.tools.data_analysis import (
+    correlation_matrix,
+    data_quality_profile,
+    detect_missing,
+    execute_preprocessing_plan,
+    preprocessing_plan,
+    profile_dataset,
+)
 
 router = APIRouter(prefix="/api/projects/{project_id}/analysis", tags=["analysis"])
 
 
 class AnalysisReportRequest(BaseModel):
     dataset_path: str = Field(min_length=1, max_length=4096)
+    session_id: str = Field(default="manual-analysis", min_length=1, max_length=128)
+
+
+class DataProfileRequest(AnalysisReportRequest):
+    pass
+
+
+class PreprocessingPlanRequest(AnalysisReportRequest):
+    pass
+
+
+class ExecutePreprocessingPlanRequest(BaseModel):
+    dataset_path: str | None = Field(default=None, min_length=1, max_length=4096)
+    preprocessing_plan_path: str = Field(min_length=1, max_length=4096)
     session_id: str = Field(default="manual-analysis", min_length=1, max_length=128)
 
 
@@ -182,6 +203,234 @@ def generate_analysis_report(project_id: str, payload: AnalysisReportRequest) ->
             _relative_path(root, report_path),
             {"dataset_path": payload.dataset_path},
         )
+    }
+
+
+@router.post("/profile")
+def generate_data_profile(project_id: str, payload: DataProfileRequest) -> dict:
+    root = _get_project_root(project_id)
+    dataset = _resolve_project_path(root, payload.dataset_path)
+    if not dataset.exists() or not dataset.is_file():
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    profile = data_quality_profile(dataset)
+    result_dir = root / "results" / payload.session_id
+    result_dir.mkdir(parents=True, exist_ok=True)
+    profile_path = result_dir / "data_quality_profile.json"
+    profile_path.write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return {
+        "profile": profile,
+        "artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "dataframe",
+            profile_path.name,
+            _relative_path(root, profile_path),
+            {"dataset_path": payload.dataset_path, "profile_type": "data_quality"},
+        ),
+    }
+
+
+@router.post("/preprocess-plan")
+def generate_preprocessing_plan(project_id: str, payload: PreprocessingPlanRequest) -> dict:
+    root = _get_project_root(project_id)
+    dataset = _resolve_project_path(root, payload.dataset_path)
+    if not dataset.exists() or not dataset.is_file():
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    plan = preprocessing_plan(dataset, dataset_path=payload.dataset_path)
+    result_dir = root / "results" / payload.session_id
+    result_dir.mkdir(parents=True, exist_ok=True)
+    plan_path = result_dir / "preprocessing_plan.json"
+
+    output_dataset_path = _relative_path(root, result_dir / f"{dataset.stem}_preprocessed.csv")
+    script = str(plan.pop("pipeline_script"))
+    script = script.replace(
+        f"output_path = {'results/manual-analysis/' + dataset.stem + '_preprocessed.csv'!r}",
+        f"output_path = {output_dataset_path!r}",
+    )
+    plan["output_dataset_path"] = output_dataset_path
+    plan["sklearn_pipeline_script_path"] = f"notebooks/{payload.session_id}_preprocessing_pipeline.py"
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    script_dir = root / "notebooks"
+    script_dir.mkdir(parents=True, exist_ok=True)
+    script_path = script_dir / f"{payload.session_id}_preprocessing_pipeline.py"
+    script_path.write_text(script, encoding="utf-8", newline="")
+
+    return {
+        "plan": plan,
+        "plan_artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "dataframe",
+            plan_path.name,
+            _relative_path(root, plan_path),
+            {
+                "dataset_path": payload.dataset_path,
+                "target_column": plan["target_column"],
+                "artifact_role": "preprocessing_plan",
+            },
+        ),
+        "pipeline_artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "code",
+            script_path.name,
+            _relative_path(root, script_path),
+            {
+                "dataset_path": payload.dataset_path,
+                "target_column": plan["target_column"],
+                "plan_path": _relative_path(root, plan_path),
+            },
+        ),
+    }
+
+
+def _render_transformation_report(summary: dict[str, Any]) -> str:
+    numeric_rows = "\n".join(
+        f"| {column} | {details.get('fill_value')} | {details.get('scaler')} |"
+        for column, details in summary.get("transformations", {}).get("numeric", {}).items()
+    )
+    if not numeric_rows:
+        numeric_rows = "| - | - | - |"
+    categorical_rows = "\n".join(
+        f"| {column} | {details.get('fill_value')} | {details.get('encoder')} |"
+        for column, details in summary.get("transformations", {}).get("categorical", {}).items()
+    )
+    if not categorical_rows:
+        categorical_rows = "| - | - | - |"
+    drop_rows = "\n".join(
+        f"| {column} | {reason} |" for column, reason in summary.get("transformations", {}).get("dropped", {}).items()
+    )
+    if not drop_rows:
+        drop_rows = "| - | - |"
+
+    return "\n".join(
+        [
+            "# Preprocessing Transformation Report",
+            "",
+            "## Summary",
+            "",
+            f"- Source dataset: `{summary['source_dataset_path']}`",
+            f"- Preprocessing plan: `{summary['preprocessing_plan_path']}`",
+            f"- Output dataset: `{summary['output_dataset_path']}`",
+            f"- Target column: `{summary['target_column']}`",
+            f"- Input shape: {summary['input_shape']['rows']} rows x {summary['input_shape']['columns']} columns",
+            f"- Output shape: {summary['output_shape']['rows']} rows x {summary['output_shape']['columns']} columns",
+            "",
+            "## Dropped Columns",
+            "",
+            "| Column | Reason |",
+            "| --- | --- |",
+            drop_rows,
+            "",
+            "## Numeric Transforms",
+            "",
+            "| Column | Fill Value | Scaler |",
+            "| --- | ---: | --- |",
+            numeric_rows,
+            "",
+            "## Categorical Transforms",
+            "",
+            "| Column | Fill Value | Encoder |",
+            "| --- | --- | --- |",
+            categorical_rows,
+            "",
+        ]
+    )
+
+
+@router.post("/execute-preprocess-plan")
+def execute_preprocessing_plan_endpoint(project_id: str, payload: ExecutePreprocessingPlanRequest) -> dict:
+    root = _get_project_root(project_id)
+    dataset_project_path = payload.dataset_path
+    dataset: Path | None = None
+    if dataset_project_path is not None:
+        dataset = _resolve_project_path(root, dataset_project_path)
+        if not dataset.exists() or not dataset.is_file():
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+    plan_file = _resolve_project_path(root, payload.preprocessing_plan_path)
+    if not plan_file.exists() or not plan_file.is_file():
+        raise HTTPException(status_code=404, detail="Preprocessing plan not found")
+    try:
+        plan_payload = json.loads(plan_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if dataset_project_path is None:
+        dataset_project_path = plan_payload.get("dataset_path")
+        if not isinstance(dataset_project_path, str) or not dataset_project_path:
+            raise HTTPException(status_code=400, detail="Dataset path is required")
+        dataset = _resolve_project_path(root, dataset_project_path)
+        if not dataset.exists() or not dataset.is_file():
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+    result_dir = root / "results" / payload.session_id
+    result_dir.mkdir(parents=True, exist_ok=True)
+    output_path = result_dir / f"{dataset.stem}_planned.csv"
+    output_project_path = _relative_path(root, output_path)
+
+    try:
+        summary = execute_preprocessing_plan(
+            csv_path=dataset,
+            plan_path=plan_file,
+            output_path=output_path,
+            dataset_path=dataset_project_path,
+            plan_project_path=payload.preprocessing_plan_path,
+            output_project_path=output_project_path,
+        )
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    summary_path = result_dir / "preprocessing_transform_report.json"
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    report_path = result_dir / "preprocessing_transform_report.md"
+    report_path.write_text(_render_transformation_report(summary), encoding="utf-8", newline="")
+
+    return {
+        "summary": summary,
+        "transformed_data_artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "dataframe",
+            output_path.name,
+            output_project_path,
+            {
+                "dataset_path": dataset_project_path,
+                "preprocessing_plan_path": payload.preprocessing_plan_path,
+                "target_column": summary["target_column"],
+                "artifact_role": "preprocessed_dataset",
+            },
+        ),
+        "summary_artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "dataframe",
+            summary_path.name,
+            _relative_path(root, summary_path),
+            {
+                "dataset_path": dataset_project_path,
+                "preprocessing_plan_path": payload.preprocessing_plan_path,
+                "output_dataset_path": output_project_path,
+                "artifact_role": "preprocessing_transform_summary",
+            },
+        ),
+        "report_artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "report",
+            report_path.name,
+            _relative_path(root, report_path),
+            {
+                "dataset_path": dataset_project_path,
+                "preprocessing_plan_path": payload.preprocessing_plan_path,
+                "output_dataset_path": output_project_path,
+                "artifact_role": "preprocessing_transform_report",
+            },
+        ),
     }
 
 

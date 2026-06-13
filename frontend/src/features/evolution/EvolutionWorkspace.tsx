@@ -12,8 +12,10 @@ import {
   Sparkles,
   HelpCircle,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 
+import type { EvolutionTabId } from "../../app/appDeepLink";
 import { getKnowledgeGraph } from "../../lib/api";
 import type {
   EvolutionInjectionLog,
@@ -24,14 +26,24 @@ import type {
   AdvancedInsight,
   KnowledgeGraphResult,
 } from "../../lib/api";
+import type { TaskStateInspection } from "../chat/taskStateInspector";
+import { buildGraphEvidenceItems } from "./graphEvidence";
 import { summarizeLessonStatuses } from "./evolutionStats";
 
 type EvolutionWorkspaceProps = {
   projectId: string;
+  taskStateInspection?: TaskStateInspection | null;
   lessons: Lesson[];
   injectionLogs: EvolutionInjectionLog[];
   protocols: EvolutionProtocol[];
+  initialTab?: EvolutionTabId;
   onAdopt: (lessonId: string) => Promise<void>;
+  onExtractLessonsFromSession?: () => Promise<void>;
+  onAbandonTaskState?: () => Promise<void>;
+  onOpenLogs?: (taskId?: string) => void;
+  onRetryLearning?: () => Promise<void>;
+  onSelectExperimentRun?: (experimentId: string) => void;
+  onSelectProjectFile?: (path: string) => void;
   onReject: (lessonId: string) => Promise<void>;
   onMarkConflict: (lessonId: string, reason: string) => Promise<void>;
 };
@@ -74,15 +86,23 @@ function lessonStatusProperty(properties: Record<string, unknown>) {
 
 export function EvolutionWorkspace({
   projectId,
+  taskStateInspection,
   lessons,
   injectionLogs,
   protocols,
+  initialTab,
   onAdopt,
+  onExtractLessonsFromSession,
+  onAbandonTaskState,
+  onOpenLogs,
+  onRetryLearning,
+  onSelectExperimentRun,
+  onSelectProjectFile,
   onReject,
   onMarkConflict,
 }: EvolutionWorkspaceProps) {
   // Tab control: "rules" | "graph"
-  const [activeTab, setActiveTab] = useState<"rules" | "graph">("rules");
+  const [activeTab, setActiveTab] = useState<EvolutionTabId>(initialTab ?? "rules");
 
   // Rules list state
   const [statusFilter, setStatusFilter] = useState<LessonStatus | "all">("all");
@@ -95,6 +115,9 @@ export function EvolutionWorkspace({
   const [graphReloadToken, setGraphReloadToken] = useState(0);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [selectedGraphNode, setSelectedGraphNode] = useState<KnowledgeGraphNode | null>(null);
+  const [extractingLessons, setExtractingLessons] = useState(false);
+  const [retryingLearning, setRetryingLearning] = useState(false);
+  const [learningFeedback, setLearningFeedback] = useState<string | null>(null);
 
   // Statistics
   const lessonSummary = useMemo(() => summarizeLessonStatuses(lessons), [lessons]);
@@ -104,12 +127,61 @@ export function EvolutionWorkspace({
     [lessons, statusFilter],
   );
 
+  async function extractLessonsFromSession() {
+    if (!onExtractLessonsFromSession) return;
+    setExtractingLessons(true);
+    setLearningFeedback("Extracting lessons from the active session...");
+    try {
+      await onExtractLessonsFromSession();
+      setLearningFeedback("Learning extraction completed. Review the new rule candidates below.");
+    } catch (error) {
+      setLearningFeedback(error instanceof Error ? error.message : "Learning extraction failed.");
+    } finally {
+      setExtractingLessons(false);
+    }
+  }
+
+  async function retryLearningExtraction() {
+    if (!onRetryLearning) return;
+    setRetryingLearning(true);
+    setLearningFeedback("Retrying learned rule extraction...");
+    try {
+      await onRetryLearning();
+      setLearningFeedback("Learning retry completed. Review the recovered candidates below.");
+    } catch (error) {
+      setLearningFeedback(error instanceof Error ? error.message : "Learning retry failed.");
+    } finally {
+      setRetryingLearning(false);
+    }
+  }
+
+  async function abandonLearningState() {
+    if (!onAbandonTaskState) return;
+    setLearningFeedback("Clearing saved learning retry state...");
+    try {
+      await onAbandonTaskState();
+      setLearningFeedback("Saved learning retry state was cleared.");
+    } catch (error) {
+      setLearningFeedback(error instanceof Error ? error.message : "Failed to clear learning retry state.");
+    }
+  }
+
   const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? visibleLessons[0] ?? null;
+  const selectedGraphEvidenceItems = useMemo(
+    () => (selectedGraphNode ? buildGraphEvidenceItems(selectedGraphNode) : []),
+    [selectedGraphNode],
+  );
 
   useEffect(() => {
     if (selectedLessonId && lessons.some((lesson) => lesson.id === selectedLessonId)) return;
     setSelectedLessonId(visibleLessons[0]?.id ?? lessons[0]?.id ?? null);
   }, [lessons, selectedLessonId, visibleLessons]);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Load knowledge graph data when graph tab is selected
   useEffect(() => {
@@ -281,6 +353,7 @@ export function EvolutionWorkspace({
       <style>{`
         .view-tabs {
           display: flex;
+          flex-wrap: wrap;
           gap: 12px;
           margin-bottom: 20px;
           border-bottom: 1.5px solid #313244;
@@ -297,6 +370,7 @@ export function EvolutionWorkspace({
           display: flex;
           align-items: center;
           gap: 8px;
+          min-height: 38px;
           transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .view-tabs button:hover {
@@ -311,7 +385,7 @@ export function EvolutionWorkspace({
         }
         .graph-container {
           display: grid;
-          grid-template-columns: 1fr 340px;
+          grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
           gap: 20px;
           margin-top: 16px;
           background: #11111b;
@@ -319,6 +393,7 @@ export function EvolutionWorkspace({
           border-radius: 12px;
           padding: 20px;
           min-height: 520px;
+          min-width: 0;
         }
         .svg-canvas {
           background-image: radial-gradient(#313244 1.2px, transparent 0);
@@ -327,7 +402,13 @@ export function EvolutionWorkspace({
           background-color: #181825;
           border: 1px solid #313244;
           box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+          min-height: 420px;
+          min-width: 0;
           position: relative;
+        }
+        .svg-canvas svg {
+          display: block;
+          min-width: 0;
         }
         .node-rect {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -369,6 +450,8 @@ export function EvolutionWorkspace({
           display: flex;
           flex-direction: column;
           gap: 12px;
+          min-height: 0;
+          min-width: 0;
           overflow-y: auto;
           box-shadow: 0 4px 16px rgba(0,0,0,0.4);
         }
@@ -393,6 +476,52 @@ export function EvolutionWorkspace({
         .graph-detail-sidebar .badge.column { background: rgba(137, 220, 235, 0.15); color: #89dceb; border: 1px solid rgba(137, 220, 235, 0.3); }
         .graph-detail-sidebar .badge.experiment { background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.3); }
         .graph-detail-sidebar .badge.rule { background: rgba(249, 226, 175, 0.15); color: #f9e2af; border: 1px solid rgba(249, 226, 175, 0.3); }
+        .graph-evidence-panel {
+          border: 1px solid rgba(166, 173, 200, 0.16);
+          background: #11111b;
+          border-radius: 8px;
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-width: 0;
+        }
+        .graph-evidence-panel strong {
+          color: #cdd6f4;
+          font-size: 12px;
+        }
+        .graph-evidence-row {
+          display: grid;
+          grid-template-columns: 84px 1fr;
+          gap: 8px;
+          align-items: start;
+          font-size: 12px;
+          min-width: 0;
+        }
+        .graph-evidence-row span {
+          color: #a6adc8;
+        }
+        .graph-evidence-row code {
+          color: #89dceb;
+          white-space: normal;
+          overflow-wrap: anywhere;
+          font-family: inherit;
+          line-height: 1.35;
+        }
+        .graph-evidence-row button {
+          border: 1px solid rgba(137, 220, 235, 0.28);
+          background: rgba(137, 220, 235, 0.08);
+          color: #89dceb;
+          border-radius: 5px;
+          padding: 2px 7px;
+          font-size: 11px;
+          cursor: pointer;
+          justify-self: start;
+        }
+        .graph-evidence-row button:hover {
+          border-color: rgba(137, 220, 235, 0.58);
+          background: rgba(137, 220, 235, 0.15);
+        }
 
         .insights-section {
           margin-top: 24px;
@@ -407,7 +536,7 @@ export function EvolutionWorkspace({
         }
         .insights-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
           gap: 16px;
         }
         .insight-card {
@@ -491,8 +620,39 @@ export function EvolutionWorkspace({
           line-height: 1.45;
         }
         @media (max-width: 1100px) {
+          .graph-container {
+            grid-template-columns: 1fr;
+          }
+          .graph-detail-sidebar {
+            max-height: none;
+          }
           .graph-empty-steps {
             grid-template-columns: 1fr;
+          }
+        }
+        @container (max-width: 740px) {
+          .graph-container {
+            grid-template-columns: 1fr;
+          }
+          .graph-detail-sidebar {
+            max-height: none;
+          }
+          .graph-empty-steps,
+          .insights-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+        @media (max-width: 620px) {
+          .view-tabs button {
+            flex: 1 1 220px;
+            justify-content: center;
+          }
+          .graph-container {
+            padding: 12px;
+          }
+          .svg-canvas {
+            min-height: 360px;
+            overflow: auto;
           }
         }
         .insight-card.knowledge_gap {
@@ -606,12 +766,54 @@ export function EvolutionWorkspace({
             </div>
           </div>
 
+          {taskStateInspection?.stage === "learn" ? (
+            <section className="learning-recovery" data-learning-recovery="true">
+              <div>
+                <span className="section-kicker">Learn Recovery</span>
+                <strong>{taskStateInspection.title}</strong>
+                <p>{taskStateInspection.description}</p>
+              </div>
+              <div className="learning-recovery-facts">
+                {taskStateInspection.facts
+                  .filter((fact) => ["Source", "Retries", "Last error", "Repair", "Stale check", "Resume"].includes(fact.label))
+                  .map((fact) => (
+                    <span key={fact.label}>
+                      <b>{fact.label}</b>
+                      {fact.value}
+                    </span>
+                  ))}
+              </div>
+              <div className="lesson-actions">
+                <button disabled={!onRetryLearning || retryingLearning} onClick={() => void retryLearningExtraction()} type="button">
+                  <RefreshCw size={14} />
+                  {retryingLearning ? "Retrying..." : "Retry Learning"}
+                </button>
+                <button onClick={() => onOpenLogs?.(taskStateInspection.taskId)} type="button">
+                  <ChevronRight size={14} />
+                  Inspect Logs
+                </button>
+                <button disabled={!onAbandonTaskState} onClick={() => void abandonLearningState()} type="button">
+                  <XCircle size={14} />
+                  Abandon State
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           <div className="evolution-layout">
             <section className="lesson-list">
               <div className="section-header">
                 <span className="panel-title">从历史任务提取的经验</span>
-                <span className="sidebar-kicker">Review Queue</span>
+                <button
+                  className="table-title-action"
+                  disabled={!onExtractLessonsFromSession || extractingLessons}
+                  onClick={() => void extractLessonsFromSession()}
+                  type="button"
+                >
+                  {extractingLessons ? "Learning..." : "Extract Lessons"}
+                </button>
               </div>
+              {learningFeedback ? <div className="action-feedback info">{learningFeedback}</div> : null}
               <div className="lesson-filter-bar">
                 {statusFilters.map((status) => (
                   <button
@@ -1017,6 +1219,33 @@ export function EvolutionWorkspace({
                       <strong style={{ color: "#cdd6f4", fontSize: "16px", marginTop: "4px" }}>
                         {selectedGraphNode.label}
                       </strong>
+
+                      {selectedGraphEvidenceItems.length > 0 ? (
+                        <div className="graph-evidence-panel" aria-label="节点来源与证据">
+                          <strong>来源与证据</strong>
+                          {selectedGraphEvidenceItems.map((item) => {
+                            const action = item.action;
+                            return (
+                              <div className="graph-evidence-row" key={`${item.label}-${item.value}`}>
+                                <span>{item.label}</span>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                                  <code>{item.value}</code>
+                                  {action?.type === "file" && onSelectProjectFile ? (
+                                    <button onClick={() => onSelectProjectFile(action.path)} type="button">
+                                      定位文件
+                                    </button>
+                                  ) : null}
+                                  {action?.type === "experiment" && onSelectExperimentRun ? (
+                                    <button onClick={() => onSelectExperimentRun(action.experimentId)} type="button">
+                                      定位实验
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
 
                       <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px", fontSize: "13px" }}>
                         {selectedGraphNode.type === "column" && (

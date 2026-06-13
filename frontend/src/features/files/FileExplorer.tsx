@@ -17,6 +17,7 @@ import {
 import { useState } from "react";
 
 import { projectFileDownloadUrl, type AgentSession, type FileItem, type Project } from "../../lib/api";
+import { buildVisibleTree, getDepth } from "./fileTree";
 
 const fallbackItems: FileItem[] = [
   { name: "customer_churn.csv", path: "data/customer_churn.csv", type: "file" },
@@ -59,35 +60,6 @@ function getFileIcon(item: FileItem) {
   if (item.path.endsWith(".csv")) return <Database size={14} />;
   if (item.path.endsWith(".py") || item.path.endsWith(".json")) return <FileCode2 size={14} />;
   return <FileText size={14} />;
-}
-
-function getParentPath(path: string) {
-  const parts = path.split("/");
-  parts.pop();
-  return parts.join("/");
-}
-
-function getDepth(path: string) {
-  return Math.max(0, path.split("/").length - 1);
-}
-
-function isVisiblePath(path: string, expandedFolders: string[]) {
-  const parent = getParentPath(path);
-  if (!parent) return true;
-  const parts = parent.split("/");
-  return parts.every((_, index) => expandedFolders.includes(parts.slice(0, index + 1).join("/")));
-}
-
-function buildVisibleTree(items: FileItem[], expandedFolders: string[]) {
-  return items
-    .filter((item) => item.path !== "sessions")
-    .filter((item) => isVisiblePath(item.path, expandedFolders))
-    .sort((a, b) => {
-      const parentCompare = getParentPath(a.path).localeCompare(getParentPath(b.path));
-      if (parentCompare !== 0) return parentCompare;
-      if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
 }
 
 export function FileExplorer({

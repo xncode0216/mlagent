@@ -1,0 +1,357 @@
+# MLAgent Follow-up Plan
+
+## Goal
+
+Harden the next practical slice after the runnable MVP: start with Kernel sandbox reliability, then leave the project ready for an end-to-end golden-path test.
+
+## Product North Star
+
+MLAgent should converge from a collection of data-analysis and machine-learning tools into a vertical Codex-style IDE for data work. The center workspace should become the natural-language agent cockpit: users describe an analysis or modeling goal, the agent plans and executes the workflow, dedicated data/ML components appear at the right moment, and every intermediate result remains inspectable and reproducible.
+
+Target product shape:
+
+- Left side: project resources, files, datasets, runs, knowledge, settings, and durable navigation.
+- Center: persistent conversation, workflow plan, step timeline, approvals, tool progress, and stage-specific interactive cards.
+- Right side: contextual inspector for data previews, charts, code, preprocessing plans, training diagnostics, reports, logs, and provenance.
+- Backend: a structured agent orchestrator that routes intents to data/ML tools and streams typed events instead of relying on one hardcoded WebSocket flow.
+- Artifacts: every dataset, profile, preprocessing plan, transformed dataset, model run, report, prediction sample, and learned rule should be traceable through a provenance graph.
+
+## Codex-Style Data/ML IDE Target
+
+The user's updated product concept is now the planning anchor: MLAgent should feel like a Codex-style IDE panel specialized for data analysis and machine learning. The center area is not a passive chat history; it is the primary agent cockpit where the user describes goals in natural language, the agent plans the workflow, executes each phase, pauses for human approval when needed, and brings up focused data/ML tools exactly when that phase needs them.
+
+Core product commitments:
+
+- Natural-language center cockpit: the user should be able to start from "analyze this dataset", "prepare features for churn modeling", "train and compare models", "diagnose why recall is poor", or "export a reproducible report" without manually jumping across separate modes.
+- Stage-specific tool components: ingest, profile, clean, transform, train, evaluate, diagnose, iterate, export, and learn should each have dedicated inline cards and contextual inspector views rather than generic text-only messages.
+- IDE-like operating model: conversation, plan timeline, run state, tool output, artifact tree, logs, diagnostics, reports, and provenance should remain visible and cross-linked like an engineering workbench.
+- Agent-owned workflow state: the backend orchestrator should own intent routing, step planning, approvals, durable retry/resume state, typed events, artifact creation, and learning-rule proposals.
+- Human-controlled automation: the agent can recommend transformations, training runs, diagnosis actions, exports, and reusable rules, but risky or behavior-changing steps should be inspectable, reversible, and approval-aware.
+- Reproducible handoff: each completed workflow should produce a coherent bundle of dataset version, preprocessing plan, transformed data, model run, metrics, diagnostics, report, logs, code/tool parameters, provenance, and optional learned-rule proposal.
+
+Implications for the existing product:
+
+- The current `analysis`, `machine-learning`, and `evolution` modes should gradually become workflow phases and inspector contexts, not separate journeys that force the user to leave the central conversation.
+- The right panel should evolve from fixed tabs into a contextual inspector selected by active stage, selected artifact, selected model run, or selected provenance node.
+- The left rail should remain the durable IDE navigation layer for projects, files, datasets, runs, knowledge, settings, and logs.
+- The center component registry should become the main presentation layer for data/ML tools: profile tables, quality warnings, feature/target selectors, preprocessing editors, transform diffs, training configs, model comparison, error slices, prediction samples, report previews, export controls, and learned-rule reviews.
+- Browser/API golden paths should validate the full natural-language flow, not only isolated panels.
+
+## Current Phase
+
+- [x] Review project progress and implementation plans.
+- [x] Confirm code structure matches the documented MVP state.
+- [x] Establish current test baseline.
+- [x] Add focused tests for Kernel sandbox hardening.
+- [x] Implement the smallest backend changes needed for those tests.
+- [x] Run backend/frontend verification relevant to the change.
+- [x] Add backend golden-path integration coverage.
+- [x] Patch graph insight feature extraction for baseline model runs.
+- [x] Decide the next implementation slice after golden-path coverage.
+- [x] Add GPU scheduler cancel/timeout semantics.
+- [x] Expose GPU cancellation API and train timeout/cancel responses.
+- [x] Connect GPU status and cancel controls to the frontend training panel.
+- [x] Add a stable frontend QA deep link for the machine-learning panel.
+- [x] Capture the GPU scheduling panel with a Chrome CLI fallback.
+- [x] Add graph node provenance/evidence metadata to the backend graph API.
+- [x] Show graph node source and evidence details in the frontend graph sidebar.
+- [x] Verify the graph evidence panel with tests and browser QA.
+- [x] Make graph provenance file paths clickable and synchronize them with the active project file.
+- [x] Verify graph-to-file positioning with tests and browser QA.
+- [x] Implement real panels for all left activity-bar icons, including settings.
+- [x] Verify activity-bar panel switching and settings panel rendering.
+- [x] Add graph experiment-node navigation into the machine-learning training run detail.
+- [x] Reuse the same experiment-focus path from the left activity-bar experiments panel.
+- [x] Verify experiment focusing with tests and browser QA.
+- [x] Research mainstream product UI/UX practices and distill them for MLAgent.
+- [x] Create a project-specific frontend product design skill.
+- [x] Add a project agent rule so future frontend work uses the dedicated frontend optimization agent.
+- [x] Make the settings panel actionable with persisted local preferences.
+- [x] Apply default target-column and GPU refresh preferences to the live app shell.
+- [x] Verify settings preferences with tests and browser QA.
+- [x] Strengthen logs/observability with trace and task filtering.
+- [x] Add a log event inspector and rules-matched event formatting.
+- [x] Verify log observability with tests and browser QA.
+- [x] Extend backend golden-path coverage across persisted logs, training run detail, and navigable artifact files.
+- [x] Add stable frontend deep-link entry points for browser smoke tests.
+- [x] Verify deep-linked machine-learning/training workspace with browser DOM QA.
+- [x] Add a scripted deep-link smoke runner with DOM assertions.
+- [x] Verify analysis, machine-learning, and evolution smoke links with the runner.
+- [x] Add deterministic smoke fixture seeding for a real project, CSV dataset, and baseline training run.
+- [x] Expand smoke coverage to experiment-focus and direct evolution graph deep links.
+- [x] Extend the smoke fixture into a fuller browser/API golden path across analysis artifacts, ML handoff, cleaned data, adopted lessons, rule injection, and graph insights.
+- [x] Add data quality profiling as the first expanded data-analysis tool-library slice.
+- [x] Surface the data quality profile in the frontend and smoke-test the preview.
+- [x] Expand sklearn evaluation artifacts with holdout strategy, row counts, class distribution, and per-class metrics.
+- [x] Surface model comparison and class-quality evaluation in the training panel.
+- [x] Smoke-test the training run model comparison surface.
+- [x] Run third-pass frontend interaction QA for the machine-learning page.
+- [x] Collapse repeated Agent quick-command tool chips and add duplicate-click feedback.
+- [x] Add visible feedback for training/GPU interactions and wire right-panel export.
+- [x] Generate backend-curated model evaluation report artifacts for training runs.
+- [x] Surface evaluation report paths in training detail and smoke-test report preview.
+- [x] Add feature-engineering/preprocessing plan artifacts from data quality findings.
+- [x] Surface preprocessing plan generation and preview in the analysis workflow.
+- [x] Teach sklearn training to optionally consume the generated preprocessing plan before model comparison.
+- [x] Surface preprocessing-plan selection in the training panel and persist it in run detail, metrics, reports, and smoke coverage.
+- [x] Add artifact-to-file navigation from training run detail for metrics, reports, and preprocessing plans.
+- [x] Add per-class error-slice diagnostics from confusion matrices in training detail.
+- [x] Add artifact-backed prediction sample/error examples for training diagnostics.
+- [x] Diagnose Codex Windows `PATH`/`Path` duplication and create a clean-environment launcher.
+- [x] Verify the clean launcher produces a single `Path` variable and supports `Start-Process`.
+- [x] Define the single-agent workbench model: workflow phases, task state, step events, approvals, artifacts, and component invocation rules.
+- [x] Upgrade the center Agent workspace from chat-plus-cards into a first-pass persistent agent cockpit with conversation, plan timeline, current step, approval checkpoints, component signals, and latest-artifact context.
+- [x] Add a frontend component registry that maps structured agent events to data/ML UI components such as data quality, preprocessing plan, training config, model comparison, error analysis, and report preview.
+- [x] Wire the component registry into the center cockpit so `component_requested` events can render real inline data/ML cards instead of only status summaries.
+- [x] Harden preprocessing-plan feature selection for small default datasets so executable cockpit flows do not drop every feature column.
+- [x] Extract the hardcoded WebSocket analysis flow into a first intent-aware backend orchestrator that routes analysis-overview and modeling-prep intents, streams typed stage/tool/artifact/approval/component events, and preserves legacy analysis artifacts, rules, lessons, session messages, and logs.
+- [x] Extend the backend orchestrator with the first true paused approval and user-driven resume flow for modeling-prep preprocessing execution.
+- [x] Add first-pass approval revision handling, stale approval detection, and structured transform failure events for the modeling-prep workflow.
+- [x] Add first-pass durable transform retry/resume state for approved preprocessing execution failures.
+- [x] Add first-pass durable sklearn training retry/resume state for recoverable training execution failures.
+- [x] Surface retryable sklearn training failures in the center cockpit with a `Retry Training` action.
+- [x] Extend retry policy metadata and durable recovery branch controls across transform, sklearn training, evaluation/report, export, and learn.
+- [x] Rehydrate failed task state into the cockpit when a session/page is reopened, so retryable work survives reloads.
+- [x] Add a task-state/log inspector for failed workflow stages, including saved inputs, retry count, last error, and recommended next action.
+- [x] Extend durable retry/resume to evaluation/report regeneration, including `task_state/evaluate.json`, `Retry Evaluation`, and training-detail report regeneration.
+- [x] Extend retry/resume to report export and downstream learning-rule extraction, including `task_state/export.json`, `task_state/learn.json`, `Retry Export`, `Retry Learning`, and training-detail export bundle generation.
+- [x] Add the first continuation intent: "continue from last failure" / "retry last failed step" reads persisted task state, streams typed recovery events, and requests the failed-stage inspector from the center conversation.
+- [x] Add the first training intent: natural-language sklearn/baseline training requests resolve dataset, target column, and preprocessing-plan context, then summon a real `training_config` cockpit card instead of immediately running risky work.
+- [x] Add the first evaluate/report intent: natural-language evaluation/report prompts resolve the selected or latest completed experiment run, then summon `model_comparison` and `evaluation_report` cockpit cards with real metrics, report, model, and regeneration actions.
+- [x] Add the first diagnose intent: natural-language diagnosis/error-sample prompts resolve the selected or latest completed experiment run, summarize class-level errors from the confusion matrix, then summon `error_analysis` and `prediction_samples` cockpit cards.
+- [x] Add the first export/learn intents: natural-language export prompts summon `evaluation_report` plus `export_bundle` cards, and learned-rule prompts summon a `lesson_review` card with source-session evidence.
+- [x] Add profile/clean/transform/iterate intents: natural-language profile prompts generate a typed data-quality profile card, clean prompts request a quality review plus safe preprocessing-plan handoff, transform prompts generate a preprocessing plan and approval checkpoint without execution, and iterate prompts summon an iteration-proposal card from selected run diagnostics.
+- [x] Generalize the backend orchestrator from two intents into a full data/ML workflow router: ingest, profile, clean, transform, train, evaluate, diagnose, iterate, export, and learn.
+- [x] Add the first confirmed branch execution path for recovery control: natural-language abandon/clear last failure deletes the newest durable failed task state while preserving historical events, logs, messages, and artifacts.
+- [ ] Promote fixed mode panels into contextual inspector views driven by workflow state and selected artifacts.
+- [ ] Add richer center-cockpit components for target/feature selection, preprocessing-plan editing, transform diff review, model comparison, error-slice drilldown, prediction samples, and final report preview.
+- [ ] Link every visible message, action, artifact, model run, report, and learned rule back to a provenance record.
+- [ ] Add browser/API golden-path coverage for the natural-language flow from raw dataset to trained model, evaluation report, diagnosis, retry, export, and learned rule.
+- [x] Make preprocessing plans executable as first-class artifacts, producing transformed datasets, transformation reports, and training-ready artifact links.
+- [x] Add the first natural-language golden path: "analyze this dataset and prepare it for modeling" profiles data, generates a preprocessing plan, pauses at an approval checkpoint, resumes after user approval, executes the transform, and hands the transformed dataset to training.
+- [x] Record the Codex-style Data/ML IDE product direction in the project plan and progress documents.
+- [x] Synchronize the refined Codex-style Data/ML IDE follow-up plan into `task_plan.md`, `progress.md`, and `docs/project-progress.md`.
+- [x] Write the latest Data/ML code-agent IDE follow-up goals into the project plan table and progress documents.
+
+## Data/ML Code Agent IDE Roadmap
+
+| Priority | Objective | Concrete Product Outcome | Next Implementation Slice | Status |
+| --- | --- | --- | --- | --- |
+| P0 | Make the center cockpit the primary work surface | Users can stay in one natural-language conversation while the app shows phase state, approvals, active tools, artifacts, and retry controls inline. | Inspector/retry coverage now includes transform, training, evaluation/report, export, and learn; next add explicit abandon/regenerate choices. | In progress |
+| P0 | Build a durable task runtime | Failed transform, training, evaluation/report, export, and learning extraction steps retain enough input state to retry safely without rebuilding the whole workflow. | Harden the shared task-state schema with repair hints, stale artifact checks, and recovery policy metadata. | In progress |
+| P0 | Finish retry/resume policy | The system distinguishes rerun, repair, regenerate upstream plan, and abandon paths for each failed stage. | Recovery policy metadata now covers retryable stages, "continue from last failure" can surface the safest next action, and explicit abandon/clear prompts can delete the newest failed task state; next connect regenerate-upstream and additional direct resume branches where safe. | In progress |
+| P0 | Expand the intent-aware orchestrator | Natural language should route to the correct workflow phase and tool chain instead of one hardcoded analysis path. | Ingest, continuation, profile, clean, transform, training-configuration, evaluation/report, model-diagnosis, iteration proposal, export-bundle, and learned-rule review intents are implemented; next add structured command objects and more direct recovery branches. | In progress |
+| P0 | Define the agent command language | The cockpit should understand user goals, active dataset/run context, selected artifacts, and continuation requests without brittle keyword-only routing. | `agent_command` events are implemented for train, evaluate, diagnose, export, and learn intents with dataset/run/session context, selected artifacts, missing context, risk, planned steps, proposed tools, approval requirement, component requests, diagnosis summary, export readiness, and learning candidate evidence where relevant. Ambiguous multi-run evaluate/diagnose/export contexts now produce a missing-`experiment_id` command with candidate runs; ambiguous train prompts without an active CSV now produce a missing-`dataset_path` command with candidate datasets and stable CSV dataset version ids. The cockpit renders blocked run/dataset selection cards, and choosing a candidate continues the selected flow while preserving dataset version context. Next add structured continuation parser tests and full hash/schema dataset registry integration. | In progress |
+| P0 | Make tool invocation typed and inspectable | Every backend tool call should stream start/progress/result/failure events that the UI can render as stable cockpit cards and log traces. | Normalize typed event payloads for data-analysis, preprocessing, training, evaluation, export, and learning tools. | Planned |
+| P1 | Turn fixed panels into contextual data/ML components | Data profile, preprocessing plan, feature selector, training config, model comparison, error analysis, prediction samples, and reports appear when the agent reaches that phase. | Extend the cockpit component registry and move more right-panel surfaces into reusable component descriptors. | Planned |
+| P1 | Add interactive preprocessing and feature editing | Users can inspect, revise, approve, and rerun preprocessing plans instead of accepting a static JSON artifact. | Add a preprocessing-plan editor card with drop/keep columns, imputation strategy, scaling, encoding, and target validation controls. | Planned |
+| P1 | Strengthen ML experiment operations | Training should feel like an IDE run panel: configuration, queued/running/failed/succeeded state, artifacts, comparison, diagnostics, report regeneration, export bundles, and rerun. | Add model-comparison actions that can start a follow-up training run and connect export bundles to provenance. | In progress |
+| P1 | Make diagnosis actionable | Model errors should lead to concrete dataset slices, feature issues, preprocessing changes, or retraining suggestions. | Connect error slices and prediction samples to recommended actions: adjust features, regenerate plan, retrain, or export caveats. | Planned |
+| P1 | Make provenance inspectable | Every artifact and UI card should answer: what data, code, tool, parameters, session, and run produced this? | Add a provenance inspector view and graph links from cockpit cards, run details, reports, and learned rules. | Planned |
+| P1 | Convert the right panel into a contextual inspector | The right side should show the canonical detail surface for the selected stage, artifact, run, log event, or graph node. | Add a selected-context model and route profile/report/run/log/provenance details through it. | Planned |
+| P2 | Add project memory and learning loops | Accepted lessons and workflow patterns should improve later analysis without silently changing behavior. | Require reviewable rule proposals with evidence links, confidence, conflict state, and reversible injection logs. | Partially done |
+| P2 | Support richer data sources | The same agent cockpit should handle CSV first, then Excel, Parquet, larger sampled files, and database-style sources. | Add source adapters and a dataset registry that records schema, sample strategy, version, and lineage. | Planned |
+| P2 | Improve collaboration/export | The final result should be a reproducible handoff: report, model, data lineage, code, metrics, diagnostics, and decisions. | Run-level export bundles now collect core artifacts; next add run-summary pages and broader workflow-level bundles. | Partially done |
+| Quality Gate | Keep the product verifiable | Each slice should have backend contract tests, frontend state/component tests, and browser DOM QA on a stable deep link. | Expand smoke coverage to retry/resume, task-state inspector, evaluation report, and provenance links. | Ongoing |
+
+## Latest User Concept Goal Table
+
+The latest product direction is now explicit: MLAgent should become a Codex-like IDE panel for end-to-end data analysis and machine learning. The center conversation is the primary agent cockpit, while specialized data/ML components appear as the workflow advances.
+
+| Order | Follow-up Goal | Current Project Basis | Work To Add | Acceptance Signal |
+| --- | --- | --- | --- | --- |
+| 1 | Complete the natural-language workflow router | `AgentOrchestrator` already routes analysis/modeling prep, ingest, retry/continuation, profile, clean, transform, train, evaluate/report, diagnose, iterate, export, and learn prompts. | Add structured command output and safer direct resume/regenerate branches after confirmation; abandon/clear last failure now deletes the newest durable failed task state. | A user can type one goal and the backend emits a phase plan plus typed events for the correct workflow stage without manual mode switching. |
+| 2 | Define a structured agent command language | Current routing is intent-aware but still partly keyword/context driven; train, evaluate, diagnose, export, and learn intents now emit and persist `agent_command` objects. Ambiguous multi-run evaluate/diagnose/export prompts now emit candidate-run missing-context commands, and the cockpit can continue after a run is selected. | Extend command objects to continuation, ambiguous dataset prompts, and richer user correction handling, including selected run/session evidence, missing context questions, risk level, planned tools, requested approvals, and component requests. | Ambiguous prompts produce context questions; clear prompts and selected-candidate prompts produce deterministic command state saved with session events. |
+| 3 | Make the center cockpit the main IDE work surface | The center `AgentWorkspace` already shows stage timeline, approvals, task-state recovery, and component cards. | Add interpreted-intent summaries, editable phase plans, current-step controls, richer failure/approval states, and component-level progress. | Users can complete a data/ML workflow while staying primarily in the center conversation. |
+| 4 | Expand stage-specific data/ML components | The registry already renders data quality, preprocessing, training config, model comparison, evaluation report, error analysis, and prediction samples. | Add feature/target selector, preprocessing editor, transform diff, run monitor, diagnosis action cards, export bundle preview, and learned-rule review. | Each workflow phase has at least one real card with wired actions, artifact links, empty/loading/error states, and tests. |
+| 5 | Turn preprocessing into an interactive feature workflow | Executable preprocessing plans and approvals already exist. | Add plan patch APIs, keep/drop controls, imputation/scaling/encoding editors, leakage warnings, schema drift checks, preview diff, and regenerate-plan branch. | A user can revise a plan in the cockpit, preview the impact, approve execution, and train from the transformed dataset. |
+| 6 | Make ML experiments feel like IDE runs | Training, evaluation reports, prediction samples, retry state, export bundles, and selected-run detail already exist. | Add run monitor events, queue/GPU state in the cockpit, rerun-from-config, follow-up experiment proposals, and compare-to-baseline actions. | Train -> evaluate -> diagnose -> iterate -> export works as one inspectable run loop. |
+| 7 | Make diagnosis actionable | Confusion-derived error slices and prediction samples are now available in training detail and cockpit cards. | Connect error slices to feature issues, preprocessing changes, retraining suggestions, class-specific caveats, and row-level evidence links. | Diagnosis cards can propose and launch a concrete next step instead of only displaying metrics. |
+| 8 | Convert the right panel into a contextual inspector | The right panel already previews files, data, training detail, logs, and graph evidence. | Add a selected-context model shared by cockpit cards, file explorer, logs, graph, and right panel. Route selected dataset/profile/plan/run/report/log/rule to canonical inspector views. | Clicking a cockpit card or graph evidence row focuses the correct inspector item and preserves project/session context. |
+| 9 | Build artifact provenance as the product spine | Graph provenance and artifact paths already exist for several runs, reports, and rules. | Add stable provenance IDs and edges for messages, tool calls, datasets, profiles, plans, transforms, runs, reports, exports, logs, and learned rules. | Every visible artifact can answer what produced it, from which data, with which parameters, in which session/run. |
+| 10 | Produce reproducible workflow handoffs | Run-level export bundles already collect core ML artifacts. | Add workflow-level bundles with dataset version, preprocessing plan, transformed data, model, metrics, diagnostics, report, logs, parameters, provenance, and optional learned-rule proposals. | A completed workflow exports a self-contained review/handoff package from the center cockpit. |
+| 11 | Keep learning safe and reviewable | Lesson extraction, accepted rules, injection audit logs, and learn retry state already exist. | Add learned-rule proposal cards with evidence, confidence, conflict detection, scope, approve/reject, rollback, and provenance links. | The agent can propose reusable rules, but adoption stays human-reviewed and reversible. |
+| 12 | Expand sources and tool library without breaking the flow | The product is CSV-first with data quality, preprocessing, sklearn training, reports, explanations, and prediction samples. | Add Excel/Parquet/large-file sampling/database-like adapters, dataset registry, schema snapshots, richer feature engineering, and model explanation tools. | New source/tool types enter the same cockpit workflow instead of creating separate fragmented journeys. |
+| 13 | Verify the full code-agent experience | Deep-link smoke and focused tests already cover many individual routes and recent natural-language train/evaluate/diagnose flows. | Add deterministic browser/API golden path for raw dataset -> profile -> approval -> transform -> train -> evaluate -> diagnose -> retry/export -> learn. | `npm.cmd run smoke:deep-links` and backend/frontend contract tests prove the full natural-language workflow. |
+
+## Codex-Style IDE Phase Plan
+
+### Phase A - Reliability First Agent Runtime
+
+Goal: make the central cockpit trustworthy before adding more surface area.
+
+- Durable retry/resume now covers `evaluate`, `export`, and `learn` in addition to transform/train.
+- Retry policy metadata now covers every retryable failed stage: retryable, resume stage, repair hint, stale-input check, retry count, abandon path, and regenerate-upstream path.
+- "Continue from last failure" is now a first-class orchestrator intent that reads persisted task state and proposes the safest next action.
+- Keep failed-stage inspection, related logs, saved inputs, and recovery actions visible in the center cockpit.
+
+### Phase B - Full Data/ML Workflow Router
+
+Goal: route natural language through a complete data/ML workflow instead of two hardcoded intents.
+
+- Add orchestrator intents for ingest, profile, clean, transform, train, evaluate, diagnose, iterate, export, and learn. Ingest, profile, clean, transform, train, evaluate, diagnose, iterate, export, learn, continuation, and modeling-prep routing are now implemented.
+- Represent each phase as typed events: `stage_started`, `tool_started`, `artifact_created`, `approval_required`, `component_requested`, `step_failed`, `stage_completed`, and `task_resumed`.
+- Preserve compatibility with the existing project, file, session, log, training, report, and knowledge APIs while moving coordination into `AgentOrchestrator`.
+- Add context resolution for active dataset, selected preprocessing plan, selected experiment, selected report, and last failed task.
+
+### Phase C - Contextual Data/ML Components
+
+Goal: let the conversation summon real tools instead of making the user hunt through panels.
+
+- Add feature/target selector cards that validate schema, target leakage risks, class balance, and feature availability.
+- Add an editable preprocessing-plan card with keep/drop columns, imputation, scaling, encoding, target handling, and previewable diff.
+- Add transform review cards showing before/after schema, row counts, dropped columns, generated columns, warnings, and downstream training readiness.
+- Add training configuration and run monitor cards with engine, dataset, target, preprocessing plan, GPU state, queue/cancel/retry status, and artifact links.
+- Add evaluation and diagnosis cards for model comparison, per-class quality, confusion-derived error slices, prediction samples, model explanations, and recommended next actions.
+- Add report/export cards that preview the final Markdown report, collect artifacts into a bundle, and expose reproducibility metadata.
+- Add learned-rule review cards with evidence, confidence, conflicts, proposed scope, approval, rejection, and rollback information.
+
+### Phase D - IDE Context Inspector and Provenance
+
+Goal: make every artifact and decision inspectable from one stable workbench.
+
+- Introduce a selected-context model shared by the left rail, center cockpit, right inspector, file explorer, logs, and graph.
+- Convert fixed right-panel tabs into contextual inspector views for data preview, profile, preprocessing plan, transformed dataset, run detail, report, logs, graph evidence, and learned rules.
+- Link messages, tool calls, generated files, training runs, reports, logs, and learned rules through stable provenance IDs.
+- Add graph navigation from cockpit cards and inspector rows back to source dataset, plan, run, report, and rule evidence.
+
+### Phase E - Verified End-to-End Agent Experience
+
+Goal: prove the product behaves like a specialized data/ML code agent.
+
+- Add a browser/API golden path: raw dataset -> profile -> preprocessing approval -> transform -> training -> evaluation report -> diagnosis -> retry/export -> learned-rule proposal.
+- Extend smoke fixtures to include failure and resume paths for transform, train, evaluate, export, and learn.
+- Keep each milestone shippable with focused backend contract tests, frontend state/component tests, TypeScript/lint/build checks, and browser DOM QA.
+
+## Detailed Implementation Milestones
+
+This table turns the Codex-style Data/ML IDE direction into execution-ready project targets. The order is intentional: reliability and orchestration first, richer components second, provenance and verification as the product spine.
+
+| Milestone | Product Goal | Backend / Agent Work | Frontend / UX Work | Verification Target | Status |
+| --- | --- | --- | --- | --- | --- |
+| M1 - Recovery policy hardening | Make failed work recoverable, explainable, and reversible before expanding automation. | Shared task-state policy now covers transform, train, evaluate, export, and learn with repair hints, stale checks, resume, regenerate-upstream, abandon actions, and stale artifact paths. | The failed-stage inspector now shows policy facts and `Abandon State`; evolution learning recovery mirrors the same branch. | Backend contract tests, frontend task-state/component tests, build, and deep-link smoke passed. | Done |
+| M2 - Full workflow intent router | Let users describe data/ML goals in one conversation instead of manually choosing separate modes. | Ingest, continuation, profile, clean, transform, training-configuration, evaluation/report, diagnosis, iterate, export, and learned-rule review slices are complete: `AgentOrchestrator` recognizes dataset ingest/register prompts, "continue from last failure" / "retry last failed step", explicit abandon/clear last failure prompts, profile/data-quality prompts, clean/safe-fix prompts, transform/preprocessing-plan prompts, explicit sklearn/baseline training prompts, evaluation/report prompts, diagnosis/error-sample prompts, iterate/improve-recall prompts, export/handoff prompts, and lesson/rule proposal prompts. Ingest emits a dataset registry artifact and `dataset_summary` request; profile emits a real `data_quality` request; clean emits `data_quality` plus a safe `preprocessing_plan` handoff; transform emits a generated `preprocessing_plan` plus approval checkpoint; iterate emits `iteration_proposal` with selected-run diagnostics; abandon deletes the newest failed task state without deleting history. Next add structured command output and direct resume/regenerate branch execution. | The center cockpit refreshes durable task state for continuation prompts, uses `training_config.props` for actionable training, uses evaluation/report props to render model comparison plus report cards, renders diagnosis cards with `Open Metrics`, `Open Report`, `Open Samples`, and `Open Diagnostics`, renders export/learn cards with `Export Bundle`, `Open Report`, `Extract Lessons`, and `Open Evidence`, renders `dataset_summary` for ingest, and renders an `iteration_proposal` card with existing metrics/report/samples/training actions. Next show interpreted intent, selected context, proposed phase plan, current step, and approval checkpoints for more intent classes. | WebSocket tests cover ingest registry, continuation, abandon-last-failure deletion, profile event order, clean component requests, transform approval contract, train-intent event order, plan-derived training context, evaluate/report event order, diagnose event order, iterate event order, export event order, learn event order, selected/latest-run context, and no-state fallback; component-registry/workflow-state tests cover requested task-state, dataset-summary, data-quality, preprocessing, training-config, model-comparison, evaluation-report, error-analysis, prediction-sample, iteration-proposal, export-bundle, and lesson-review cards; deep-link smoke covers current browser routes. Next browser/API golden path for branch execution flows. | In progress |
+| M3 - Agent command language | Make the agent understand continuation, selected artifacts, and user corrections without brittle keyword-only routing. | Structured `agent_command` output is implemented and persisted for train, evaluate, diagnose, export, and learn intents: intent, dataset/session context, optional dataset version, target, selected run, selected artifacts, missing context, risk level, planned steps, proposed tools, approval requirement, component requests, diagnosis summary, export bundle readiness, and learning candidate evidence where relevant. Ambiguous multi-run evaluate/diagnose/export prompts now emit persisted missing-context commands with candidate runs; active-file matches and explicit latest/recent prompts remain deterministic; ambiguous train prompts without an active CSV now emit missing-`dataset_path` commands with candidate datasets and stable CSV dataset version ids; selecting a candidate resends the intent with chosen context and continues into real cards. Next extend the same contract to continuation parser tests and hash/schema-backed dataset registry integration. | Cockpit workflow state and log view can consume `agent_command` events; evaluate commands activate report review, diagnose commands activate error analysis, export commands activate reproducible handoff, learn commands activate rule review, missing-context commands block the current stage, candidate runs render as selectable cockpit actions, and candidate datasets render as selectable training-dataset actions with version facts. Next add compact confirmations for "what the agent understood" and user correction handling. | WebSocket tests assert command payload/persistence for train, plan-backed train, evaluate, diagnose, export, learn, ambiguous run selection, ambiguous dataset selection with dataset version ids, and selected-context continuation; frontend workflow/log/component tests cover rendering/search, blocked missing-context stages, run-selection actions, and dataset-selection actions. Deep-link smoke now verifies missing run context through selected-run evaluate/diagnose/export cards and missing dataset context through selected-dataset training cards. Next add parser/context tests for continuation prompts and connect dataset candidates to durable source-hash/schema registry records. | In progress |
+| M4 - Contextual cockpit components | Turn data/ML workflow phases into real inline tools summoned by the conversation. | Normalize tool result payloads for data profile, preprocessing plan, transform report, training run, evaluation report, diagnosis, export bundle, and learned rules so components do not scrape free text. | Add stage cards for feature/target selection, preprocessing editing, transform diff, training config/run monitor, model comparison, error slices, prediction samples, report preview, export bundle, and learned-rule review. | Component-registry tests; focused UI tests for every card action; browser smoke through profile -> transform -> train -> evaluate. | Planned |
+| M5 - Interactive preprocessing and feature workflow | Move from static plan artifacts to user-reviewable feature engineering. | Add plan patch/update APIs, target validation, feature leakage checks, schema drift checks, transform preview/diff, and regenerate-plan support. | Build a preprocessing-plan editor card with keep/drop columns, imputation, scaling, encoding, target handling, warnings, preview diff, approve, revise, retry, and regenerate controls. | Backend tests for plan patch and execution; frontend tests for editor state; browser QA for revise -> approve -> transformed dataset. | Planned |
+| M6 - ML run cockpit | Make training feel like an IDE run/debug panel, not a disconnected API call. | Route train/evaluate/diagnose/export through the orchestrator; emit typed queue, GPU, running, artifact, metrics, failure, retry, and completion events. | Add run monitor, candidate comparison controls, evaluation summary, report regeneration, error-diagnosis actions, prediction filters, export bundle controls, and rerun-from-config. | Backend ML API/orchestrator tests; frontend run-detail tests; smoke for train -> report -> diagnose -> export. | In progress |
+| M7 - Actionable diagnosis and iteration | Let model errors suggest concrete next workflow steps. | Connect error slices, prediction samples, feature importance, class quality, and report caveats to suggested actions: adjust features, regenerate plan, retrain, collect data, or export with caveat. | Add diagnosis cards with recommended next steps, row-level evidence links, one-click feature/preprocessing adjustments, and retrain proposal cards. | Tests for diagnostic recommendation helpers; browser smoke for error slice -> sample filter -> retrain proposal. | Planned |
+| M8 - Contextual inspector and provenance | Make every artifact, message, tool call, run, report, and learned rule explain where it came from. | Add stable provenance IDs and edges for dataset versions, profiles, plans, transforms, runs, reports, logs, exports, and rules. Return provenance metadata from relevant APIs. | Convert fixed right-panel tabs into selected-context inspector views for dataset/profile/plan/run/report/log/graph/rule. Clicking cockpit cards or graph evidence should focus the canonical inspector item. | Backend graph/provenance contract tests; frontend selected-context tests; browser smoke for card -> file/run/report/graph navigation. | Planned |
+| M9 - Project memory and safe learning loop | Let accepted lessons improve future work without silently changing behavior. | Strengthen lesson extraction, rule proposal, conflict detection, confidence scoring, reversible injection logs, and evidence links. | Add learned-rule review cards with approve/reject, confidence, evidence, conflict state, scope, rollback, and "apply to future workflows" controls. | Evolution API tests; frontend rule review tests; smoke for learn -> review -> inject -> provenance. | Partially done |
+| M10 - Reproducible handoff and workflow export | Produce a complete deliverable from one natural-language data/ML workflow. | Add workflow-level bundles containing dataset version, preprocessing plan, transformed data, model, metrics, diagnostics, report, logs, parameters, provenance, and learned-rule proposals. | Add final report/export cards that preview deliverables, show bundle completeness, and expose download/open/provenance actions. | Backend bundle tests; browser smoke for final report and archive download controls. | Partially done |
+| M11 - Data-source and tool-library expansion | Broaden the same cockpit flow beyond the current CSV-first path. | Add Excel, Parquet, sampled large files, database-style source adapters, dataset registry, schema snapshots, and lineage records. Extend ML tools with richer feature engineering and explanations. | Add source adapter UI, dataset registry views, schema/sample controls, and source-specific warnings in the cockpit/inspector. | Adapter contract tests; frontend dataset registry tests; smoke fixture for at least one non-CSV source. | Planned |
+| M12 - End-to-end product QA | Keep the product honest as it becomes agentic and multi-step. | Maintain deterministic fixtures and API setup for raw dataset -> profile -> approval -> transform -> train -> evaluate -> diagnose -> retry/export -> learn. | Maintain deep-link browser smoke coverage for cockpit, right inspector, logs, graph, run detail, export, and learning recovery. | Full backend contract suite, frontend unit/component suite, lint/type/build, and `npm.cmd run smoke:deep-links`. | Ongoing |
+
+## Stage Component Backlog
+
+| Workflow Stage | Component / Inspector Target | Trigger | Required State | Primary Actions | Artifact / Provenance Output |
+| --- | --- | --- | --- | --- | --- |
+| Ingest | Dataset selector and source summary | User asks to analyze or train from a file/source. | Project id, source path, dataset registry entry, schema/sample snapshot. | Select source, upload/open file, register dataset, inspect sample. | Dataset version id, schema snapshot, sample strategy. |
+| Profile | Data quality profile card | Agent profiles an active dataset. | Dataset path/version, column stats, missing/unique counts, target candidates. | Generate profile, open profile, choose target, inspect warnings. | `data_quality_profile.json`, profile provenance edge. |
+| Clean | Quality issue review | Profile finds missing values, duplicates, leakage risk, or suspicious IDs. | Profile artifact, issue list, proposed fixes. | Accept/ignore issue, generate preprocessing plan, request explanation. | Cleaning decision log and plan seed. |
+| Transform | Preprocessing-plan editor and transform diff | Agent generates or revises a plan. | Plan artifact, dataset schema, target, current approval, retry policy. | Edit plan, approve, revise, execute, retry, regenerate, abandon. | `preprocessing_plan.json`, pipeline script, planned CSV, transform report. |
+| Train | Training configuration and run monitor | User asks to train or a planned dataset is ready. | Dataset path, target, plan path, engine, GPU preference, run config. | Start run, cancel queued GPU work, retry training, rerun config. | Experiment run id, metrics, model, prediction samples. |
+| Evaluate | Model comparison and report preview | Training succeeds or user asks to evaluate. | Experiment id, metrics/model/report artifacts. | Compare candidates, regenerate report, retry evaluation, open report. | `model_evaluation_report.md`, evaluation provenance. |
+| Diagnose | Error slice and prediction sample explorer | Evaluation reveals weak class quality or misclassified examples. | Confusion matrix, per-class metrics, prediction samples, feature explanations. | Filter samples, inspect evidence, propose feature changes, retrain. | Diagnosis notes, iteration recommendation. |
+| Iterate | Follow-up experiment proposal | Diagnosis suggests plan/training changes. | Current run, selected errors, proposed changes, previous config. | Adjust plan, rerun training, compare to baseline, keep/reject. | Iteration run link and comparison record. |
+| Export | Reproducible handoff bundle | User asks for deliverable or workflow completion. | Dataset, plan, transformed data, model, metrics, report, logs, provenance. | Export bundle, retry export, download archive, open manifest. | Zip bundle, manifest, provenance summary. |
+| Learn | Learned-rule review | Workflow completes or user asks to extract lessons. | Source session, evidence events, outcomes, candidate lessons. | Extract lessons, retry learning, approve/reject rule, inject, rollback. | Lesson candidates, adopted rule, injection audit. |
+
+## Near-Term Implementation Targets
+
+1. Agent orchestrator expansion: add the remaining ingest/source-registration intent and explain model behavior; profile, clean, transform, train, evaluate, diagnose, iterate, export, and learn typed cockpit intents are now implemented.
+2. Continue-from-last-failure follow-up: move from surfacing the saved recovery policy to executing safe resume, repair, regenerate upstream, or abandon branches from the center conversation when the required context is complete.
+3. Inspector branch controls follow-up: wire regenerate-upstream actions to concrete plan/report/source regeneration flows where the required backend contract already exists.
+4. Agent command language and context resolver: represent intent, selected dataset, selected plan, selected run, missing context, risk level, and planned tool chain as structured state.
+5. Contextual cockpit components: add feature/target selector, editable preprocessing plan, transform preview/diff, training run monitor, model comparison, diagnosis action cards, report preview, export bundle, and learned-rule review.
+6. ML iteration loop: connect error slices, prediction samples, model explanations, preprocessing edits, and retraining proposals into one inspectable loop.
+7. Contextual inspector: promote right-panel data preview, training detail, report preview, log detail, graph evidence, and learned-rule detail into selected-context views driven by cockpit/artifact selection.
+8. Provenance foundation: connect cockpit events, artifacts, experiment runs, reports, logs, graph nodes, export bundles, and learned rules through stable IDs and graph evidence links.
+9. Reproducible workflow export: move from run-level export bundles toward workflow-level bundles with dataset version, plan, transformed data, model, metrics, diagnostics, report, logs, parameters, and provenance.
+10. End-to-end golden path: verify a fresh project can go from raw dataset to data profile, approved preprocessing, transformed dataset, sklearn training, evaluation report, error diagnosis, retry/export, and learned-rule proposal through the center agent flow.
+11. Product QA loop: keep every vertical slice covered by backend contract tests, frontend model/component tests, lint/type/build checks, and browser DOM QA on stable deep links.
+
+## Decisions
+
+- Prioritize Kernel sandbox hardening before expanding graph, GPU, or tool-library features.
+- Keep changes scoped to backend execution service and tests unless inspection reveals a blocking issue elsewhere.
+- Use a backend TestClient golden path before browser E2E so product-critical contracts are fixed first.
+- Next recommended slice: strengthen GPU scheduling UI/API semantics or add graph evidence deep links; choose GPU if execution reliability remains the priority.
+- GPU acquire now returns explicit acquisition status; queued cancellation raises cancellation instead of looking like a successful acquisition.
+- Frontend GPU queue feedback should poll the backend status endpoint and use the cancel endpoint for both active and queued GPU tasks.
+- Machine-learning panel QA can use `?mode=machine-learning` to open the training view directly.
+- Next slice: Phase 10 graph evidence positioning, starting with stable node provenance metadata before deeper layout changes.
+- Graph node evidence details should be backed by `properties.provenance` so the UI can show source metadata without reverse-engineering node labels.
+- Graph evidence positioning should reuse the existing `activeFile`/file explorer state instead of adding a second navigation model.
+- Left activity-bar icons should be real navigation controls with visible panels or actions; avoid placeholder icon buttons with no click behavior.
+- Activity-bar secondary controls can start as local runtime/account panels before deeper persisted settings are added.
+- Experiment provenance should deep-link to the canonical training run detail instead of only exposing artifact paths.
+- The experiments activity panel should reuse the same focus path as graph navigation so users get consistent selected-run behavior.
+- Next recommended slice: make settings/preferences actionable and persisted, starting with user-selectable default mode and service endpoints.
+- Future frontend work should first use `docs/skills/mlagent-frontend-product-designer/SKILL.md` as the project-specific frontend optimization agent.
+- Settings preferences can start in browser-local storage with an in-memory fallback; backend/user-level persistence should wait for account/project permission work.
+- Next recommended slice: strengthen logs/observability with trace filtering and task error details before expanding the ML tool library.
+- Log observability should remain focused on operational diagnosis: trace/task filters, error focus, JSONL export, and selected-event detail are now the baseline.
+- Next recommended slice: add an end-to-end browser/API golden-path test that covers upload/analyze/train/evolution/log navigation, then expand the ML tool library.
+- Backend golden path now verifies the API contract needed by browser E2E: uploaded file preview, session messages/events/log download, one trace id across persisted events, training run detail, readable metrics/model artifacts, graph provenance, and injection logs.
+- Next recommended slice: implement a lightweight frontend/browser E2E smoke harness around the same golden path, with DOM assertions instead of full-page screenshots when the in-app screenshot path is unstable.
+- Frontend smoke links now support `mode`, `activity`, `rightTab`, `evolutionTab`, `file`, `projectId`, `sessionId`, and `experimentId` query parameters so QA can land directly on the canonical work surface.
+- Next recommended slice: add a small scripted browser smoke runner that opens the deep links and asserts DOM state for analysis, ML training, evolution graph, and logs.
+- `npm.cmd run smoke:deep-links` now launches local Chrome/Edge through CDP and validates the analysis data panel, ML training panel, and evolution logs panel without relying on screenshots.
+- `npm.cmd run smoke:deep-links` now seeds/reuses a `smoke_deep_links` project, writes `data/smoke_churn.csv`, ensures a completed baseline run, and validates analysis, ML training, experiment focus, evolution logs, and evolution graph tab deep links.
+- `npm.cmd run smoke:deep-links` now also generates an analysis report, ML handoff file, cleaned dataset, high-confidence lesson, rule-injection audit entry, and graph surprise insight, then validates each through browser DOM assertions.
+- Data-analysis expansion started with `data_quality_profile`: column kind, missing/unique counts, quality flags, target candidates, and a frontend quality-profile table.
+- Next recommended slice: expand the ML tool library around the same verified workflow, starting with richer sklearn evaluation artifacts and comparison surfaces.
+- ML tool-library expansion now includes richer sklearn classification evaluation artifacts and a frontend comparison surface for candidate runs.
+- Next recommended slice: add feature-engineering and model-explanation tooling that can feed the same training detail surface, starting with permutation/importance summaries and exportable evaluation reports.
+- Model explanation expansion now adds permutation importance and linear coefficient summaries to sklearn artifacts, with matching training-detail tables and browser smoke coverage.
+- Next recommended slice: generate an exportable model evaluation report artifact that packages metrics, confusion matrix, class quality, and explanations for handoff/review.
+- Machine-learning quick commands should aggregate tool activity by latest tool status and count instead of rendering every historical tool event as a separate chip.
+- Machine-learning controls should return local feedback for disabled, pending, successful, and failed actions; visible buttons should not silently no-op.
+- Right-panel export now starts as a client-side JSON panel summary; backend-curated Markdown evaluation reports are now the canonical ML handoff artifact.
+- Feature-engineering/preprocessing plan artifacts now transform analysis quality findings into a JSON plan plus reproducible sklearn `ColumnTransformer` script.
+- Sklearn training can now consume a generated preprocessing plan, record the plan artifact in metrics/reports/run detail, and keep the selected training dataset separate from active artifact preview files.
+- Training detail artifact paths now open their canonical file preview directly, with browser smoke coverage for Preprocessing Plan navigation.
+- Post-training diagnostics now include confusion-derived error slices in the focused run detail, with browser smoke coverage.
+- Training APIs now emit `prediction_samples.json` artifacts, experiment history preserves the path, and the training detail previews concrete misclassified rows before opening the full artifact.
+- Current Codex session still inherits duplicated `PATH`/`Path`, but `C:\Users\Administrator\mlagent\.codex-tools\Launch-Codex-CleanEnv.cmd` and the desktop `Codex Clean Env.lnk` launch Codex with a single clean `Path`.
+- Model comparison filtering/sorting and prediction-sample filters are now in place: users can filter/sort historical runs, sort or narrow candidate models, use error slices as row-level sample filters, and search concrete prediction samples by label or feature.
+- `npm.cmd run smoke:deep-links` now verifies the focused experiment diagnostic summary and prediction-sample filter controls in addition to existing report, preprocessing-plan, error-slice, and artifact-navigation assertions.
+- Next recommended slice: make preprocessing plans executable as first-class artifacts, so users can run a plan to produce a transformed dataset and then train from that artifact or the plan-backed runtime transform.
+- Product direction updated: MLAgent should become a data/ML-specific Codex-style IDE, with a persistent center agent cockpit, contextual data/ML components, and artifact provenance as the main interaction model.
+- The existing `analysis`, `machine-learning`, and `evolution` modes should gradually become workflow phases and inspector contexts rather than separate user journeys that fragment the central conversation.
+- The center workspace should show durable agent state across ingest, profile, clean, transform, train, evaluate, diagnose, iterate, export, and learn phases.
+- Stage-specific tools should be invoked by structured agent events instead of being fixed panels only: data profile, quality review, preprocessing plan editor, feature/target selector, training configuration, model comparison, error slices, prediction samples, and final report should all be available as contextual components.
+- Backend WebSocket events should evolve toward typed task events: `stage_started`, `tool_started`, `artifact_created`, `approval_required`, `component_requested`, `step_failed`, `step_completed`, and `task_resumed`.
+- Artifact provenance is now a product requirement: messages, tool calls, UI components, generated files, experiments, reports, and learned rules should link back to the dataset/version/run that produced them.
+- Recommended implementation order: first formalize workflow state and event contracts, then add the center plan timeline and component registry, then make preprocessing execution the first end-to-end agent-controlled vertical slice.
+- Preprocessing plans are now executable via `/analysis/execute-preprocess-plan`; execution writes a planned dataset CSV, a JSON transformation summary, and a Markdown transformation report, and the frontend can execute the plan directly from the preprocessing-plan preview.
+- Frontend API calls now support `VITE_API_BASE_URL`, so smoke/browser QA can target a non-default backend port when an older inspection service is still running on `127.0.0.1:8000`.
+- The frontend now has a typed workbench event/state contract and a pure workflow-state derivation layer that can consume both legacy events and future orchestrator events.
+- The center Agent workspace now renders a first-pass workflow cockpit with ingest/profile/clean/transform/train/evaluate/diagnose/export/learn stages, current-step guidance, approval checkpoint state, requested component state, and latest-artifact context.
+- Preprocessing-plan generation now emits `approval_required` and `component_requested` local events; executing the plan emits `stage_completed` plus a planned-dataset component request, making the executable preprocessing flow visible in the cockpit.
+- The frontend component registry now renders the first real inline cockpit cards for data quality profiling, preprocessing approval/execution, planned dataset handoff, and training configuration.
+- Cockpit card actions call the canonical AppShell workflow callbacks, so Generate Profile, Generate Plan, Execute/Re-run Plan, Open Dataset, Open Training, and Start sklearn are real controls rather than status-only summaries.
+- File tree and search selection now reuse the canonical project-file selection handler so dataset paths and preprocessing-plan paths stay synchronized across the left rail, center cockpit, and right inspector.
+- Preprocessing-plan drop heuristics should treat explicit identifier-like names as hard drops, but should not drop tiny-sample numeric columns only because every value is unique; otherwise the default churn sample can lose every feature.
+- WebSocket `/ws/sessions/{session_id}` is now a thin transport layer; `AgentOrchestrator` owns intent classification, context resolution, session persistence, tool routing, artifact creation, assistant message streaming, and typed event emission.
+- The first natural-language modeling-prep path now emits `rules_matched`, `stage_started`, `tool_started`, `artifact_created`, `approval_required`, `component_requested`, `tool_call_finished`, and `task_progress` before pausing; after user approval it emits `approval_resolved`, `task_resumed`, transform artifacts, `stage_completed`, component requests, and final progress.
+- The first approval checkpoint is now interactive and resumable: the orchestrator writes a pending approval record with the original dataset and plan path, the frontend cockpit sends an `approval_response`, and execution resumes only after the user selects `Approve & Execute`.
+- Approval revision is now a real branch: selecting `Revise Plan` clears the pending approval, emits `approval_resolved` plus `step_failed`, prevents stale approval ids from executing later, and keeps the cockpit in a revision state with `Refresh Plan` instead of showing a misleading execution button.
+- Transform execution failures are now converted into structured `tool_call_finished(status=error)`, `step_failed`, and `task_progress` events so the WebSocket session can stay alive and the cockpit can display a recoverable failed step.
+- The cockpit component registry should classify preprocessing artifacts by filename/path and explicit `artifact_role` so transformation reports do not overwrite the canonical `preprocessing_plan.json` handoff path.
+- Failed approved preprocessing execution now writes a durable `sessions/<session_id>/task_state/transform.json` record with project id, original dataset, plan path, retry count, status, and last error.
+- `resume_step(stage="transform")` is now the first retry/resume contract: it restores the original dataset context from task state, reuses the saved plan path, emits `task_resumed`, reruns preprocessing, and clears task state after success.
+- Retryable transform failures render a `Retry Transform` cockpit action, while revised/declined approvals remain non-retryable and keep the safer `Refresh Plan` path.
+- Workflow state should classify planned datasets by artifact filename/path before metadata, because planned dataset metadata can legitimately reference `preprocessing_plan.json`.
+- Next recommended slice: extend retry/resume from transform into training and evaluation, add a task-state inspector/log surface, and define retry policies for plan repair versus rerun.
+- Session task-state listing is now part of the recovery contract: the frontend derives failed workflow events from persisted `task_state/*.json` records so reload/session reopen restores retryable cockpit cards.
+- Failed task-state inspection is now part of the cockpit contract: persisted failures expose saved inputs, retry count, last error, related logs, latest log, and recovery guidance, with `Inspect Logs` deep-linking to the filtered log panel.
+- Next recommended slice: extend retry/resume to evaluation, report export, and learning-rule extraction.
+
+## Risks
+
+- Docker may be unavailable in this environment; Docker-dependent tests should remain skippable or use command construction tests.
+- The current local Python execution path must keep working for development and existing tests.
+- Vite/esbuild frontend test/build commands need to run outside the sandbox on this Windows host because config loading probes a denied parent path.
+- If browser smoke needs local servers in the current already-open Codex session, prefix that shell command with process-level `PATH`/`Path` normalization. For future sessions, start Codex through the desktop `Codex Clean Env` shortcut to avoid the duplicate environment variable.

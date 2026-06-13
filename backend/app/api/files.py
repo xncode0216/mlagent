@@ -3,14 +3,14 @@ import shutil
 from pathlib import Path
 from typing import Literal
 
-mimetypes.add_type("text/csv", ".csv")
-
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app.api.projects import get_registered_project
 from app.schemas.file import FileContent, FileDeleteResult, FileItem, FileList, FileSearchMatch, FileSearchResult
+
+mimetypes.add_type("text/csv", ".csv")
 
 router = APIRouter(prefix="/api/projects/{project_id}/files", tags=["files"])
 

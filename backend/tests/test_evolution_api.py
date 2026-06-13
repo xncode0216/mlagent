@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -123,6 +125,60 @@ def test_extract_lessons_from_session_artifacts(tmp_path, monkeypatch):
     items = response.json()["items"]
     assert len(items) == 1
     assert items[0]["status"] == "pending_review"
+
+
+def test_lesson_extraction_persists_and_resumes_failed_learning_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "retry_learning"}).json()
+    root = tmp_path / "dev-user" / project["id"]
+
+    failed_response = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract-from-session",
+        json={"session_id": "learn-session"},
+    )
+
+    assert failed_response.status_code == 500
+    assert failed_response.json()["detail"] == "Session not found for lesson extraction"
+    state_path = root / "sessions" / "learn-session" / "task_state" / "learn.json"
+    assert state_path.exists()
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["stage"] == "learn"
+    assert state["source_id"] == "learn-session"
+    assert state["repair_hint"].startswith("Restore the source session")
+    assert state["recovery_policy"]["resume_action"] == "Retry learned-rule extraction from the saved source session."
+
+    artifact_path = root / "results" / "learn-session" / "missing.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(
+        '{"columns":{"age":{"missing_count":2,"missing_ratio":0.02}}}',
+        encoding="utf-8",
+    )
+    session_dir = root / "sessions" / "learn-session"
+    session_dir.mkdir(parents=True, exist_ok=True)
+    (root / "sessions" / "index.json").write_text(
+        '{"sessions":[{"id":"learn-session","project_id":"%s","mode":"analysis","title":"Learn",'
+        '"created_at":"now","updated_at":"now","message_count":0}]}'
+        % project["id"],
+        encoding="utf-8",
+    )
+    (session_dir / "events.jsonl").write_text(
+        '{"payload":{"type":"artifact_created","trace_id":"trace-1",'
+        '"artifact":{"name":"missing.json","path":"results/learn-session/missing.json"}}}\n',
+        encoding="utf-8",
+    )
+
+    resumed_response = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/resume-extraction",
+        json={"session_id": "learn-session"},
+    )
+
+    assert resumed_response.status_code == 200
+    items = resumed_response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["source_id"] == "learn-session"
+    assert not state_path.exists()
 
 
 def test_match_rules_api_writes_injection_log(tmp_path, monkeypatch):

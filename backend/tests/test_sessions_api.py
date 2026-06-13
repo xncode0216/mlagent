@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.api.projects import PROJECTS
 from app.core.config import get_settings
 from app.main import app
+from app.services.task_state_service import write_task_state
 
 
 def test_create_and_list_project_sessions(tmp_path, monkeypatch):
@@ -57,7 +58,7 @@ def test_list_session_messages_after_websocket_run(tmp_path, monkeypatch):
     messages = client.get("/api/sessions/session-history/messages").json()["items"]
     assert [message["role"] for message in messages] == ["user", "assistant"]
     assert messages[0]["content"] == "分析 customer_churn.csv"
-    assert "缺失值" in messages[1]["content"]
+    assert "missing values" in messages[1]["content"]
 
 
 def test_list_session_events_after_websocket_run(tmp_path, monkeypatch):
@@ -119,3 +120,88 @@ def test_list_session_events_after_websocket_run(tmp_path, monkeypatch):
         if line.strip()
     ]
     assert [event["payload"]["trace_id"] for event in downloaded_events] == [events[0]["trace_id"]] * len(events)
+
+
+def test_list_session_task_states_returns_durable_retry_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    PROJECTS.clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "task_state_project"}).json()
+    project_root = tmp_path / "dev-user" / project["id"]
+    session = client.post(
+        f"/api/projects/{project['id']}/sessions",
+        json={"mode": "machine-learning", "title": "Retry Session"},
+    ).json()
+
+    empty_response = client.get(f"/api/sessions/{session['id']}/task-states")
+    assert empty_response.status_code == 200
+    assert empty_response.json()["items"] == []
+
+    write_task_state(
+        project_root=project_root,
+        session_id=session["id"],
+        stage="train",
+        payload={
+            "status": "failed",
+            "project_id": project["id"],
+            "dataset_path": "data/customer_churn.csv",
+            "target_column": "churn",
+            "engine": "sklearn",
+            "retry_count": 2,
+            "last_error": "Target column was not found",
+        },
+    )
+
+    response = client.get(f"/api/sessions/{session['id']}/task-states")
+
+    assert response.status_code == 200
+    assert response.json()["items"] == [
+        {
+            "session_id": session["id"],
+            "status": "failed",
+            "project_id": project["id"],
+            "dataset_path": "data/customer_churn.csv",
+            "target_column": "churn",
+            "engine": "sklearn",
+            "retry_count": 2,
+            "last_error": "Target column was not found",
+            "stage": "train",
+            "created_at": response.json()["items"][0]["created_at"],
+            "updated_at": response.json()["items"][0]["updated_at"],
+        }
+    ]
+
+
+def test_abandon_session_task_state_deletes_saved_retry_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    PROJECTS.clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "task_state_abandon_project"}).json()
+    project_root = tmp_path / "dev-user" / project["id"]
+    session = client.post(
+        f"/api/projects/{project['id']}/sessions",
+        json={"mode": "machine-learning", "title": "Retry Session"},
+    ).json()
+
+    write_task_state(
+        project_root=project_root,
+        session_id=session["id"],
+        stage="train",
+        payload={
+            "status": "failed",
+            "project_id": project["id"],
+            "dataset_path": "data/customer_churn.csv",
+            "target_column": "churn",
+            "engine": "sklearn",
+            "retry_count": 1,
+            "last_error": "Target column was not found",
+        },
+    )
+
+    response = client.delete(f"/api/sessions/{session['id']}/task-states/train")
+
+    assert response.status_code == 200
+    assert response.json() == {"session_id": session["id"], "stage": "train", "deleted": True}
+    assert client.get(f"/api/sessions/{session['id']}/task-states").json()["items"] == []

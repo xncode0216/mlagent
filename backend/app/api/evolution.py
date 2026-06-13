@@ -1,3 +1,5 @@
+import json
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +11,7 @@ from app.services.evolution_service import EvolutionProtocol, EvolutionService, 
 from app.services.lesson_extractor import LessonExtractor
 from app.services.rule_injection_service import RuleInjectionService
 from app.services.session_service import SessionService
+from app.services.task_state_service import delete_task_state, load_task_state, recovery_policy, write_task_state
 
 router = APIRouter(prefix="/api/projects/{project_id}/evolution", tags=["evolution"])
 
@@ -27,6 +30,10 @@ class LessonExtractRequest(BaseModel):
 
 
 class ExtractFromSessionRequest(BaseModel):
+    session_id: str = Field(min_length=1)
+
+
+class ResumeLessonExtractionRequest(BaseModel):
     session_id: str = Field(min_length=1)
 
 
@@ -52,6 +59,37 @@ def _project_root(project_id: str) -> Path:
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return Path(project.workspace_path).resolve()
+
+
+def _write_learn_failure_state(
+    *,
+    root: Path,
+    project_id: str,
+    session_id: str,
+    error: str,
+    retry_count: int = 0,
+) -> None:
+    write_task_state(
+        project_root=root,
+        session_id=session_id,
+        stage="learn",
+        payload={
+            "status": "failed",
+            "project_id": project_id,
+            "source_type": "session",
+            "source_id": session_id,
+            "retry_count": retry_count,
+            "last_error": error,
+            **recovery_policy(
+                repair_hint="Restore the source session and its evidence events before extracting learned rules.",
+                stale_check="Confirm the source session still exists and its evidence/log events are readable.",
+                resume_action="Retry learned-rule extraction from the saved source session.",
+                regenerate_action="Rerun the source analysis or training workflow to recreate stronger learning evidence.",
+                abandon_action="Clear the saved learning retry state and keep existing lessons unchanged.",
+                stale_artifact_paths=[],
+            ),
+        },
+    )
 
 
 @router.get("/lessons")
@@ -85,26 +123,56 @@ def extract_lesson(project_id: str, payload: LessonExtractRequest) -> LessonReco
 
 @router.post("/lessons/extract-from-session")
 def extract_lessons_from_session(project_id: str, payload: ExtractFromSessionRequest) -> LessonList:
+    return _run_lesson_extraction(project_id=project_id, session_id=payload.session_id)
+
+
+@router.post("/lessons/resume-extraction")
+def resume_lesson_extraction(project_id: str, payload: ResumeLessonExtractionRequest) -> LessonList:
+    root = _project_root(project_id)
+    state = load_task_state(project_root=root, session_id=payload.session_id, stage="learn")
+    if state is None:
+        raise HTTPException(status_code=404, detail="Learning retry state not found")
+    source_id = state.get("source_id") if isinstance(state.get("source_id"), str) else payload.session_id
+    retry_count = int(state.get("retry_count") or 0) + 1
+    return _run_lesson_extraction(project_id=project_id, session_id=source_id, retry_count=retry_count)
+
+
+def _run_lesson_extraction(project_id: str, session_id: str, retry_count: int = 0) -> LessonList:
     root = _project_root(project_id)
     evolution = EvolutionService(root)
     session_service = SessionService(root)
-    events = session_service.list_events(payload.session_id)
-    candidates = LessonExtractor(root).extract_from_session(payload.session_id, events)
-    lessons = [
-        evolution.create_lesson(
-            source_type=item["source_type"],
-            source_id=item["source_id"],
-            domain=item["domain"],
-            observation=item["observation"],
-            recommendation=item["recommendation"],
-            confidence=item["confidence"],
-            evidence=item.get("evidence", {}),
-            title=item.get("title", ""),
-            conditions=item.get("conditions", {}),
-            expected_benefit=item.get("expected_benefit", {}),
+    try:
+        if session_service.get_session(session_id) is None:
+            raise RuntimeError("Session not found for lesson extraction")
+        events = session_service.list_events(session_id)
+        candidates = LessonExtractor(root).extract_from_session(session_id, events)
+        lessons = [
+            evolution.create_lesson(
+                source_type=item["source_type"],
+                source_id=item["source_id"],
+                domain=item["domain"],
+                observation=item["observation"],
+                recommendation=item["recommendation"],
+                confidence=item["confidence"],
+                evidence=item.get("evidence", {}),
+                title=item.get("title", ""),
+                conditions=item.get("conditions", {}),
+                expected_benefit=item.get("expected_benefit", {}),
+            )
+            for item in candidates
+        ]
+    except (RuntimeError, OSError, ValueError, json.JSONDecodeError) as exc:
+        error = str(exc)
+        _write_learn_failure_state(
+            root=root,
+            project_id=project_id,
+            session_id=session_id,
+            error=error,
+            retry_count=retry_count,
         )
-        for item in candidates
-    ]
+        raise HTTPException(status_code=500, detail=error) from exc
+
+    delete_task_state(project_root=root, session_id=session_id, stage="learn")
     return LessonList(items=lessons)
 
 
@@ -174,13 +242,14 @@ def get_knowledge_graph(project_id: str) -> dict[str, Any]:
     # 3. Gather column details from dataset
     import pandas as pd
     columns_metadata = {}
+    column_dataset_paths: dict[str, set[str]] = defaultdict(set)
 
     dataset_paths = set()
     for run in runs:
         if run.get("dataset_path"):
             dataset_paths.add(run["dataset_path"])
 
-    for dp in dataset_paths:
+    for dp in sorted(dataset_paths):
         try:
             resolved_path = (root / dp).resolve()
             if root in resolved_path.parents or root == resolved_path:
@@ -193,6 +262,7 @@ def get_knowledge_graph(project_id: str) -> dict[str, Any]:
                             "type": "numeric" if is_num else "categorical",
                             "missing_rate": float(df[col].isnull().mean())
                         }
+                        column_dataset_paths[col].add(dp)
         except Exception:
             pass
 
@@ -201,6 +271,8 @@ def get_knowledge_graph(project_id: str) -> dict[str, Any]:
         tgt = run.get("target_column")
         if tgt and tgt not in columns_metadata:
             columns_metadata[tgt] = {"name": tgt, "type": "categorical", "missing_rate": 0.0}
+        if tgt and run.get("dataset_path"):
+            column_dataset_paths[tgt].add(run["dataset_path"])
 
         feature_cols = []
         model_data = run.get("model", {})
@@ -219,17 +291,27 @@ def get_knowledge_graph(project_id: str) -> dict[str, Any]:
         for col in feature_cols:
             if col and col not in columns_metadata:
                 columns_metadata[col] = {"name": col, "type": "numeric", "missing_rate": 0.0}
+            if col and run.get("dataset_path"):
+                column_dataset_paths[col].add(run["dataset_path"])
 
     # 4. Construct Nodes
     nodes = []
 
     # Column Nodes
     for col_name, meta in columns_metadata.items():
+        properties = {
+            **meta,
+            "provenance": {
+                "kind": "dataset_column",
+                "dataset_paths": sorted(column_dataset_paths.get(col_name, [])),
+                "column": col_name,
+            },
+        }
         nodes.append({
             "id": f"col_{col_name}",
             "label": col_name,
             "type": "column",
-            "properties": meta
+            "properties": properties
         })
 
     # Experiment Nodes
@@ -246,7 +328,14 @@ def get_knowledge_graph(project_id: str) -> dict[str, Any]:
                 "engine": engine,
                 "accuracy": acc,
                 "target_column": run.get("target_column"),
-                "created_at": run.get("created_at")
+                "created_at": run.get("created_at"),
+                "provenance": {
+                    "kind": "experiment_run",
+                    "experiment_id": exp_id,
+                    "dataset_path": run.get("dataset_path"),
+                    "metrics_path": run.get("metrics_artifact", {}).get("path"),
+                    "model_path": run.get("model_artifact", {}).get("path"),
+                },
             }
         })
 
@@ -263,7 +352,14 @@ def get_knowledge_graph(project_id: str) -> dict[str, Any]:
                 "confidence": lesson.confidence,
                 "observation": lesson.observation,
                 "recommendation": lesson.recommendation,
-                "evidence": lesson.evidence
+                "evidence": lesson.evidence,
+                "provenance": {
+                    "kind": "lesson",
+                    "lesson_id": lesson_id,
+                    "source_type": lesson.source_type,
+                    "source_id": lesson.source_id,
+                    "evidence": lesson.evidence,
+                },
             }
         })
 
@@ -382,6 +478,10 @@ def get_knowledge_graph(project_id: str) -> dict[str, Any]:
                     metrics_data = run.get("metrics", {})
                     if isinstance(metrics_data, dict):
                         run_features.update(metrics_data.get("feature_columns", []))
+                    for cand in run.get("candidate_runs", []):
+                        model_name = cand.get("model_name", "")
+                        if ":" in model_name:
+                            run_features.add(model_name.split(":", 1)[1])
 
                     for col in affected:
                         if col in run_features:
