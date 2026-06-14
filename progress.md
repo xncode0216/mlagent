@@ -763,3 +763,13 @@
 - 每切片三道闸门全绿：`vitest`（16 文件 / 93 passed，含 AppShell 冒烟）、`eslint` 0 error、`npm run build`（`tsc -b` 严格类型 + `vite build`，本机此次未触发 esbuild 沙箱限制）。分支按既定「先留本地」未 push。
 - 剩余（后续会话）：GPU 轮询 + `lessons`/`injectionLogs`/`trainingRuns` 改 `invalidateQueries` → sessions/messages/events/task-states + bootstrap/文件树（`useMutation`）→ 落地 `app/uiStore.ts`（zustand）逐字段消除 props drilling → 拆 `AppShell` 为薄容器。
 - 工程过程注记：沿用本机 shell 间歇性「伪造成功」的应对——命令输出写文件再 Read、`git commit -F <消息文件>`；另注意 `npm`/`vitest` 必须在 `frontend/` cwd 下跑（一次因 cwd 残留在仓库根导致 `ENOENT package.json`、vitest 从根扫描漏文件）。
+
+## 2026-06-14 前端状态架构（P1-1，GPU + 纠缠列表迁移，分 3 提交）
+
+- 承接上一片（地基 + protocols），把之前判定为「非低风险」的纠缠服务端态迁到 react-query。为守住每片绿、可回滚，拆成 3 个聚焦提交。
+- **GPU（commit `4c1dbce`）**：`features/right-panel/useGpuStatusQuery.ts`（`useQuery` + `refetchInterval=preferences.gpuRefreshIntervalMs` 接管轮询，导出 `gpuStatusQueryKey`）。AppShell 删 `gpuStatus` useState 改 `gpuStatusQuery.data ?? null`；引入 `useQueryClient`；6 处命令式 `setGpuStatus(await getGPUStatus(...))` 机械替换为 `queryClient.setQueryData(key, await getGPUStatus(...))`（时序/错误语义不变）；原 setInterval 轮询 effect 换成桥接 effect，把查询的成功/失败（含后台重取，用 `error ?? failureReason`）映射回 `gpuActionError`，保留「成功清错、失败显错」行为。
+- **lessons + injectionLogs（commit `b0ac25c`）**：`features/evolution/useEvolutionQueries.ts`（`useLessonsQuery`/`useInjectionLogsQuery` + key 助手）。这两个列表此前以「`listLessons`+`listEvolutionInjectionLog` → `setLessons`/`setInjectionLogs`」成对 idiom 重复 **7 处**；新增 AppShell 内 `invalidateEvolutionLists(projectId)` 助手，5 个独立块直接 invalidate，`activateProject` 去掉抓取（靠 `project.id` 变更自动触发查询），`refreshSessionState` 保留 sessions/messages 抓取后追加 invalidate。
+- **trainingRuns（commit `92bf8ff`）**：`features/right-panel/useTrainingRunsQuery.ts`。删 useState 改查询派生；4 处命令式 `setTrainingRuns(await listTrainingRuns(...))` 改 `invalidateQueries`（训练/重试/评估/导出后），`activateProject` 去掉抓取。
+- 关键手法：凡 `setX(await listX(id))`（命令式刷新）→ `invalidateQueries`（或 GPU 的 `setQueryData`）；凡 `activateProject`/`useState` 里的初始抓取 → 删除，靠 query 随 `project.id` 自动加载；清理因此失效的 api 函数与类型 import（`listEvolutionProtocols`/`listLessons`/`listEvolutionInjectionLog`/`listTrainingRuns` 及 `EvolutionProtocol`/`EvolutionInjectionLog`/`GPUStatus`/`ExperimentRun`）。
+- 每子片三道闸门全绿：`vitest` 16 文件 / 93 passed（含 AppShell 冒烟，证明各次迁移后仍正常渲染）、`eslint` 0 error、`npm run build`（`tsc -b` + `vite build`）成功。分支按既定「先留本地」未 push。
+- 现状：服务端只读/轮询态（protocols/gpu/lessons/injectionLogs/trainingRuns）已全部由 react-query 托管。剩余（后续会话）：sessions/messages/events/task-states + bootstrap/文件树（`useMutation`）→ 落地 `app/uiStore.ts`（zustand）消除 props drilling → 拆 `AppShell` 为薄容器。
