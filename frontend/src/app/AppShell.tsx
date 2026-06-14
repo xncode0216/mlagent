@@ -24,6 +24,7 @@ import { buildTaskStateInspection } from "../features/chat/taskStateInspector";
 import type { AgentStreamEvent, Artifact, WorkflowStageId } from "../features/chat/types";
 import { useAgentStream } from "../features/chat/useAgentStream";
 import { EvolutionWorkspace } from "../features/evolution/EvolutionWorkspace";
+import { useEvolutionProtocolsQuery } from "../features/evolution/useEvolutionProtocolsQuery";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
@@ -48,7 +49,6 @@ import {
   getGPUStatus,
   handoffDatasetToMl,
   listEvolutionInjectionLog,
-  listEvolutionProtocols,
   listFiles,
   listLessons,
   listProjectSessions,
@@ -71,7 +71,6 @@ import {
   type AgentMessage,
   type EvolutionInjectionLog,
   type ExperimentRun,
-  type EvolutionProtocol,
   type ExportBundleResult,
   type FileItem,
   type GPUStatus,
@@ -231,7 +230,8 @@ export function AppShell() {
   const [selectedPreprocessingPlanPath, setSelectedPreprocessingPlanPath] = useState<string | null>(null);
   const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [protocols, setProtocols] = useState<EvolutionProtocol[]>([]);
+  const protocolsQuery = useEvolutionProtocolsQuery(project?.id);
+  const protocols = protocolsQuery.data ?? [];
   const [injectionLogs, setInjectionLogs] = useState<EvolutionInjectionLog[]>([]);
 
   const visibleEvents = useMemo(
@@ -497,15 +497,13 @@ export function AppShell() {
     const nextActiveFile = deepLink.file ?? nextFiles.find((item) => item.type === "file")?.path ?? "";
     setActiveFile(nextActiveFile);
     setTrainingDatasetPath(isLikelyDatasetPath(nextActiveFile) ? nextActiveFile : "data/customer_churn.csv");
-    const [nextLessons, nextProtocols, nextTrainingRuns, nextSessions, nextInjectionLogs] = await Promise.all([
+    const [nextLessons, nextTrainingRuns, nextSessions, nextInjectionLogs] = await Promise.all([
       listLessons(nextProject.id),
-      listEvolutionProtocols(nextProject.id),
       listTrainingRuns(nextProject.id),
       listProjectSessions(nextProject.id),
       listEvolutionInjectionLog(nextProject.id),
     ]);
     setLessons(nextLessons);
-    setProtocols(nextProtocols);
     setTrainingRuns(nextTrainingRuns);
     setSessions(nextSessions);
     setInjectionLogs(nextInjectionLogs);
