@@ -34,6 +34,7 @@ import {
   useLessonsQuery,
 } from "../features/evolution/useEvolutionQueries";
 import { gpuStatusQueryKey, useGpuStatusQuery } from "../features/right-panel/useGpuStatusQuery";
+import { trainingRunsQueryKey, useTrainingRunsQuery } from "../features/right-panel/useTrainingRunsQuery";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
@@ -63,7 +64,6 @@ import {
   listSessionEvents,
   listSessionMessages,
   listSessionTaskStates,
-  listTrainingRuns,
   markLessonConflict,
   openLocalProject,
   renameProjectFile,
@@ -76,7 +76,6 @@ import {
   uploadProjectFile,
   type AgentSession,
   type AgentMessage,
-  type ExperimentRun,
   type ExportBundleResult,
   type FileItem,
   type Lesson,
@@ -226,7 +225,8 @@ export function AppShell() {
   const [localProjectPath, setLocalProjectPath] = useState("");
   const [workspaceStatus, setWorkspaceStatus] = useState("Connecting to backend project service...");
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
-  const [trainingRuns, setTrainingRuns] = useState<ExperimentRun[]>([]);
+  const trainingRunsQuery = useTrainingRunsQuery(project?.id);
+  const trainingRuns = trainingRunsQuery.data ?? [];
   const [trainingError, setTrainingError] = useState<string | null>(null);
   const [focusedExperimentId, setFocusedExperimentId] = useState<string | null>(deepLink.experimentId ?? null);
   const gpuStatusQuery = useGpuStatusQuery(project?.id, preferences.gpuRefreshIntervalMs);
@@ -500,12 +500,7 @@ export function AppShell() {
     const nextActiveFile = deepLink.file ?? nextFiles.find((item) => item.type === "file")?.path ?? "";
     setActiveFile(nextActiveFile);
     setTrainingDatasetPath(isLikelyDatasetPath(nextActiveFile) ? nextActiveFile : "data/customer_churn.csv");
-    const [nextTrainingRuns, nextSessions] = await Promise.all([
-      listTrainingRuns(nextProject.id),
-      listProjectSessions(nextProject.id),
-    ]);
-    setTrainingRuns(nextTrainingRuns);
-    setSessions(nextSessions);
+    setSessions(await listProjectSessions(nextProject.id));
     setActiveSession(null);
     setTrainingResult(null);
     setTrainingError(null);
@@ -718,7 +713,7 @@ export function AppShell() {
         // Training completed; keep the result visible even if status refresh fails.
       }
       setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
-      setTrainingRuns(await listTrainingRuns(project.id));
+      await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
       await refreshDurableTaskStates(trainingSessionId);
       const lesson = await extractLesson(project.id, {
         source_type: "training",
@@ -875,7 +870,7 @@ export function AppShell() {
         // Training completed; keep the result visible even if status refresh fails.
       }
       setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
-      setTrainingRuns(await listTrainingRuns(project.id));
+      await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
       await refreshDurableTaskStates(trainingSessionId);
       setLocalEvents((current) => [
         ...current,
@@ -958,7 +953,7 @@ export function AppShell() {
   async function applyEvaluationReportResult(result: EvaluationReportResult, sessionId: string, label: string) {
     if (!project) return;
     setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
-    setTrainingRuns(await listTrainingRuns(project.id));
+    await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
     await refreshDurableTaskStates(sessionId);
     setFocusedExperimentId(result.experiment_id);
     setActiveMode("machine-learning");
@@ -1052,7 +1047,7 @@ export function AppShell() {
   async function applyExportBundleResult(result: ExportBundleResult, sessionId: string, label: string) {
     if (!project) return;
     setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
-    setTrainingRuns(await listTrainingRuns(project.id));
+    await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
     await refreshDurableTaskStates(sessionId);
     setFocusedExperimentId(result.experiment_id);
     setActiveMode("machine-learning");
