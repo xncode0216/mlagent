@@ -37,6 +37,12 @@ import { gpuStatusQueryKey, useGpuStatusQuery } from "../features/right-panel/us
 import { trainingRunsQueryKey, useTrainingRunsQuery } from "../features/right-panel/useTrainingRunsQuery";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
+import {
+  filesQueryKey,
+  filesQueryKeyRoot,
+  listExpandedProjectFiles,
+  useProjectFilesQuery,
+} from "../features/files/useProjectFilesQuery";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
 import { projectsQueryKey, useProjectsQuery } from "../features/projects/useProjectsQuery";
 import {
@@ -107,17 +113,6 @@ const activityIcons: Record<ActivityMode, ReactNode> = {
 const sampleCsv = new Blob(["age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n"], {
   type: "text/csv",
 });
-
-async function listExpandedProjectFiles(projectId: string, folders: string[]) {
-  const batches = await Promise.all([listFiles(projectId), ...folders.map((folder) => listFiles(projectId, folder))]);
-  const byPath = new Map<string, FileItem>();
-  for (const batch of batches) {
-    for (const item of batch) {
-      byPath.set(item.path, item);
-    }
-  }
-  return Array.from(byPath.values());
-}
 
 function parentPath(path: string) {
   return path.split("/").slice(0, -1).join("/");
@@ -236,8 +231,9 @@ export function AppShell() {
   const [project, setProject] = useState<Project | null>(null);
   const sessionsQuery = useSessionsQuery(project?.id);
   const sessions = sessionsQuery.data ?? [];
-  const [files, setFiles] = useState<FileItem[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  const filesQuery = useProjectFilesQuery(project?.id, expandedFolders);
+  const files = filesQuery.data ?? [];
   const [activeFile, setActiveFile] = useState(deepLink.file ?? "data/customer_churn.csv");
   const [activeActivity, setActiveActivity] = useState<ActivityMode>(deepLink.activity ?? "explorer");
   const [activeMode, setActiveMode] = useState<MainMode>(() => resolveInitialMode(readAppPreferences(), deepLink));
@@ -485,9 +481,11 @@ export function AppShell() {
   async function activateProject(nextProject: Project, projectFiles?: FileItem[], folders?: string[]) {
     const nextFiles = projectFiles ?? (await listFiles(nextProject.id));
     setProject(nextProject);
-    setFiles(nextFiles);
     const deepLinkFolders = deepLink.file ? parentFolders(deepLink.file) : [];
-    setExpandedFolders(Array.from(new Set([...(folders ?? []), ...deepLinkFolders])));
+    const nextExpandedFolders = Array.from(new Set([...(folders ?? []), ...deepLinkFolders]));
+    // 用 setQueryData 以 nextExpandedFolders 对应的键预置缓存，避免激活后闪空树/触发一次重取。
+    queryClient.setQueryData(filesQueryKey(nextProject.id, nextExpandedFolders), nextFiles);
+    setExpandedFolders(nextExpandedFolders);
     const nextActiveFile = deepLink.file ?? nextFiles.find((item) => item.type === "file")?.path ?? "";
     setActiveFile(nextActiveFile);
     setTrainingDatasetPath(isLikelyDatasetPath(nextActiveFile) ? nextActiveFile : "data/customer_churn.csv");
@@ -548,20 +546,18 @@ export function AppShell() {
     if (!project) return;
     const targetPath = `data/${file.name}`;
     await uploadProjectFile(project.id, targetPath, file);
-    const [rootFiles, dataFiles] = await Promise.all([listFiles(project.id), listFiles(project.id, "data")]);
-    setFiles([...rootFiles, ...dataFiles]);
     setExpandedFolders((current) => (current.includes("data") ? current : [...current, "data"]));
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     setActiveFile(targetPath);
     setTrainingDatasetPath(targetPath);
   }
 
   async function refreshExpandedFiles(extraFolders: string[] = []) {
-    if (!project) return [];
+    if (!project) return;
     const folders = Array.from(new Set([...expandedFolders, ...extraFolders]));
-    const nextFiles = await listExpandedProjectFiles(project.id, folders);
-    setFiles(nextFiles);
     setExpandedFolders(folders);
-    return nextFiles;
+    // 文件树由 react-query 托管：展开集变化会改 key 自动重取；若集合未变则靠 invalidate 取新内容。
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
   }
 
   async function handleCreateFile(path: string, type: "file" | "directory") {
@@ -589,8 +585,8 @@ export function AppShell() {
         parentPath(newPath),
       ].filter(Boolean)),
     );
-    setFiles(await listExpandedProjectFiles(project.id, nextExpandedFolders));
     setExpandedFolders(nextExpandedFolders);
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     if (activeFile === path || activeFile.startsWith(`${path}/`)) {
       setActiveFile(activeFile.replace(path, newPath));
     }
@@ -611,8 +607,10 @@ export function AppShell() {
     const nextExpandedFolders = Array.from(
       new Set([...expandedFolders.filter((folder) => folder !== path && !folder.startsWith(`${path}/`)), parentPath(path)].filter(Boolean)),
     );
+    // 删除后需要新列表来挑回退的 activeFile/dataset，故直接取数；同时 setQueryData 以同键
+    // 预置缓存（再 setExpandedFolders 让 hook 读到同一键），保留原 .find 回退逻辑。
     const nextFiles = await listExpandedProjectFiles(project.id, nextExpandedFolders);
-    setFiles(nextFiles);
+    queryClient.setQueryData(filesQueryKey(project.id, nextExpandedFolders), nextFiles);
     setExpandedFolders(nextExpandedFolders);
     if (activeFile === path || activeFile.startsWith(`${path}/`)) {
       setActiveFile(nextFiles.find((item) => item.type === "file")?.path ?? "");
@@ -628,23 +626,15 @@ export function AppShell() {
     }
   }
 
-  async function handleToggleFolder(path: string) {
+  function handleToggleFolder(path: string) {
     if (!project) return;
+    // 文件树由 react-query 托管，键含展开集：折叠/展开只改 expandedFolders，key 变化即自动
+    // 重取对应集合（取一次缓存 staleTime 内复用），替代原先的本地 prune / 增量 merge。
     if (expandedFolders.includes(path)) {
       setExpandedFolders((current) => current.filter((item) => item !== path && !item.startsWith(`${path}/`)));
-      setFiles((current) => current.filter((item) => item.path === path || !item.path.startsWith(`${path}/`)));
       return;
     }
-
-    const children = await listFiles(project.id, path);
-    setFiles((current) => {
-      const byPath = new Map(current.map((item) => [item.path, item]));
-      for (const child of children) {
-        byPath.set(child.path, child);
-      }
-      return Array.from(byPath.values());
-    });
-    setExpandedFolders((current) => [...current, path]);
+    setExpandedFolders((current) => (current.includes(path) ? current : [...current, path]));
   }
 
   async function handleTrainModel(
@@ -693,7 +683,7 @@ export function AppShell() {
       } catch {
         // Training completed; keep the result visible even if status refresh fails.
       }
-      setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
+      await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
       await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
       await invalidateSessionTaskStates(trainingSessionId);
       const lesson = await extractLesson(project.id, {
@@ -850,7 +840,7 @@ export function AppShell() {
       } catch {
         // Training completed; keep the result visible even if status refresh fails.
       }
-      setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
+      await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
       await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
       await invalidateSessionTaskStates(trainingSessionId);
       setLocalEvents((current) => [
@@ -933,7 +923,7 @@ export function AppShell() {
 
   async function applyEvaluationReportResult(result: EvaluationReportResult, sessionId: string, label: string) {
     if (!project) return;
-    setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
     await invalidateSessionTaskStates(sessionId);
     setFocusedExperimentId(result.experiment_id);
@@ -1027,7 +1017,7 @@ export function AppShell() {
 
   async function applyExportBundleResult(result: ExportBundleResult, sessionId: string, label: string) {
     if (!project) return;
-    setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
     await invalidateSessionTaskStates(sessionId);
     setFocusedExperimentId(result.experiment_id);
@@ -1258,8 +1248,8 @@ export function AppShell() {
     const result = await generateAnalysisReport(project.id, activeFile, sessionId);
     const reportFolder = parentPath(result.artifact.path);
     const nextFolders = Array.from(new Set([...expandedFolders, "results", reportFolder].filter(Boolean)));
-    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
     setExpandedFolders(nextFolders);
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     setLocalEvents((current) => [
       ...current,
       {
@@ -1291,8 +1281,8 @@ export function AppShell() {
     const result = await generateDataQualityProfile(project.id, activeFile, sessionId);
     const profileFolder = parentPath(result.artifact.path);
     const nextFolders = Array.from(new Set([...expandedFolders, "results", profileFolder].filter(Boolean)));
-    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
     setExpandedFolders(nextFolders);
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     setLocalEvents((current) => [
       ...current,
       {
@@ -1337,8 +1327,8 @@ export function AppShell() {
         "notebooks",
       ].filter(Boolean)),
     );
-    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
     setExpandedFolders(nextFolders);
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     setLocalEvents((current) => [
       ...current,
       {
@@ -1408,8 +1398,8 @@ export function AppShell() {
         reportFolder,
       ].filter(Boolean)),
     );
-    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
     setExpandedFolders(nextFolders);
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     setSelectedPreprocessingPlanPath(planPath);
     setTrainingDatasetPath(result.transformed_data_artifact.path);
     setActiveFile(result.transformed_data_artifact.path);
@@ -1487,8 +1477,8 @@ export function AppShell() {
         "notebooks",
       ].filter(Boolean)),
     );
-    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
     setExpandedFolders(nextFolders);
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     setLocalEvents((current) => [
       ...current,
       {
@@ -1521,8 +1511,8 @@ export function AppShell() {
     const result = await handoffDatasetToMl(project.id, activeFile, sessionId);
     const handoffFolder = parentPath(result.artifact.path);
     const nextFolders = Array.from(new Set([...expandedFolders, "results", handoffFolder].filter(Boolean)));
-    setFiles(await listExpandedProjectFiles(project.id, nextFolders));
     setExpandedFolders(nextFolders);
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     setSuggestedTargetColumn(result.recommended_target_column || "churn");
     setTrainingDatasetPath(result.dataset_path);
     setActiveMode("machine-learning");
