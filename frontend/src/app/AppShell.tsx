@@ -39,6 +39,7 @@ import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
 import { projectsQueryKey, useProjectsQuery } from "../features/projects/useProjectsQuery";
+import { sessionsQueryKey, useSessionsQuery } from "../features/sessions/useSessionQueries";
 import { RightPanel } from "../features/right-panel/RightPanel";
 import {
   adoptLesson,
@@ -205,7 +206,6 @@ export function AppShell() {
   const queryClient = useQueryClient();
   const [preferences, setPreferences] = useState<AppPreferences>(() => readAppPreferences());
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
-  const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [sessionMessages, setSessionMessages] = useState<AgentMessage[]>([]);
   const [sessionEvents, setSessionEvents] = useState<AgentStreamEvent[]>([]);
   const [taskStateEvents, setTaskStateEvents] = useState<AgentStreamEvent[]>([]);
@@ -216,6 +216,8 @@ export function AppShell() {
   const projectsQuery = useProjectsQuery();
   const projects = projectsQuery.data ?? [];
   const [project, setProject] = useState<Project | null>(null);
+  const sessionsQuery = useSessionsQuery(project?.id);
+  const sessions = sessionsQuery.data ?? [];
   const [files, setFiles] = useState<FileItem[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [activeFile, setActiveFile] = useState(deepLink.file ?? "data/customer_churn.csv");
@@ -379,7 +381,11 @@ export function AppShell() {
 
     async function ensureModeSession() {
       if (!project) return;
-      const existingSessions = await listProjectSessions(project.id);
+      // 首读走 fetchQuery：与 useSessionsQuery 同键去重，只发一次请求，并把最新列表写入缓存。
+      const existingSessions = await queryClient.fetchQuery({
+        queryKey: sessionsQueryKey(project.id),
+        queryFn: () => listProjectSessions(project.id),
+      });
       let nextSession =
         existingSessions.find((session) => session.id === deepLink.sessionId && session.mode === activeMode) ??
         existingSessions.find((session) => session.id === activeSession?.id && session.mode === activeMode) ??
@@ -389,10 +395,13 @@ export function AppShell() {
           mode: activeMode,
           title: `${modeLabel(activeMode)} - ${project.name}`,
         });
+        // 新建后刷新列表缓存（未新建时 fetchQuery 已写入最新列表，无需二次取数）。
+        const refreshedSessions = await listProjectSessions(project.id);
+        if (!cancelled) {
+          queryClient.setQueryData(sessionsQueryKey(project.id), refreshedSessions);
+        }
       }
-      const refreshedSessions = await listProjectSessions(project.id);
       if (!cancelled) {
-        setSessions(refreshedSessions);
         setActiveSession(nextSession);
       }
     }
@@ -439,13 +448,12 @@ export function AppShell() {
 
     async function refreshSessionState() {
       if (!project || !activeSession) return;
-      const [nextSessions, nextMessages] = await Promise.all([
-        listProjectSessions(project.id),
-        listSessionMessages(activeSession.id),
-      ]);
-      setSessions(nextSessions);
+      const nextMessages = await listSessionMessages(activeSession.id);
       setSessionMessages(nextMessages);
-      await invalidateEvolutionLists(project.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: sessionsQueryKey(project.id) }),
+        invalidateEvolutionLists(project.id),
+      ]);
     }
 
     void refreshSessionState();
@@ -507,7 +515,6 @@ export function AppShell() {
     const nextActiveFile = deepLink.file ?? nextFiles.find((item) => item.type === "file")?.path ?? "";
     setActiveFile(nextActiveFile);
     setTrainingDatasetPath(isLikelyDatasetPath(nextActiveFile) ? nextActiveFile : "data/customer_churn.csv");
-    setSessions(await listProjectSessions(nextProject.id));
     setActiveSession(null);
     setTrainingResult(null);
     setTrainingError(null);
