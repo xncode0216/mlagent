@@ -751,3 +751,15 @@
   - 项目无自定义 conftest、本机 `pytest -q` 基线为 169 passed/3 skipped → CI 同命令无需起 Postgres/Redis service 容器。
 - 验证：`ci.yml` 经 pyyaml `safe_load` 解析通过（两 job、各 step 名称齐全；`on` 被 pyyaml 当布尔键属其已知怪癖，不影响 GitHub Actions 解析）。改动为纯新增 + 文档，未触碰任何应用代码/测试，169 passed/3 skipped 基线不变。
 - 本地提交（`feat(ci):`），分支按既定「先留本地」未 push——workflow 文件先随分支落库，待真正推送/开 PR 时才会在 GitHub 上运行。
+
+## 2026-06-14 前端状态架构（P1-1，地基 + 首迁，增量行为保持）
+
+- 背景：`AppShell.tsx` 1845 行上帝组件，~35 个顶层 `useState` + 6 个数据加载 `useEffect`，海量 props 钻取（AgentWorkspace ~35 / RightPanel ~30 / FileExplorer ~22 / ActivityPanel ~20 / EvolutionWorkspace ~15）；`zustand` 与 `@tanstack/react-query` 是依赖但 `src/` 零使用。P1-1 是 L 级，本会话只推「地基 + 1 个低风险切片」，并先补安全网。
+- **切片 0（安全网，commit `6676b28`）**：前端 15 个测试全是纯 `.ts` 逻辑，AppShell 无任何 render 兜底。补 `src/test/websocketStub.ts`（jsdom 无 WebSocket，而 `useAgentStream` 挂载即 `new WebSocket`）+ `src/test/renderWithProviders.tsx` + `src/app/AppShell.smoke.test.tsx`（`// @vitest-environment jsdom` docblock 单文件切环境、不动全局 node）。devDep 加 `@testing-library/react@16` + `jsdom@25`。
+  - 踩坑：mock api 层时先用 catch-all Proxy，`get` 对任意 key（含 `then`）都返回 `vi.fn(async()=>undefined)`——module namespace 被当 thenable 探测，`then` 返回忽略 resolve 的函数导致 `await import(...)` 永久挂起（5s 超时、无报错）。改用 vitest 官方 `importOriginal` 模式：枚举真实导出名（真实模块无顶层副作用），逐个把函数换成 async 桩，vitest 才能建静态绑定。
+- **切片 1（地基，commit `9564dd7`）**：`src/lib/queryClient.ts` 工厂（保守默认 `refetchOnWindowFocus:false`/`retry:1`/`staleTime:30s`，迁移期对齐原「取一次数」语义）；`App.tsx` 包 `QueryClientProvider`（应用级单例）；`renderWithProviders` 升级为每用例新建隔离 client。无 query 接入，行为不变。
+- **切片 2（首迁，commit `937bc5e`）**：选 evolution `protocols` 作示范——它只在 `activateProject` 设置一次、零 mutation 纠缠，是最隔离的只读列表。新增 `features/evolution/useEvolutionProtocolsQuery.ts`（`useQuery` 随 projectId 取数）；AppShell 删 `protocols` 的 useState 改 `protocolsQuery.data ?? []`，从 `activateProject` 的 `Promise.all` 移除抓取与 set，清理失效 import。
+  - 纠缠度核查（决定为何只迁 protocols）：`setGpuStatus` 9 处 / `setLessons`·`setInjectionLogs` 各 ~7 处 / `setTrainingRuns` 5 处——都与训练/清洗/导出/课程等 handler 命令式纠缠，迁移要逐点改 `invalidateQueries`，不属低风险；`setProtocols` 仅 1 处 → 唯一真正隔离者。
+- 每切片三道闸门全绿：`vitest`（16 文件 / 93 passed，含 AppShell 冒烟）、`eslint` 0 error、`npm run build`（`tsc -b` 严格类型 + `vite build`，本机此次未触发 esbuild 沙箱限制）。分支按既定「先留本地」未 push。
+- 剩余（后续会话）：GPU 轮询 + `lessons`/`injectionLogs`/`trainingRuns` 改 `invalidateQueries` → sessions/messages/events/task-states + bootstrap/文件树（`useMutation`）→ 落地 `app/uiStore.ts`（zustand）逐字段消除 props drilling → 拆 `AppShell` 为薄容器。
+- 工程过程注记：沿用本机 shell 间歇性「伪造成功」的应对——命令输出写文件再 Read、`git commit -F <消息文件>`；另注意 `npm`/`vitest` 必须在 `frontend/` cwd 下跑（一次因 cwd 残留在仓库根导致 `ENOENT package.json`、vitest 从根扫描漏文件）。
