@@ -37,6 +37,7 @@ import { gpuStatusQueryKey, useGpuStatusQuery } from "../features/right-panel/us
 import { trainingRunsQueryKey, useTrainingRunsQuery } from "../features/right-panel/useTrainingRunsQuery";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
+import { useProjectFileMutations } from "../features/files/useProjectFileMutations";
 import {
   filesQueryKey,
   filesQueryKeyRoot,
@@ -60,9 +61,7 @@ import {
   cancelGPUTask,
   cleanAnalysisDataset,
   createAgentSession,
-  createProjectFile,
   createProject,
-  deleteProjectFile,
   exportRunBundle,
   extractLesson,
   extractLessonsFromSession,
@@ -79,7 +78,6 @@ import {
   listProjects,
   markLessonConflict,
   openLocalProject,
-  renameProjectFile,
   rejectLesson,
   resumeEvaluationReport,
   resumeLessonExtraction,
@@ -234,6 +232,7 @@ export function AppShell() {
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const filesQuery = useProjectFilesQuery(project?.id, expandedFolders);
   const files = filesQuery.data ?? [];
+  const { createFile, renameFile, deleteFile, uploadFile } = useProjectFileMutations(project?.id);
   const [activeFile, setActiveFile] = useState(deepLink.file ?? "data/customer_churn.csv");
   const [activeActivity, setActiveActivity] = useState<ActivityMode>(deepLink.activity ?? "explorer");
   const [activeMode, setActiveMode] = useState<MainMode>(() => resolveInitialMode(readAppPreferences(), deepLink));
@@ -545,26 +544,21 @@ export function AppShell() {
   async function handleUpload(file: File) {
     if (!project) return;
     const targetPath = `data/${file.name}`;
-    await uploadProjectFile(project.id, targetPath, file);
+    await uploadFile.mutateAsync({ path: targetPath, file });
     setExpandedFolders((current) => (current.includes("data") ? current : [...current, "data"]));
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     setActiveFile(targetPath);
     setTrainingDatasetPath(targetPath);
   }
 
-  async function refreshExpandedFiles(extraFolders: string[] = []) {
-    if (!project) return;
-    const folders = Array.from(new Set([...expandedFolders, ...extraFolders]));
-    setExpandedFolders(folders);
-    // 文件树由 react-query 托管：展开集变化会改 key 自动重取；若集合未变则靠 invalidate 取新内容。
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-  }
-
   async function handleCreateFile(path: string, type: "file" | "directory") {
     if (!project) return;
-    await createProjectFile(project.id, path, type);
+    await createFile.mutateAsync({ path, type });
+    // 展开包含文件夹让新条目可见；createFile.onSuccess 已 invalidate 文件树，
+    // 展开集变化亦会改 key 自动重取。
     const containingFolder = parentPath(path);
-    await refreshExpandedFiles(containingFolder ? [containingFolder] : []);
+    if (containingFolder) {
+      setExpandedFolders((current) => (current.includes(containingFolder) ? current : [...current, containingFolder]));
+    }
     if (type === "file") {
       setActiveFile(path);
       if (isLikelyDatasetPath(path)) {
@@ -575,7 +569,7 @@ export function AppShell() {
 
   async function handleRenameFile(path: string, newPath: string) {
     if (!project || path === newPath) return;
-    await renameProjectFile(project.id, path, newPath);
+    await renameFile.mutateAsync({ path, newPath });
     const nextExpandedFolders = Array.from(
       new Set([
         ...expandedFolders.map((folder) =>
@@ -585,8 +579,8 @@ export function AppShell() {
         parentPath(newPath),
       ].filter(Boolean)),
     );
+    // renameFile.onSuccess 已 invalidate 文件树；setExpandedFolders 改 key 亦会自动重取。
     setExpandedFolders(nextExpandedFolders);
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
     if (activeFile === path || activeFile.startsWith(`${path}/`)) {
       setActiveFile(activeFile.replace(path, newPath));
     }
@@ -603,7 +597,7 @@ export function AppShell() {
 
   async function handleDeleteFile(path: string) {
     if (!project) return;
-    await deleteProjectFile(project.id, path);
+    await deleteFile.mutateAsync(path);
     const nextExpandedFolders = Array.from(
       new Set([...expandedFolders.filter((folder) => folder !== path && !folder.startsWith(`${path}/`)), parentPath(path)].filter(Boolean)),
     );
