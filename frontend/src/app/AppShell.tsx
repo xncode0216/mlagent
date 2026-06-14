@@ -27,6 +27,12 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { EvolutionWorkspace } from "../features/evolution/EvolutionWorkspace";
 import { useEvolutionProtocolsQuery } from "../features/evolution/useEvolutionProtocolsQuery";
+import {
+  injectionLogsQueryKey,
+  lessonsQueryKey,
+  useInjectionLogsQuery,
+  useLessonsQuery,
+} from "../features/evolution/useEvolutionQueries";
 import { gpuStatusQueryKey, useGpuStatusQuery } from "../features/right-panel/useGpuStatusQuery";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
@@ -51,9 +57,7 @@ import {
   generatePreprocessingPlan,
   getGPUStatus,
   handoffDatasetToMl,
-  listEvolutionInjectionLog,
   listFiles,
-  listLessons,
   listProjectSessions,
   listProjects,
   listSessionEvents,
@@ -72,7 +76,6 @@ import {
   uploadProjectFile,
   type AgentSession,
   type AgentMessage,
-  type EvolutionInjectionLog,
   type ExperimentRun,
   type ExportBundleResult,
   type FileItem,
@@ -233,10 +236,12 @@ export function AppShell() {
   const [trainingDatasetPath, setTrainingDatasetPath] = useState(deepLink.file ?? "data/customer_churn.csv");
   const [selectedPreprocessingPlanPath, setSelectedPreprocessingPlanPath] = useState<string | null>(null);
   const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const lessonsQuery = useLessonsQuery(project?.id);
+  const lessons = lessonsQuery.data ?? [];
   const protocolsQuery = useEvolutionProtocolsQuery(project?.id);
   const protocols = protocolsQuery.data ?? [];
-  const [injectionLogs, setInjectionLogs] = useState<EvolutionInjectionLog[]>([]);
+  const injectionLogsQuery = useInjectionLogsQuery(project?.id);
+  const injectionLogs = injectionLogsQuery.data ?? [];
 
   const visibleEvents = useMemo(
     () => [...sessionEvents, ...taskStateEvents, ...events, ...localEvents],
@@ -269,6 +274,15 @@ export function AppShell() {
     const snapshot = taskStateSnapshot(taskStates);
     setDurableTaskStates(snapshot.states);
     setTaskStateEvents(snapshot.events);
+  }
+
+  // 课程与规则注入日志由 react-query 托管，操作后用 invalidate 触发重取
+  // （替代原先成对的 setLessons / setInjectionLogs）。
+  function invalidateEvolutionLists(projectId: string) {
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: lessonsQueryKey(projectId) }),
+      queryClient.invalidateQueries({ queryKey: injectionLogsQueryKey(projectId) }),
+    ]);
   }
 
   async function refreshDurableTaskStates(sessionId: string | undefined = activeSession?.id) {
@@ -418,16 +432,13 @@ export function AppShell() {
 
     async function refreshSessionState() {
       if (!project || !activeSession) return;
-      const [nextSessions, nextMessages, nextLessons, nextInjectionLogs] = await Promise.all([
+      const [nextSessions, nextMessages] = await Promise.all([
         listProjectSessions(project.id),
         listSessionMessages(activeSession.id),
-        listLessons(project.id),
-        listEvolutionInjectionLog(project.id),
       ]);
       setSessions(nextSessions);
       setSessionMessages(nextMessages);
-      setLessons(nextLessons);
-      setInjectionLogs(nextInjectionLogs);
+      await invalidateEvolutionLists(project.id);
     }
 
     void refreshSessionState();
@@ -489,16 +500,12 @@ export function AppShell() {
     const nextActiveFile = deepLink.file ?? nextFiles.find((item) => item.type === "file")?.path ?? "";
     setActiveFile(nextActiveFile);
     setTrainingDatasetPath(isLikelyDatasetPath(nextActiveFile) ? nextActiveFile : "data/customer_churn.csv");
-    const [nextLessons, nextTrainingRuns, nextSessions, nextInjectionLogs] = await Promise.all([
-      listLessons(nextProject.id),
+    const [nextTrainingRuns, nextSessions] = await Promise.all([
       listTrainingRuns(nextProject.id),
       listProjectSessions(nextProject.id),
-      listEvolutionInjectionLog(nextProject.id),
     ]);
-    setLessons(nextLessons);
     setTrainingRuns(nextTrainingRuns);
     setSessions(nextSessions);
-    setInjectionLogs(nextInjectionLogs);
     setActiveSession(null);
     setTrainingResult(null);
     setTrainingError(null);
@@ -736,12 +743,7 @@ export function AppShell() {
           engine: result.engine,
         },
       });
-      const [nextLessons, nextInjectionLogs] = await Promise.all([
-        listLessons(project.id),
-        listEvolutionInjectionLog(project.id),
-      ]);
-      setLessons(nextLessons);
-      setInjectionLogs(nextInjectionLogs);
+      await invalidateEvolutionLists(project.id);
       const reportEvent: AgentStreamEvent | null = result.evaluation_report_artifact
         ? {
             type: "artifact_created",
@@ -1143,12 +1145,7 @@ export function AppShell() {
 
   async function applyLearnedLessons(items: Lesson[], sessionId: string, label: string) {
     if (!project) return;
-    const [nextLessons, nextInjectionLogs] = await Promise.all([
-      listLessons(project.id),
-      listEvolutionInjectionLog(project.id),
-    ]);
-    setLessons(nextLessons);
-    setInjectionLogs(nextInjectionLogs);
+    await invalidateEvolutionLists(project.id);
     await refreshDurableTaskStates(sessionId);
     setActiveMode("evolution");
     setActiveActivity("knowledge");
@@ -1244,12 +1241,7 @@ export function AppShell() {
   async function handleAdoptLesson(lessonId: string) {
     if (!project) return;
     await adoptLesson(project.id, lessonId);
-    const [nextLessons, nextInjectionLogs] = await Promise.all([
-      listLessons(project.id),
-      listEvolutionInjectionLog(project.id),
-    ]);
-    setLessons(nextLessons);
-    setInjectionLogs(nextInjectionLogs);
+    await invalidateEvolutionLists(project.id);
   }
 
   async function handleRefreshGpuStatus() {
@@ -1588,23 +1580,13 @@ export function AppShell() {
   async function handleRejectLesson(lessonId: string) {
     if (!project) return;
     await rejectLesson(project.id, lessonId);
-    const [nextLessons, nextInjectionLogs] = await Promise.all([
-      listLessons(project.id),
-      listEvolutionInjectionLog(project.id),
-    ]);
-    setLessons(nextLessons);
-    setInjectionLogs(nextInjectionLogs);
+    await invalidateEvolutionLists(project.id);
   }
 
   async function handleMarkLessonConflict(lessonId: string, reason: string) {
     if (!project) return;
     await markLessonConflict(project.id, lessonId, reason);
-    const [nextLessons, nextInjectionLogs] = await Promise.all([
-      listLessons(project.id),
-      listEvolutionInjectionLog(project.id),
-    ]);
-    setLessons(nextLessons);
-    setInjectionLogs(nextInjectionLogs);
+    await invalidateEvolutionLists(project.id);
   }
 
   function handleSelectProjectFile(path: string) {
