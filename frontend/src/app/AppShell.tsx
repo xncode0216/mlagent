@@ -23,8 +23,11 @@ import {
 import { buildTaskStateInspection } from "../features/chat/taskStateInspector";
 import type { AgentStreamEvent, Artifact, WorkflowStageId } from "../features/chat/types";
 import { useAgentStream } from "../features/chat/useAgentStream";
+import { useQueryClient } from "@tanstack/react-query";
+
 import { EvolutionWorkspace } from "../features/evolution/EvolutionWorkspace";
 import { useEvolutionProtocolsQuery } from "../features/evolution/useEvolutionProtocolsQuery";
+import { gpuStatusQueryKey, useGpuStatusQuery } from "../features/right-panel/useGpuStatusQuery";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
@@ -73,7 +76,6 @@ import {
   type ExperimentRun,
   type ExportBundleResult,
   type FileItem,
-  type GPUStatus,
   type Lesson,
   type Project,
   type TrainingResult,
@@ -197,6 +199,7 @@ function exportBundleArtifactEvent(
 
 export function AppShell() {
   const deepLink = useMemo(() => readAppDeepLink(), []);
+  const queryClient = useQueryClient();
   const [preferences, setPreferences] = useState<AppPreferences>(() => readAppPreferences());
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
   const [sessions, setSessions] = useState<AgentSession[]>([]);
@@ -223,7 +226,8 @@ export function AppShell() {
   const [trainingRuns, setTrainingRuns] = useState<ExperimentRun[]>([]);
   const [trainingError, setTrainingError] = useState<string | null>(null);
   const [focusedExperimentId, setFocusedExperimentId] = useState<string | null>(deepLink.experimentId ?? null);
-  const [gpuStatus, setGpuStatus] = useState<GPUStatus | null>(null);
+  const gpuStatusQuery = useGpuStatusQuery(project?.id, preferences.gpuRefreshIntervalMs);
+  const gpuStatus = gpuStatusQuery.data ?? null;
   const [gpuActionError, setGpuActionError] = useState<string | null>(null);
   const [suggestedTargetColumn, setSuggestedTargetColumn] = useState(() => preferences.defaultTargetColumn);
   const [trainingDatasetPath, setTrainingDatasetPath] = useState(deepLink.file ?? "data/customer_churn.csv");
@@ -449,35 +453,23 @@ export function AppShell() {
     }
   }, [activeSession, events]);
 
+  // 把 GPU 状态查询的轮询结果桥接回 gpuActionError，保留原轮询 effect 的行为：
+  // 每次取数成功（含后台重取）清错，失败（含后台重取）显示错误信息。命令式操作
+  // （刷新/取消/训练）另行设置 gpuActionError，会在下次成功轮询时被清除——与旧行为一致。
   useEffect(() => {
-    if (!project) {
-      setGpuStatus(null);
-      return;
+    const failure = gpuStatusQuery.error ?? gpuStatusQuery.failureReason;
+    if (failure) {
+      setGpuActionError(failure instanceof Error ? failure.message : "GPU status refresh failed");
+    } else if (gpuStatusQuery.isSuccess) {
+      setGpuActionError(null);
     }
-
-    let cancelled = false;
-    async function refreshGpu() {
-      if (!project) return;
-      try {
-        const nextStatus = await getGPUStatus(project.id);
-        if (!cancelled) {
-          setGpuStatus(nextStatus);
-          setGpuActionError(null);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setGpuActionError(error instanceof Error ? error.message : "GPU status refresh failed");
-        }
-      }
-    }
-
-    void refreshGpu();
-    const interval = window.setInterval(() => void refreshGpu(), preferences.gpuRefreshIntervalMs);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [preferences.gpuRefreshIntervalMs, project]);
+  }, [
+    gpuStatusQuery.isSuccess,
+    gpuStatusQuery.error,
+    gpuStatusQuery.failureReason,
+    gpuStatusQuery.dataUpdatedAt,
+    gpuStatusQuery.errorUpdatedAt,
+  ]);
 
   function handlePreferenceChange(patch: Partial<AppPreferences>) {
     const nextPreferences = updateAppPreferences(preferences, patch);
@@ -686,7 +678,7 @@ export function AppShell() {
     setGpuActionError(null);
     if (useGpu) {
       try {
-        setGpuStatus(await getGPUStatus(project.id));
+        queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
       } catch {
         // Training can continue even if the status refresh fails.
       }
@@ -714,7 +706,7 @@ export function AppShell() {
           : await trainBaselineModel(project.id, datasetPath, targetColumn, trainingSessionId);
       setTrainingResult(result);
       try {
-        setGpuStatus(await getGPUStatus(project.id));
+        queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
       } catch {
         // Training completed; keep the result visible even if status refresh fails.
       }
@@ -837,7 +829,7 @@ export function AppShell() {
       setTrainingError(errorMessage);
       await refreshDurableTaskStates(trainingSessionId);
       try {
-        setGpuStatus(await getGPUStatus(project.id));
+        queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
       } catch {
         // Preserve the original training error in the UI.
       }
@@ -876,7 +868,7 @@ export function AppShell() {
       const result = await resumeSklearnTraining(project.id, trainingSessionId);
       setTrainingResult(result);
       try {
-        setGpuStatus(await getGPUStatus(project.id));
+        queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
       } catch {
         // Training completed; keep the result visible even if status refresh fails.
       }
@@ -1264,7 +1256,7 @@ export function AppShell() {
     if (!project) return;
     setGpuActionError(null);
     try {
-      setGpuStatus(await getGPUStatus(project.id));
+      queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
     } catch (error) {
       setGpuActionError(error instanceof Error ? error.message : "GPU status refresh failed");
       throw error;
@@ -1276,7 +1268,7 @@ export function AppShell() {
     setGpuActionError(null);
     try {
       await cancelGPUTask(project.id, taskId);
-      setGpuStatus(await getGPUStatus(project.id));
+      queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
       setLocalEvents((current) => [
         ...current,
         {
