@@ -38,6 +38,7 @@ import { trainingRunsQueryKey, useTrainingRunsQuery } from "../features/right-pa
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
+import { projectsQueryKey, useProjectsQuery } from "../features/projects/useProjectsQuery";
 import { RightPanel } from "../features/right-panel/RightPanel";
 import {
   adoptLesson,
@@ -212,7 +213,8 @@ export function AppShell() {
   const { connected, events, lastError, sendApprovalResponse, sendMessage, sendResumeStep } = useAgentStream(
     activeSession?.id ?? "dev-session",
   );
-  const [projects, setProjects] = useState<Project[]>([]);
+  const projectsQuery = useProjectsQuery();
+  const projects = projectsQuery.data ?? [];
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
@@ -342,7 +344,12 @@ export function AppShell() {
 
     async function bootstrapProject() {
       try {
-        let initialProjects = await listProjects();
+        // 首读走 fetchQuery：与 useProjectsQuery 同键去重，只发一次请求，且建项后用
+        // setQueryData 写回的列表不会被 hook 的并发空列表覆盖。
+        let initialProjects = await queryClient.fetchQuery({
+          queryKey: projectsQueryKey(),
+          queryFn: () => listProjects(),
+        });
         let current = initialProjects[0];
         if (!current) {
           current = await createProject("sales_churn_analysis");
@@ -350,7 +357,7 @@ export function AppShell() {
         }
 
         if (!cancelled) {
-          setProjects(initialProjects);
+          queryClient.setQueryData(projectsQueryKey(), initialProjects);
         }
         const deepLinkedProject = deepLink.projectId ? initialProjects.find((item) => item.id === deepLink.projectId) : undefined;
         await loadProject(deepLinkedProject ?? current);
@@ -545,7 +552,7 @@ export function AppShell() {
     setWorkspaceStatus("Creating project...");
     const created = await createProject(name);
     const nextProjects = await listProjects();
-    setProjects(nextProjects);
+    queryClient.setQueryData(projectsQueryKey(), nextProjects);
     setNewProjectName("");
     await activateProject(created);
     setWorkspaceStatus("Project files synced");
@@ -557,7 +564,7 @@ export function AppShell() {
     setWorkspaceStatus("Opening local project...");
     const opened = await openLocalProject(path);
     const nextProjects = await listProjects();
-    setProjects(nextProjects);
+    queryClient.setQueryData(projectsQueryKey(), nextProjects);
     setLocalProjectPath("");
     await activateProject(opened);
     setWorkspaceStatus("Local project opened");
