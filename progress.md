@@ -785,3 +785,12 @@
 - 行为保持要点：`activeSession` 选择态、`useAgentStream` 接线、`visibleEvents = [...sessionEvents, ...taskStateEvents, ...events, ...localEvents]` 合并逻辑均不变；会话切换时 query 走 undefined→[]→data（与既定保守 QueryClient 默认一致，未引入 `keepPreviousData`，与前几片同口径）。
 - 每片三道闸门全绿：`vitest` 16 文件 / 93 passed（含 AppShell 冒烟）、`eslint` 0 error、`npm run build`（`tsc -b` + `vite build`）。分支按既定「先留本地」未 push。
 - **更新后剩余（后续会话）**：文件树迁 `useMutation` → 落地 `app/uiStore.ts`（zustand）逐字段消除 props drilling → 拆 `AppShell` 为薄容器。
+
+## 2026-06-14 前端状态架构（P1-1，文件树迁 react-query，分 2 提交）
+
+- 迁最后一块、也是判定为「最不适合 react-query」的文件树。坦诚定位：这是 P1-1 里风险最高、收益最低的一片——文件树本以本地命令式 + 乐观更新工作良好，缓存收益有限；但它兑现「把取数移出组件」的目标，用户明确要求推进，故做扎实、分 2 聚焦提交、每步守绿。
+- **关键设计：query key 含已展开文件夹集合**。文件树显示内容同时取决于 projectId 与「哪些文件夹被展开」。把 `expandedFolders`（排序后）放进 key 是**正确且惯用**的：展开/折叠改 key 即自动重取对应集合。曾考虑把 expandedFolders 留在闭包/ref 而非 key 以保留单文件夹增量取数，但「展开新文件夹 + 刷新」类 handler 会因 ref 在下次渲染才更新而**漏取新展开的文件夹**（invalidate 用旧 ref 立即重取）——keying 把这个依赖显式化，从根上避免该竞态。代价：folder 切换从单文件夹增量取数变为重取整个展开集（`staleTime:30s` 内复用缓存）。
+- **F1·读模型（commit `7e203de`）**：`features/files/useProjectFilesQuery.ts`（`useProjectFilesQuery` + `filesQueryKey`/`filesQueryKeyRoot`，并把原内联 `listExpandedProjectFiles` 移入以避免循环依赖）。删 `files` useState 改查询派生；转换全部 ~13 处 `setFiles`——写后及 10 处训练/清洗/预处理/评估/导出后的刷新改 `invalidate(filesQueryKeyRoot)`；`activateProject` 与 `handleDeleteFile` 用 `setQueryData` 以**同键**预置缓存（前者避免激活闪空树，后者保留 `.find` 回退所需的新列表）；`handleToggleFolder` 折叠/展开只改 `expandedFolders`，去掉本地 prune 与增量 `listFiles+merge`。tsc 确认无 `setFiles` 残留。
+- **F2·写操作（commit `2fa3e41`）**：`features/files/useProjectFileMutations.ts`（create/rename/delete/upload 四个 `useMutation`，`onSuccess` 统一 `invalidate(filesQueryKeyRoot)`）。四个写 handler 改 `mutateAsync` 并移除 F1 里手写的显式 invalidate（onSuccess 接管）；`handleCreateFile` 内联并删除仅它使用的 `refreshExpandedFiles`；`handleDeleteFile` 仍保留删除后取新列表 + `setQueryData` 以支持 activeFile/dataset 的 `.find` 回退（onSuccess 的后台重取与之冗余但结果一致，可接受）。清理失效 import：`createProjectFile`/`deleteProjectFile`/`renameProjectFile`（`uploadProjectFile` 仍由 bootstrap 上传样例 CSV 使用，保留）。
+- 行为保持：`expandedFolders` 仍为本地 UI 态；handler 仍负责展开集与 activeFile/dataset/plan 的连带处理。安全网注记：文件树**行为**无组件测试覆盖，本片靠 `tsc`（删 useState 后每个 `setFiles` 即编译错误，等于完整清单）+ 冒烟渲染兜底；逐站点人工核对。每片三道闸门绿（lint 0、vitest 16 文件/93 passed 含冒烟、tsc + build），分支先留本地未 push。
+- **现状：服务端态已全部由 react-query 托管**（projects/sessions/messages/events/task-states/files/protocols/gpu/lessons/injectionLogs/trainingRuns）。剩余（后续会话，纯 UI/选择态重构，不再涉及取数）：落地 `app/uiStore.ts`（zustand）逐字段消除 props drilling → 拆 `AppShell` 为薄容器。
