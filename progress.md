@@ -736,3 +736,18 @@
 - 子模块 import 用 **ast 最小化**：解析 facade 的 import 成 `{绑定名: 来源}` 注册表，对每个 mixin 取「类体里实际被 `Load` 的 `Name`」∩ 注册表，只 emit 用到的 import → 无 F401、无 F821。顺手清掉了切片 4 误留在 `stages.py` 的 4 个未用 stdlib import（`asyncio`/`csv`/`hashlib`/`json`）和一个被局部变量遮蔽的 `profile_props` import（切片 5 提交里一并修正）。
 - 成果：facade **4263 → 703 行**（累计 −3560，约 **−83%**），逻辑分布到 9 个内聚子模块（`contexts/support/artifacts/tools/intent/commands/runs/stages/messaging`）。最终验证 `ruff check app tests` → All checks passed、`pytest -q` → **169 passed, 3 skipped**，MRO 与公共 API 不变。P1-6 完成，本地提交（`refactor(backend):`），分支先留本地未推。
 - 工程过程注记（沿用前一阶段经验）：本机 shell 输出层间歇性「伪造成功并注入文本」，故全程以 **Read 工具 + python 子进程把结果写文件再读** 作为地面真相，提交用 `git commit -F <消息文件>`（不用 heredoc），import 清理用 ast 自算（不依赖被污染欺骗的 `ruff --fix`）。
+
+## 2026-06-14 接入 CI/CD（P1-4）
+
+- 目标：补上 P1-4——仓库此前无 `.github/workflows`，PR 无任何自动闸门。新增 `.github/workflows/ci.yml`，对 `pull_request` 与 `push: master` 触发。
+- 设计：两个**并行** job，均 `ubuntu-latest`（Windows 本地那条 vite/esbuild 沙箱限制只针对本机，不影响 Linux runner）。
+  - **backend**（`working-directory: backend`）：`actions/setup-python@v5`（Python 3.12，`cache: pip` 指向 `backend/pyproject.toml`）→ `pip install -e ".[dev]"` → `ruff check app tests` → `pytest -q`。
+  - **frontend**（`working-directory: frontend`）：`actions/setup-node@v4`（Node 20，`cache: npm` 指向 `frontend/package-lock.json`）→ `npm ci` → `npm run lint`（eslint）→ `npm run test`（vitest）→ `npm run build`（`tsc -b` 即类型检查 + vite build）。
+- 加固项：`concurrency`（同 ref 新推送取消旧运行，省额度）、`permissions: contents: read`（最小权限）。两 job 每次都跑、不加 `paths` 过滤——避免将来设了「必需检查」时 skip 的 job 卡住合并。
+- 落地前先把关键不确定性核实为地面真相（用 `git ls-files`，即 runner `checkout` 后能看到的内容；注意 Glob 默认遵守 `.gitignore`，会漏掉被忽略的 lockfile/egg-info）：
+  - pyproject 无 `[build-system]`/`[tool.setuptools]`，曾担心 `pip install -e` 触发 setuptools「多个 top-level 包」失败；但 `backend/mlagent_backend.egg-info/top_level.txt` 内容就是单行 `app`，证明自动发现把 `tests` 排除、稳定解析为单一 `app` 包——`pip install -e ".[dev]"` 可行，**无需**改 pyproject。
+  - `frontend/package-lock.json` 已被 git 跟踪 → `npm ci`（要求 lockfile 在场）成立。
+  - 前端有 15 个 `.test.ts` 已跟踪 → `vitest run` 不会因「No test files found」非零退出。
+  - 项目无自定义 conftest、本机 `pytest -q` 基线为 169 passed/3 skipped → CI 同命令无需起 Postgres/Redis service 容器。
+- 验证：`ci.yml` 经 pyyaml `safe_load` 解析通过（两 job、各 step 名称齐全；`on` 被 pyyaml 当布尔键属其已知怪癖，不影响 GitHub Actions 解析）。改动为纯新增 + 文档，未触碰任何应用代码/测试，169 passed/3 skipped 基线不变。
+- 本地提交（`feat(ci):`），分支按既定「先留本地」未 push——workflow 文件先随分支落库，待真正推送/开 PR 时才会在 GitHub 上运行。
