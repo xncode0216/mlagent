@@ -39,7 +39,15 @@ import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
 import { projectsQueryKey, useProjectsQuery } from "../features/projects/useProjectsQuery";
-import { sessionsQueryKey, useSessionsQuery } from "../features/sessions/useSessionQueries";
+import {
+  sessionMessagesQueryKey,
+  sessionTaskStatesQueryKey,
+  sessionsQueryKey,
+  useSessionMessagesQuery,
+  useSessionEventsQuery,
+  useSessionsQuery,
+  useSessionTaskStatesQuery,
+} from "../features/sessions/useSessionQueries";
 import { RightPanel } from "../features/right-panel/RightPanel";
 import {
   adoptLesson,
@@ -63,9 +71,6 @@ import {
   listFiles,
   listProjectSessions,
   listProjects,
-  listSessionEvents,
-  listSessionMessages,
-  listSessionTaskStates,
   markLessonConflict,
   openLocalProject,
   renameProjectFile,
@@ -77,7 +82,6 @@ import {
   trainSklearnModel,
   uploadProjectFile,
   type AgentSession,
-  type AgentMessage,
   type ExportBundleResult,
   type FileItem,
   type Lesson,
@@ -206,10 +210,24 @@ export function AppShell() {
   const queryClient = useQueryClient();
   const [preferences, setPreferences] = useState<AppPreferences>(() => readAppPreferences());
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
-  const [sessionMessages, setSessionMessages] = useState<AgentMessage[]>([]);
-  const [sessionEvents, setSessionEvents] = useState<AgentStreamEvent[]>([]);
-  const [taskStateEvents, setTaskStateEvents] = useState<AgentStreamEvent[]>([]);
-  const [durableTaskStates, setDurableTaskStates] = useState<FrontendDurableTaskState[]>([]);
+  // 会话级服务端态全部由 react-query 托管，随 activeSession.id 取数：
+  // 无活动会话时 query disabled → data undefined → ?? [] 自然清空（替代原先
+  // loadSessionMessages effect 的成组 setState）。durableTaskStates 与 taskStateEvents
+  // 从同一份 task-states data 经 taskStateSnapshot 派生（替代 applyDurableTaskStates）。
+  const sessionMessagesQuery = useSessionMessagesQuery(activeSession?.id);
+  const sessionMessages = sessionMessagesQuery.data ?? [];
+  const sessionEventsQuery = useSessionEventsQuery(activeSession?.id);
+  const sessionEvents = useMemo(
+    () => (sessionEventsQuery.data ?? []).filter(isAgentStreamEvent),
+    [sessionEventsQuery.data],
+  );
+  const sessionTaskStatesQuery = useSessionTaskStatesQuery(activeSession?.id);
+  const taskStatesSnapshot = useMemo(
+    () => taskStateSnapshot(sessionTaskStatesQuery.data ?? []),
+    [sessionTaskStatesQuery.data],
+  );
+  const durableTaskStates = taskStatesSnapshot.states;
+  const taskStateEvents = taskStatesSnapshot.events;
   const { connected, events, lastError, sendApprovalResponse, sendMessage, sendResumeStep } = useAgentStream(
     activeSession?.id ?? "dev-session",
   );
@@ -274,12 +292,6 @@ export function AppShell() {
     [durableTaskStates, durableTrainingContext, visibleEvents],
   );
 
-  function applyDurableTaskStates(taskStates: FrontendDurableTaskState[]) {
-    const snapshot = taskStateSnapshot(taskStates);
-    setDurableTaskStates(snapshot.states);
-    setTaskStateEvents(snapshot.events);
-  }
-
   // 课程与规则注入日志由 react-query 托管，操作后用 invalidate 触发重取
   // （替代原先成对的 setLessons / setInjectionLogs）。
   function invalidateEvolutionLists(projectId: string) {
@@ -289,19 +301,11 @@ export function AppShell() {
     ]);
   }
 
-  async function refreshDurableTaskStates(sessionId: string | undefined = activeSession?.id) {
-    if (!sessionId) {
-      applyDurableTaskStates([]);
-      return [];
-    }
-    try {
-      const taskStates = await listSessionTaskStates(sessionId);
-      applyDurableTaskStates(taskStates);
-      return taskStates;
-    } catch {
-      applyDurableTaskStates([]);
-      return [];
-    }
+  // 可恢复任务态由 react-query 托管：操作后对 sessionTaskStatesQueryKey 执行 invalidate
+  // 触发重取，替代原先 refreshDurableTaskStates 的命令式取数 + applyDurableTaskStates。
+  function invalidateSessionTaskStates(sessionId: string | undefined = activeSession?.id) {
+    if (!sessionId) return Promise.resolve();
+    return queryClient.invalidateQueries({ queryKey: sessionTaskStatesQueryKey(sessionId) });
   }
 
   async function handleAbandonTaskState(stage: WorkflowStageId) {
@@ -310,7 +314,7 @@ export function AppShell() {
       throw new Error("No active session is available for abandoning saved task state.");
     }
     await abandonTaskState(sessionId, stage);
-    await refreshDurableTaskStates(sessionId);
+    await invalidateSessionTaskStates(sessionId);
     setLocalEvents((current) => [
       ...current,
       {
@@ -413,45 +417,17 @@ export function AppShell() {
   }, [activeMode, activeSession?.id, deepLink.sessionId, project]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadSessionMessages() {
-      if (!activeSession) {
-        setSessionMessages([]);
-        setSessionEvents([]);
-        setTaskStateEvents([]);
-        setDurableTaskStates([]);
-        return;
-      }
-      const [messages, persistedEvents, taskStates] = await Promise.all([
-        listSessionMessages(activeSession.id),
-        listSessionEvents(activeSession.id),
-        listSessionTaskStates(activeSession.id),
-      ]);
-      if (!cancelled) {
-        setSessionMessages(messages);
-        setSessionEvents(persistedEvents.filter(isAgentStreamEvent));
-        applyDurableTaskStates(taskStates);
-      }
-    }
-
-    void loadSessionMessages();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSession]);
-
-  useEffect(() => {
     if (!project || !activeSession) return;
     const latestEvent = visibleEvents.at(-1);
     if (latestEvent?.type !== "task_progress" || latestEvent.task_id !== activeSession.id) return;
 
     async function refreshSessionState() {
       if (!project || !activeSession) return;
-      const nextMessages = await listSessionMessages(activeSession.id);
-      setSessionMessages(nextMessages);
+      // sessions / messages / evolution 列表全部由 react-query 托管，统一用 invalidate
+      // 触发重取，替代原先 listProjectSessions + listSessionMessages 的命令式刷新。
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: sessionsQueryKey(project.id) }),
+        queryClient.invalidateQueries({ queryKey: sessionMessagesQueryKey(activeSession.id) }),
         invalidateEvolutionLists(project.id),
       ]);
     }
@@ -467,7 +443,7 @@ export function AppShell() {
       latestEvent.task_id === activeSession.id &&
       latestEvent.component === "task_state_inspector"
     ) {
-      void refreshDurableTaskStates(activeSession.id);
+      void invalidateSessionTaskStates(activeSession.id);
     }
     if (
       latestEvent?.type === "step_completed" &&
@@ -475,7 +451,7 @@ export function AppShell() {
       latestEvent.label.toLowerCase().startsWith("abandoned saved ") &&
       latestEvent.label.toLowerCase().endsWith(" failure state")
     ) {
-      void refreshDurableTaskStates(activeSession.id);
+      void invalidateSessionTaskStates(activeSession.id);
     }
   }, [activeSession, events]);
 
@@ -522,27 +498,18 @@ export function AppShell() {
     setSuggestedTargetColumn(preferences.defaultTargetColumn);
     setSelectedPreprocessingPlanPath(null);
     setLocalEvents([]);
-    setSessionMessages([]);
-    setSessionEvents([]);
-    setTaskStateEvents([]);
-    setDurableTaskStates([]);
+    // 会话级 messages/events/task-states 由 react-query 托管：setActiveSession(null) 后
+    // 对应 query disabled、queryKey 切到 undefined → data undefined → ?? [] 自动清空。
   }
 
-  async function handleSelectSession(sessionId: string) {
+  function handleSelectSession(sessionId: string) {
     const session = sessions.find((item) => item.id === sessionId);
     if (!session) return;
     if (session.mode === "analysis" || session.mode === "machine-learning" || session.mode === "evolution") {
       setActiveMode(session.mode);
     }
+    // messages/events/task-states 随 activeSession.id 由各自 query 自动重取，无需命令式加载。
     setActiveSession(session);
-    const [messages, persistedEvents, taskStates] = await Promise.all([
-      listSessionMessages(session.id),
-      listSessionEvents(session.id),
-      listSessionTaskStates(session.id),
-    ]);
-    setSessionMessages(messages);
-    setSessionEvents(persistedEvents.filter(isAgentStreamEvent));
-    applyDurableTaskStates(taskStates);
   }
 
   async function switchProject(projectId: string) {
@@ -728,7 +695,7 @@ export function AppShell() {
       }
       setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
       await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
-      await refreshDurableTaskStates(trainingSessionId);
+      await invalidateSessionTaskStates(trainingSessionId);
       const lesson = await extractLesson(project.id, {
         source_type: "training",
         source_id: result.experiment_id,
@@ -838,7 +805,7 @@ export function AppShell() {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Training task failed";
       setTrainingError(errorMessage);
-      await refreshDurableTaskStates(trainingSessionId);
+      await invalidateSessionTaskStates(trainingSessionId);
       try {
         queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
       } catch {
@@ -885,7 +852,7 @@ export function AppShell() {
       }
       setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
       await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
-      await refreshDurableTaskStates(trainingSessionId);
+      await invalidateSessionTaskStates(trainingSessionId);
       setLocalEvents((current) => [
         ...current,
         {
@@ -947,7 +914,7 @@ export function AppShell() {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Training task failed";
       setTrainingError(errorMessage);
-      await refreshDurableTaskStates(trainingSessionId);
+      await invalidateSessionTaskStates(trainingSessionId);
       setLocalEvents((current) => [
         ...current,
         {
@@ -968,7 +935,7 @@ export function AppShell() {
     if (!project) return;
     setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
     await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
-    await refreshDurableTaskStates(sessionId);
+    await invalidateSessionTaskStates(sessionId);
     setFocusedExperimentId(result.experiment_id);
     setActiveMode("machine-learning");
     setRightPanelTab("training");
@@ -1005,7 +972,7 @@ export function AppShell() {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Evaluation report generation failed";
       setTrainingError(errorMessage);
-      await refreshDurableTaskStates(sessionId);
+      await invalidateSessionTaskStates(sessionId);
       setLocalEvents((current) => [
         ...current,
         {
@@ -1041,7 +1008,7 @@ export function AppShell() {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Evaluation report retry failed";
       setTrainingError(errorMessage);
-      await refreshDurableTaskStates(sessionId);
+      await invalidateSessionTaskStates(sessionId);
       setLocalEvents((current) => [
         ...current,
         {
@@ -1062,7 +1029,7 @@ export function AppShell() {
     if (!project) return;
     setFiles(await listExpandedProjectFiles(project.id, expandedFolders));
     await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
-    await refreshDurableTaskStates(sessionId);
+    await invalidateSessionTaskStates(sessionId);
     setFocusedExperimentId(result.experiment_id);
     setActiveMode("machine-learning");
     setRightPanelTab("training");
@@ -1099,7 +1066,7 @@ export function AppShell() {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Export bundle failed";
       setTrainingError(errorMessage);
-      await refreshDurableTaskStates(sessionId);
+      await invalidateSessionTaskStates(sessionId);
       setLocalEvents((current) => [
         ...current,
         {
@@ -1135,7 +1102,7 @@ export function AppShell() {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Export bundle retry failed";
       setTrainingError(errorMessage);
-      await refreshDurableTaskStates(sessionId);
+      await invalidateSessionTaskStates(sessionId);
       setLocalEvents((current) => [
         ...current,
         {
@@ -1155,7 +1122,7 @@ export function AppShell() {
   async function applyLearnedLessons(items: Lesson[], sessionId: string, label: string) {
     if (!project) return;
     await invalidateEvolutionLists(project.id);
-    await refreshDurableTaskStates(sessionId);
+    await invalidateSessionTaskStates(sessionId);
     setActiveMode("evolution");
     setActiveActivity("knowledge");
     setLocalEvents((current) => [
@@ -1196,7 +1163,7 @@ export function AppShell() {
       await applyLearnedLessons(items, sessionId, "Learned rule extraction completed");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Lesson extraction failed";
-      await refreshDurableTaskStates(sessionId);
+      await invalidateSessionTaskStates(sessionId);
       setLocalEvents((current) => [
         ...current,
         {
@@ -1230,7 +1197,7 @@ export function AppShell() {
       await applyLearnedLessons(items, sessionId, "Learned rule extraction completed after retry");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Lesson extraction retry failed";
-      await refreshDurableTaskStates(sessionId);
+      await invalidateSessionTaskStates(sessionId);
       setLocalEvents((current) => [
         ...current,
         {
