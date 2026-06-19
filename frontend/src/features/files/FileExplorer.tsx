@@ -30,7 +30,6 @@ const fallbackItems: FileItem[] = [
 ];
 
 type FileExplorerProps = {
-  activePath: string;
   currentProjectId?: string;
   expandedFolders: string[];
   files: FileItem[];
@@ -63,7 +62,6 @@ function getFileIcon(item: FileItem) {
 }
 
 export function FileExplorer({
-  activePath,
   currentProjectId,
   expandedFolders,
   files,
@@ -87,7 +85,8 @@ export function FileExplorer({
   sessions,
   activeSessionId,
 }: FileExplorerProps) {
-  // 工作区状态串已迁入 uiStore，直接订阅（替代原先经 AppShell 钻取的 status prop）。
+  // 工作区状态串 / 当前文件已迁入 uiStore，直接订阅（替代原先经 AppShell 钻取的 props）。
+  const activePath = useUiStore((state) => state.activeFile);
   const workspaceStatus = useUiStore((state) => state.workspaceStatus);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isOpeningProject, setIsOpeningProject] = useState(false);

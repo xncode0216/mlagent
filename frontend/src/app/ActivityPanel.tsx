@@ -15,7 +15,6 @@ import { useUiStore } from "./uiStore";
 type MainMode = "analysis" | "machine-learning" | "evolution";
 
 type ActivityPanelProps = {
-  activeFile: string;
   artifactCount: number;
   connected: boolean;
   eventsCount: number;
@@ -24,7 +23,6 @@ type ActivityPanelProps = {
   injectionLogs: EvolutionInjectionLog[];
   lessons: Lesson[];
   preferences: AppPreferences;
-  focusedExperimentId?: string | null;
   onPreferenceChange: (patch: Partial<AppPreferences>) => void;
   onSelectFile: (path: string) => void;
   onSelectExperimentRun: (experimentId: string) => void;
@@ -61,7 +59,6 @@ function modeName(mode: MainMode) {
 }
 
 export function ActivityPanel({
-  activeFile,
   artifactCount,
   connected,
   eventsCount,
@@ -70,7 +67,6 @@ export function ActivityPanel({
   injectionLogs,
   lessons,
   preferences,
-  focusedExperimentId,
   onPreferenceChange,
   onSelectFile,
   onSelectExperimentRun,
@@ -83,6 +79,8 @@ export function ActivityPanel({
   // 导航态改为直接订阅 uiStore（替代原先经 AppShell 钻取的 activity / onSelectMode）。
   const activity = useUiStore((state) => state.activeActivity);
   const onSelectMode = useUiStore((state) => state.setActiveMode);
+  const activeFile = useUiStore((state) => state.activeFile);
+  const focusedExperimentId = useUiStore((state) => state.focusedExperimentId);
   const info = getActivityPanelInfo(activity);
   const dataFiles = files.filter((file) => file.type === "file" && (file.path.startsWith("data/") || file.path.endsWith(".csv")));
   const highConfidenceLessons = lessons.filter((lesson) => lesson.status === "high_confidence");

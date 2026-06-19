@@ -11,13 +11,12 @@ import type { TaskStateInspection } from "./taskStateInspector";
 import { buildToolActivitySummaries, type ToolActivityStatus } from "./toolActivity";
 import { deriveWorkflowState } from "./workflowState";
 import type { AgentMessage } from "../../lib/api";
+import { useUiStore } from "../../app/uiStore";
 
 type AgentWorkspaceProps = {
-  activeFile: string;
   mode: "analysis" | "machine-learning";
   connected: boolean;
   events: AgentStreamEvent[];
-  focusedExperimentId?: string | null;
   historyMessages: AgentMessage[];
   lastError: string | null;
   preprocessingPlanPath?: string | null;
@@ -120,11 +119,9 @@ type ActionFeedback = {
 };
 
 export function AgentWorkspace({
-  activeFile,
   mode,
   connected,
   events,
-  focusedExperimentId,
   historyMessages,
   lastError,
   preprocessingPlanPath,
@@ -152,6 +149,9 @@ export function AgentWorkspace({
   onTrainSklearn,
   sendMessage,
 }: AgentWorkspaceProps) {
+  // 当前文件 / 聚焦实验改为直接订阅 uiStore（替代原先经 AppShell 钻取的 props）。
+  const activeFile = useUiStore((state) => state.activeFile);
+  const focusedExperimentId = useUiStore((state) => state.focusedExperimentId);
   const copy = modeCopy[mode];
   const [draft, setDraft] = useState("");
   const lastSubmissionRef = useRef<{ content: string; submittedAt: number } | null>(null);

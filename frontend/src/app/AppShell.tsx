@@ -207,6 +207,10 @@ export function AppShell() {
   const activeActivity = useUiStore((state) => state.activeActivity);
   const setActiveMode = useUiStore((state) => state.setActiveMode);
   const setActiveActivity = useUiStore((state) => state.setActiveActivity);
+  // 选择态：当前文件（footer/handlers 读）+ 聚焦实验（仅 setter；其值由子组件读 store）。
+  const activeFile = useUiStore((state) => state.activeFile);
+  const setActiveFile = useUiStore((state) => state.setActiveFile);
+  const setFocusedExperimentId = useUiStore((state) => state.setFocusedExperimentId);
   // UI 状态/错误/日志聚焦字段已迁入 uiStore（AppShell 侧纯写）：此处仅取其动作，
   // 对应的值由子组件直接从 store 读取，AppShell 不再持有这些 useState 与 props。
   const setWorkspaceStatus = useUiStore((state) => state.setWorkspaceStatus);
@@ -247,12 +251,10 @@ export function AppShell() {
   const filesQuery = useProjectFilesQuery(project?.id, expandedFolders);
   const files = filesQuery.data ?? [];
   const { createFile, renameFile, deleteFile, uploadFile } = useProjectFileMutations(project?.id);
-  const [activeFile, setActiveFile] = useState(deepLink.file ?? "data/customer_churn.csv");
   const [newProjectName, setNewProjectName] = useState("");
   const [localProjectPath, setLocalProjectPath] = useState("");
   const trainingRunsQuery = useTrainingRunsQuery(project?.id);
   const trainingRuns = trainingRunsQuery.data ?? [];
-  const [focusedExperimentId, setFocusedExperimentId] = useState<string | null>(deepLink.experimentId ?? null);
   const gpuStatusQuery = useGpuStatusQuery(project?.id, preferences.gpuRefreshIntervalMs);
   const gpuStatus = gpuStatusQuery.data ?? null;
   const [suggestedTargetColumn, setSuggestedTargetColumn] = useState(() => preferences.defaultTargetColumn);
@@ -1627,7 +1629,6 @@ export function AppShell() {
       <aside className="file-sidebar">
         {activeActivity === "explorer" ? (
           <FileExplorer
-            activePath={activeFile}
             currentProjectId={project?.id}
             expandedFolders={expandedFolders}
             files={files}
@@ -1655,7 +1656,6 @@ export function AppShell() {
           <SearchPanel projectId={project?.id} onSelect={handleSelectProjectFile} />
         ) : (
           <ActivityPanel
-            activeFile={activeFile}
             artifactCount={artifactCount}
             connected={connected}
             eventsCount={visibleEvents.length}
@@ -1664,7 +1664,6 @@ export function AppShell() {
             injectionLogs={injectionLogs}
             lessons={lessons}
             preferences={preferences}
-            focusedExperimentId={focusedExperimentId}
             onPreferenceChange={handlePreferenceChange}
             onSelectExperimentRun={handleSelectExperimentRun}
             onSelectFile={handleSelectProjectFile}
@@ -1696,11 +1695,9 @@ export function AppShell() {
         />
       ) : (
         <AgentWorkspace
-          activeFile={activeFile}
           mode={activeMode}
           connected={connected}
           events={visibleEvents}
-          focusedExperimentId={focusedExperimentId}
           historyMessages={sessionMessages}
           lastError={lastError}
           preprocessingPlanPath={durableTrainingContext?.preprocessingPlanPath ?? selectedPreprocessingPlanPath}
@@ -1732,7 +1729,6 @@ export function AppShell() {
         />
       )}
       <RightPanel
-        activeFile={activeFile}
         events={visibleEvents}
         preprocessingPlanPath={selectedPreprocessingPlanPath}
         projectId={project?.id}
@@ -1740,7 +1736,6 @@ export function AppShell() {
         trainingDatasetPath={trainingDatasetPath}
         trainingRuns={trainingRuns}
         gpuStatus={gpuStatus}
-        focusedExperimentId={focusedExperimentId}
         suggestedTargetColumn={suggestedTargetColumn}
         onCleanDataset={handleCleanDataset}
         onGenerateReport={handleGenerateReport}

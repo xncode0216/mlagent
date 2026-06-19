@@ -23,6 +23,11 @@ interface UiState {
   activeActivity: ActivityMode;
   setActiveMode: (value: MainMode) => void;
   setActiveActivity: (value: ActivityMode) => void;
+  // 选择态：当前文件 / 聚焦实验（深链初始化）。
+  activeFile: string;
+  focusedExperimentId: string | null;
+  setActiveFile: (value: string) => void;
+  setFocusedExperimentId: (value: string | null) => void;
   // 工作区状态串 / 命令结果 / 错误串：AppShell 侧纯写，子组件读。
   workspaceStatus: string;
   trainingResult: TrainingResult | null;
@@ -45,6 +50,10 @@ export const useUiStore = create<UiState>((set) => ({
   activeActivity: initialDeepLink.activity ?? "explorer",
   setActiveMode: (value) => set({ activeMode: value }),
   setActiveActivity: (value) => set({ activeActivity: value }),
+  activeFile: initialDeepLink.file ?? "data/customer_churn.csv",
+  focusedExperimentId: initialDeepLink.experimentId ?? null,
+  setActiveFile: (value) => set({ activeFile: value }),
+  setFocusedExperimentId: (value) => set({ focusedExperimentId: value }),
   workspaceStatus: INITIAL_WORKSPACE_STATUS,
   trainingResult: null,
   trainingError: null,
