@@ -28,6 +28,13 @@ interface UiState {
   focusedExperimentId: string | null;
   setActiveFile: (value: string) => void;
   setFocusedExperimentId: (value: string | null) => void;
+  // 训练相关选择态（RightPanel 直读 store；AgentWorkspace 经 AppShell 拿覆盖后的值）。
+  trainingDatasetPath: string;
+  suggestedTargetColumn: string;
+  selectedPreprocessingPlanPath: string | null;
+  setTrainingDatasetPath: (value: string) => void;
+  setSuggestedTargetColumn: (value: string) => void;
+  setSelectedPreprocessingPlanPath: (value: string | null) => void;
   // 工作区状态串 / 命令结果 / 错误串：AppShell 侧纯写，子组件读。
   workspaceStatus: string;
   trainingResult: TrainingResult | null;
@@ -54,6 +61,12 @@ export const useUiStore = create<UiState>((set) => ({
   focusedExperimentId: initialDeepLink.experimentId ?? null,
   setActiveFile: (value) => set({ activeFile: value }),
   setFocusedExperimentId: (value) => set({ focusedExperimentId: value }),
+  trainingDatasetPath: initialDeepLink.file ?? "data/customer_churn.csv",
+  suggestedTargetColumn: initialPreferences.defaultTargetColumn,
+  selectedPreprocessingPlanPath: null,
+  setTrainingDatasetPath: (value) => set({ trainingDatasetPath: value }),
+  setSuggestedTargetColumn: (value) => set({ suggestedTargetColumn: value }),
+  setSelectedPreprocessingPlanPath: (value) => set({ selectedPreprocessingPlanPath: value }),
   workspaceStatus: INITIAL_WORKSPACE_STATUS,
   trainingResult: null,
   trainingError: null,

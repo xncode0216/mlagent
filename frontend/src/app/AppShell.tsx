@@ -211,6 +211,14 @@ export function AppShell() {
   const activeFile = useUiStore((state) => state.activeFile);
   const setActiveFile = useUiStore((state) => state.setActiveFile);
   const setFocusedExperimentId = useUiStore((state) => state.setFocusedExperimentId);
+  // 训练相关选择态：AppShell 读其值（handlers + AgentWorkspace 的 durableTrainingContext
+  // 覆盖表达式）并保留 setter；RightPanel 改读 store，AgentWorkspace 仍接收覆盖后的 props。
+  const trainingDatasetPath = useUiStore((state) => state.trainingDatasetPath);
+  const setTrainingDatasetPath = useUiStore((state) => state.setTrainingDatasetPath);
+  const suggestedTargetColumn = useUiStore((state) => state.suggestedTargetColumn);
+  const setSuggestedTargetColumn = useUiStore((state) => state.setSuggestedTargetColumn);
+  const selectedPreprocessingPlanPath = useUiStore((state) => state.selectedPreprocessingPlanPath);
+  const setSelectedPreprocessingPlanPath = useUiStore((state) => state.setSelectedPreprocessingPlanPath);
   // UI 状态/错误/日志聚焦字段已迁入 uiStore（AppShell 侧纯写）：此处仅取其动作，
   // 对应的值由子组件直接从 store 读取，AppShell 不再持有这些 useState 与 props。
   const setWorkspaceStatus = useUiStore((state) => state.setWorkspaceStatus);
@@ -257,9 +265,6 @@ export function AppShell() {
   const trainingRuns = trainingRunsQuery.data ?? [];
   const gpuStatusQuery = useGpuStatusQuery(project?.id, preferences.gpuRefreshIntervalMs);
   const gpuStatus = gpuStatusQuery.data ?? null;
-  const [suggestedTargetColumn, setSuggestedTargetColumn] = useState(() => preferences.defaultTargetColumn);
-  const [trainingDatasetPath, setTrainingDatasetPath] = useState(deepLink.file ?? "data/customer_churn.csv");
-  const [selectedPreprocessingPlanPath, setSelectedPreprocessingPlanPath] = useState<string | null>(null);
   const [localEvents, setLocalEvents] = useState<AgentStreamEvent[]>([]);
   const lessonsQuery = useLessonsQuery(project?.id);
   const lessons = lessonsQuery.data ?? [];
@@ -1730,13 +1735,10 @@ export function AppShell() {
       )}
       <RightPanel
         events={visibleEvents}
-        preprocessingPlanPath={selectedPreprocessingPlanPath}
         projectId={project?.id}
         sessionId={activeSession?.id}
-        trainingDatasetPath={trainingDatasetPath}
         trainingRuns={trainingRuns}
         gpuStatus={gpuStatus}
-        suggestedTargetColumn={suggestedTargetColumn}
         onCleanDataset={handleCleanDataset}
         onGenerateReport={handleGenerateReport}
         onGenerateProfile={handleGenerateProfile}

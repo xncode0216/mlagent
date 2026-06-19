@@ -169,13 +169,10 @@ function ArtifactPathRow({
 
 type RightPanelProps = {
   events: AgentStreamEvent[];
-  preprocessingPlanPath?: string | null;
   projectId?: string;
   sessionId?: string;
-  trainingDatasetPath?: string;
   trainingRuns: ExperimentRun[];
   gpuStatus: GPUStatus | null;
-  suggestedTargetColumn?: string;
   onCleanDataset: () => Promise<void>;
   onExecutePreprocessingPlan: () => Promise<void>;
   onExportRunBundle: (experimentId: string) => Promise<void>;
@@ -1879,13 +1876,10 @@ function TrainingPanel({
 
 export function RightPanel({
   events,
-  preprocessingPlanPath,
   projectId,
   sessionId,
-  trainingDatasetPath,
   trainingRuns,
   gpuStatus,
-  suggestedTargetColumn,
   onCleanDataset,
   onExecutePreprocessingPlan,
   onExportRunBundle,
@@ -1908,6 +1902,9 @@ export function RightPanel({
   const mode = useUiStore((state) => state.activeMode);
   const activeFile = useUiStore((state) => state.activeFile);
   const focusedExperimentId = useUiStore((state) => state.focusedExperimentId);
+  const preprocessingPlanPath = useUiStore((state) => state.selectedPreprocessingPlanPath);
+  const trainingDatasetPath = useUiStore((state) => state.trainingDatasetPath);
+  const suggestedTargetColumn = useUiStore((state) => state.suggestedTargetColumn);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(() => (rightPanelTab ? tabById[rightPanelTab] : "图表"));
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
   const [artifactContent, setArtifactContent] = useState<string | null>(null);
