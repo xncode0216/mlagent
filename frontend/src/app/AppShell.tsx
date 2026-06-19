@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import { ActivityPanel } from "./ActivityPanel";
-import { readAppDeepLink, resolveInitialMode, type MainMode } from "./appDeepLink";
+import { readAppDeepLink, type MainMode } from "./appDeepLink";
 import { readAppPreferences, updateAppPreferences, writeAppPreferences, type AppPreferences } from "./appPreferences";
 import { activityPanels, type ActivityMode } from "./activityRail";
 import { useUiStore } from "./uiStore";
@@ -201,6 +201,12 @@ function exportBundleArtifactEvent(
 export function AppShell() {
   const deepLink = useMemo(() => readAppDeepLink(), []);
   const queryClient = useQueryClient();
+  // 导航态（主模式 / 活动栏）由 uiStore 托管：AppShell 既读其值（渲染分支、按钮高亮、
+  // ensureModeSession）也用其动作写入。
+  const activeMode = useUiStore((state) => state.activeMode);
+  const activeActivity = useUiStore((state) => state.activeActivity);
+  const setActiveMode = useUiStore((state) => state.setActiveMode);
+  const setActiveActivity = useUiStore((state) => state.setActiveActivity);
   // UI 状态/错误/日志聚焦字段已迁入 uiStore（AppShell 侧纯写）：此处仅取其动作，
   // 对应的值由子组件直接从 store 读取，AppShell 不再持有这些 useState 与 props。
   const setWorkspaceStatus = useUiStore((state) => state.setWorkspaceStatus);
@@ -242,8 +248,6 @@ export function AppShell() {
   const files = filesQuery.data ?? [];
   const { createFile, renameFile, deleteFile, uploadFile } = useProjectFileMutations(project?.id);
   const [activeFile, setActiveFile] = useState(deepLink.file ?? "data/customer_churn.csv");
-  const [activeActivity, setActiveActivity] = useState<ActivityMode>(deepLink.activity ?? "explorer");
-  const [activeMode, setActiveMode] = useState<MainMode>(() => resolveInitialMode(readAppPreferences(), deepLink));
   const [newProjectName, setNewProjectName] = useState("");
   const [localProjectPath, setLocalProjectPath] = useState("");
   const trainingRunsQuery = useTrainingRunsQuery(project?.id);
@@ -1652,7 +1656,6 @@ export function AppShell() {
         ) : (
           <ActivityPanel
             activeFile={activeFile}
-            activity={activeActivity}
             artifactCount={artifactCount}
             connected={connected}
             eventsCount={visibleEvents.length}
@@ -1665,7 +1668,6 @@ export function AppShell() {
             onPreferenceChange={handlePreferenceChange}
             onSelectExperimentRun={handleSelectExperimentRun}
             onSelectFile={handleSelectProjectFile}
-            onSelectMode={setActiveMode}
             project={project}
             projects={projects}
             protocols={protocols}
@@ -1732,7 +1734,6 @@ export function AppShell() {
       <RightPanel
         activeFile={activeFile}
         events={visibleEvents}
-        mode={activeMode}
         preprocessingPlanPath={selectedPreprocessingPlanPath}
         projectId={project?.id}
         sessionId={activeSession?.id}

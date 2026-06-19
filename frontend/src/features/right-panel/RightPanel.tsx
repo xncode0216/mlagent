@@ -170,7 +170,6 @@ function ArtifactPathRow({
 type RightPanelProps = {
   activeFile: string;
   events: AgentStreamEvent[];
-  mode: "analysis" | "machine-learning" | "evolution";
   preprocessingPlanPath?: string | null;
   projectId?: string;
   sessionId?: string;
@@ -1883,7 +1882,6 @@ function TrainingPanel({
 export function RightPanel({
   activeFile,
   events,
-  mode,
   preprocessingPlanPath,
   projectId,
   sessionId,
@@ -1911,6 +1909,7 @@ export function RightPanel({
   const gpuActionError = useUiStore((state) => state.gpuActionError);
   const focusedLogTaskId = useUiStore((state) => state.focusedLogTaskId);
   const rightPanelTab = useUiStore((state) => state.rightPanelTab);
+  const mode = useUiStore((state) => state.activeMode);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(() => (rightPanelTab ? tabById[rightPanelTab] : "图表"));
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
   const [artifactContent, setArtifactContent] = useState<string | null>(null);

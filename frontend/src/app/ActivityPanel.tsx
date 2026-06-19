@@ -9,13 +9,13 @@ import type {
   Project,
 } from "../lib/api";
 import { gpuRefreshIntervalOptions, type AppPreferences } from "./appPreferences";
-import { getActivityPanelInfo, type ActivityMode } from "./activityRail";
+import { getActivityPanelInfo } from "./activityRail";
+import { useUiStore } from "./uiStore";
 
 type MainMode = "analysis" | "machine-learning" | "evolution";
 
 type ActivityPanelProps = {
   activeFile: string;
-  activity: ActivityMode;
   artifactCount: number;
   connected: boolean;
   eventsCount: number;
@@ -28,7 +28,6 @@ type ActivityPanelProps = {
   onPreferenceChange: (patch: Partial<AppPreferences>) => void;
   onSelectFile: (path: string) => void;
   onSelectExperimentRun: (experimentId: string) => void;
-  onSelectMode: (mode: MainMode) => void;
   project: Project | null;
   projects: Project[];
   protocols: EvolutionProtocol[];
@@ -63,7 +62,6 @@ function modeName(mode: MainMode) {
 
 export function ActivityPanel({
   activeFile,
-  activity,
   artifactCount,
   connected,
   eventsCount,
@@ -76,13 +74,15 @@ export function ActivityPanel({
   onPreferenceChange,
   onSelectFile,
   onSelectExperimentRun,
-  onSelectMode,
   project,
   projects,
   protocols,
   sessions,
   trainingRuns,
 }: ActivityPanelProps) {
+  // 导航态改为直接订阅 uiStore（替代原先经 AppShell 钻取的 activity / onSelectMode）。
+  const activity = useUiStore((state) => state.activeActivity);
+  const onSelectMode = useUiStore((state) => state.setActiveMode);
   const info = getActivityPanelInfo(activity);
   const dataFiles = files.filter((file) => file.type === "file" && (file.path.startsWith("data/") || file.path.endsWith(".csv")));
   const highConfidenceLessons = lessons.filter((lesson) => lesson.status === "high_confidence");

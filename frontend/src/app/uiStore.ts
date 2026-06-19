@@ -1,6 +1,8 @@
 import { create } from "zustand";
 
-import { readAppDeepLink, type RightPanelTabId } from "./appDeepLink";
+import { type ActivityMode } from "./activityRail";
+import { readAppDeepLink, resolveInitialMode, type MainMode, type RightPanelTabId } from "./appDeepLink";
+import { readAppPreferences } from "./appPreferences";
 import type { TrainingResult } from "../lib/api";
 
 // 全局 UI / 选择态集中存放（zustand 单例 store），逐切片把 AppShell 的 useState 搬入，
@@ -8,12 +10,19 @@ import type { TrainingResult } from "../lib/api";
 // 注意：服务端态（projects/sessions/files/...）仍由 react-query 托管，不进此 store；
 // project/activeSession（驱动 query key 与 WebSocket）与组件级表单态另行处理。
 
-// 深链只读一次：纯读 window.location.search，模块加载即可用（jsdom 下同样安全）。
+// 深链与偏好只读一次：纯读 window.location.search / localStorage，模块加载即可用
+// （jsdom 下同样安全）。activeMode 初值沿用 resolveInitialMode(deepLink.mode ?? 默认模式)。
 const initialDeepLink = readAppDeepLink();
+const initialPreferences = readAppPreferences();
 
 const INITIAL_WORKSPACE_STATUS = "Connecting to backend project service...";
 
 interface UiState {
+  // 主模式 / 左侧活动栏：导航选择态（深链初始化）。
+  activeMode: MainMode;
+  activeActivity: ActivityMode;
+  setActiveMode: (value: MainMode) => void;
+  setActiveActivity: (value: ActivityMode) => void;
   // 工作区状态串 / 命令结果 / 错误串：AppShell 侧纯写，子组件读。
   workspaceStatus: string;
   trainingResult: TrainingResult | null;
@@ -32,6 +41,10 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
+  activeMode: resolveInitialMode(initialPreferences, initialDeepLink),
+  activeActivity: initialDeepLink.activity ?? "explorer",
+  setActiveMode: (value) => set({ activeMode: value }),
+  setActiveActivity: (value) => set({ activeActivity: value }),
   workspaceStatus: INITIAL_WORKSPACE_STATUS,
   trainingResult: null,
   trainingError: null,
