@@ -17,6 +17,7 @@ import {
 import { useState } from "react";
 
 import { projectFileDownloadUrl, type AgentSession, type FileItem, type Project } from "../../lib/api";
+import { useUiStore } from "../../app/uiStore";
 import { buildVisibleTree, getDepth } from "./fileTree";
 
 const fallbackItems: FileItem[] = [
@@ -52,7 +53,6 @@ type FileExplorerProps = {
   projects: Project[];
   sessions: AgentSession[];
   activeSessionId?: string;
-  status: string;
 };
 
 function getFileIcon(item: FileItem) {
@@ -86,8 +86,9 @@ export function FileExplorer({
   projects,
   sessions,
   activeSessionId,
-  status,
 }: FileExplorerProps) {
+  // 工作区状态串已迁入 uiStore，直接订阅（替代原先经 AppShell 钻取的 status prop）。
+  const workspaceStatus = useUiStore((state) => state.workspaceStatus);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
   const [isCreatingEntry, setIsCreatingEntry] = useState(false);
@@ -343,7 +344,7 @@ export function FileExplorer({
             </label>
           </div>
         </div>
-        <div className="sidebar-status">{status}</div>
+        <div className="sidebar-status">{workspaceStatus}</div>
         {isCreatingEntry ? (
           <div className="new-entry-row">
             <input

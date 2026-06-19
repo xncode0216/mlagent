@@ -14,6 +14,7 @@ import { ActivityPanel } from "./ActivityPanel";
 import { readAppDeepLink, resolveInitialMode, type MainMode } from "./appDeepLink";
 import { readAppPreferences, updateAppPreferences, writeAppPreferences, type AppPreferences } from "./appPreferences";
 import { activityPanels, type ActivityMode } from "./activityRail";
+import { useUiStore } from "./uiStore";
 import { AgentWorkspace } from "../features/chat/AgentWorkspace";
 import {
   taskStatesToEvents,
@@ -90,7 +91,6 @@ import {
   type FileItem,
   type Lesson,
   type Project,
-  type TrainingResult,
   type EvaluationReportResult,
   abandonTaskState,
 } from "../lib/api";
@@ -201,6 +201,14 @@ function exportBundleArtifactEvent(
 export function AppShell() {
   const deepLink = useMemo(() => readAppDeepLink(), []);
   const queryClient = useQueryClient();
+  // UI 状态/错误/日志聚焦字段已迁入 uiStore（AppShell 侧纯写）：此处仅取其动作，
+  // 对应的值由子组件直接从 store 读取，AppShell 不再持有这些 useState 与 props。
+  const setWorkspaceStatus = useUiStore((state) => state.setWorkspaceStatus);
+  const setTrainingResult = useUiStore((state) => state.setTrainingResult);
+  const setTrainingError = useUiStore((state) => state.setTrainingError);
+  const setGpuActionError = useUiStore((state) => state.setGpuActionError);
+  const setRightPanelTab = useUiStore((state) => state.setRightPanelTab);
+  const openLogs = useUiStore((state) => state.openLogs);
   const [preferences, setPreferences] = useState<AppPreferences>(() => readAppPreferences());
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
   // 会话级服务端态全部由 react-query 托管，随 activeSession.id 取数：
@@ -236,19 +244,13 @@ export function AppShell() {
   const [activeFile, setActiveFile] = useState(deepLink.file ?? "data/customer_churn.csv");
   const [activeActivity, setActiveActivity] = useState<ActivityMode>(deepLink.activity ?? "explorer");
   const [activeMode, setActiveMode] = useState<MainMode>(() => resolveInitialMode(readAppPreferences(), deepLink));
-  const [rightPanelTab, setRightPanelTab] = useState(deepLink.rightTab);
-  const [focusedLogTaskId, setFocusedLogTaskId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
   const [localProjectPath, setLocalProjectPath] = useState("");
-  const [workspaceStatus, setWorkspaceStatus] = useState("Connecting to backend project service...");
-  const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
   const trainingRunsQuery = useTrainingRunsQuery(project?.id);
   const trainingRuns = trainingRunsQuery.data ?? [];
-  const [trainingError, setTrainingError] = useState<string | null>(null);
   const [focusedExperimentId, setFocusedExperimentId] = useState<string | null>(deepLink.experimentId ?? null);
   const gpuStatusQuery = useGpuStatusQuery(project?.id, preferences.gpuRefreshIntervalMs);
   const gpuStatus = gpuStatusQuery.data ?? null;
-  const [gpuActionError, setGpuActionError] = useState<string | null>(null);
   const [suggestedTargetColumn, setSuggestedTargetColumn] = useState(() => preferences.defaultTargetColumn);
   const [trainingDatasetPath, setTrainingDatasetPath] = useState(deepLink.file ?? "data/customer_churn.csv");
   const [selectedPreprocessingPlanPath, setSelectedPreprocessingPlanPath] = useState<string | null>(null);
@@ -1644,7 +1646,6 @@ export function AppShell() {
             sessions={sessions}
             activeSessionId={activeSession?.id}
             onSelectSession={(sessionId) => void handleSelectSession(sessionId)}
-            status={workspaceStatus}
           />
         ) : activeActivity === "search" ? (
           <SearchPanel projectId={project?.id} onSelect={handleSelectProjectFile} />
@@ -1684,10 +1685,7 @@ export function AppShell() {
           onAdopt={handleAdoptLesson}
           onAbandonTaskState={() => handleAbandonTaskState("learn")}
           onExtractLessonsFromSession={handleExtractLessonsFromSession}
-          onOpenLogs={(taskId) => {
-            setFocusedLogTaskId(taskId ?? null);
-            setRightPanelTab("logs");
-          }}
+          onOpenLogs={(taskId) => openLogs(taskId)}
           onRetryLearning={handleRetryLearningExtraction}
           onMarkConflict={handleMarkLessonConflict}
           onSelectExperimentRun={handleSelectExperimentRun}
@@ -1714,10 +1712,7 @@ export function AppShell() {
           onExtractLessons={handleExtractLessonsFromSession}
           onGeneratePreprocessingPlan={handleGeneratePreprocessingPlan}
           onGenerateProfile={handleGenerateProfile}
-          onOpenLogs={(taskId) => {
-            setFocusedLogTaskId(taskId ?? null);
-            setRightPanelTab("logs");
-          }}
+          onOpenLogs={(taskId) => openLogs(taskId)}
           onOpenTraining={() => setActiveMode("machine-learning")}
           onRegenerateEvaluationReport={handleGenerateEvaluationReport}
           onRespondToApproval={handleRespondToApproval}
@@ -1742,13 +1737,9 @@ export function AppShell() {
         projectId={project?.id}
         sessionId={activeSession?.id}
         trainingDatasetPath={trainingDatasetPath}
-        trainingError={trainingError}
-        trainingResult={trainingResult}
         trainingRuns={trainingRuns}
         gpuStatus={gpuStatus}
-        gpuActionError={gpuActionError}
         focusedExperimentId={focusedExperimentId}
-        focusedLogTaskId={focusedLogTaskId}
         suggestedTargetColumn={suggestedTargetColumn}
         onCleanDataset={handleCleanDataset}
         onGenerateReport={handleGenerateReport}
@@ -1762,7 +1753,6 @@ export function AppShell() {
         onTrainModel={handleTrainModel}
         onCancelGpuTask={handleCancelGpuTask}
         onRefreshGpuStatus={handleRefreshGpuStatus}
-        initialTab={rightPanelTab}
       />
       <footer className="status-bar">
         <span>{connected ? "WebSocket Connected" : "WebSocket Disconnected"}</span>

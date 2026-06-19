@@ -12,6 +12,7 @@ import {
   type TrainingResult,
 } from "../../lib/api";
 import type { RightPanelTabId } from "../../app/appDeepLink";
+import { useUiStore } from "../../app/uiStore";
 import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
 import { deriveErrorSlices } from "./errorSlices";
@@ -174,14 +175,9 @@ type RightPanelProps = {
   projectId?: string;
   sessionId?: string;
   trainingDatasetPath?: string;
-  trainingError: string | null;
-  trainingResult: TrainingResult | null;
   trainingRuns: ExperimentRun[];
   gpuStatus: GPUStatus | null;
-  gpuActionError: string | null;
   focusedExperimentId?: string | null;
-  focusedLogTaskId?: string | null;
-  initialTab?: RightPanelTabId;
   suggestedTargetColumn?: string;
   onCleanDataset: () => Promise<void>;
   onExecutePreprocessingPlan: () => Promise<void>;
@@ -1892,14 +1888,9 @@ export function RightPanel({
   projectId,
   sessionId,
   trainingDatasetPath,
-  trainingError,
-  trainingResult,
   trainingRuns,
   gpuStatus,
-  gpuActionError,
   focusedExperimentId,
-  focusedLogTaskId,
-  initialTab,
   suggestedTargetColumn,
   onCleanDataset,
   onExecutePreprocessingPlan,
@@ -1914,7 +1905,13 @@ export function RightPanel({
   onCancelGpuTask,
   onRefreshGpuStatus,
 }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(() => (initialTab ? tabById[initialTab] : "图表"));
+  // 这些 UI 字段已迁入 uiStore，改为直接订阅（替代原先经 AppShell 钻取的 props）。
+  const trainingError = useUiStore((state) => state.trainingError);
+  const trainingResult = useUiStore((state) => state.trainingResult);
+  const gpuActionError = useUiStore((state) => state.gpuActionError);
+  const focusedLogTaskId = useUiStore((state) => state.focusedLogTaskId);
+  const rightPanelTab = useUiStore((state) => state.rightPanelTab);
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(() => (rightPanelTab ? tabById[rightPanelTab] : "图表"));
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
   const [artifactContent, setArtifactContent] = useState<string | null>(null);
   const [artifactError, setArtifactError] = useState<string | null>(null);
@@ -1945,12 +1942,12 @@ export function RightPanel({
   }
 
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(tabById[initialTab]);
+    if (rightPanelTab) {
+      setActiveTab(tabById[rightPanelTab]);
       return;
     }
     setActiveTab(mode === "machine-learning" ? "训练" : mode === "evolution" ? "日志" : "图表");
-  }, [initialTab, mode]);
+  }, [rightPanelTab, mode]);
 
   useEffect(() => {
     if (!["图表", "代码", "数据"].includes(activeTab)) {
