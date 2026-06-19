@@ -32,14 +32,10 @@ const fallbackItems: FileItem[] = [
 type FileExplorerProps = {
   currentProjectId?: string;
   files: FileItem[];
-  localProjectPath: string;
-  newProjectName: string;
-  onCreateProject: () => Promise<void>;
+  onCreateProject: (name: string) => Promise<void>;
   onCreateFile: (path: string, type: "file" | "directory") => Promise<void>;
   onDeleteFile: (path: string) => Promise<void>;
-  onLocalProjectPathChange: (value: string) => void;
-  onNewProjectNameChange: (value: string) => void;
-  onOpenLocalProject: () => Promise<void>;
+  onOpenLocalProject: (path: string) => Promise<void>;
   onRenameFile: (path: string, newPath: string) => Promise<void>;
   onSelect: (path: string) => void;
   onSwitchProject: (projectId: string) => void;
@@ -63,13 +59,9 @@ function getFileIcon(item: FileItem) {
 export function FileExplorer({
   currentProjectId,
   files,
-  localProjectPath,
-  newProjectName,
   onCreateProject,
   onCreateFile,
   onDeleteFile,
-  onLocalProjectPathChange,
-  onNewProjectNameChange,
   onOpenLocalProject,
   onRenameFile,
   onSelect,
@@ -87,6 +79,9 @@ export function FileExplorer({
   const activePath = useUiStore((state) => state.activeFile);
   const expandedFolders = useUiStore((state) => state.expandedFolders);
   const workspaceStatus = useUiStore((state) => state.workspaceStatus);
+  // 新建/打开项目的表单输入为组件级瞬时态，FileExplorer 自管（替代原先经 AppShell 钻取）。
+  const [newProjectName, setNewProjectName] = useState("");
+  const [localProjectPath, setLocalProjectPath] = useState("");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isOpeningProject, setIsOpeningProject] = useState(false);
   const [isCreatingEntry, setIsCreatingEntry] = useState(false);
@@ -97,14 +92,18 @@ export function FileExplorer({
   const visibleFiles = buildVisibleTree(files.length > 0 ? files : fallbackItems, expandedFolders);
 
   async function submitProject() {
-    if (!newProjectName.trim()) return;
-    await onCreateProject();
+    const name = newProjectName.trim();
+    if (!name) return;
+    await onCreateProject(name);
+    setNewProjectName("");
     setIsCreatingProject(false);
   }
 
   async function submitLocalProject() {
-    if (!localProjectPath.trim()) return;
-    await onOpenLocalProject();
+    const path = localProjectPath.trim();
+    if (!path) return;
+    await onOpenLocalProject(path);
+    setLocalProjectPath("");
     setIsOpeningProject(false);
   }
 
@@ -198,11 +197,11 @@ export function FileExplorer({
               autoFocus
               placeholder="新项目名称"
               value={newProjectName}
-              onChange={(event) => onNewProjectNameChange(event.target.value)}
+              onChange={(event) => setNewProjectName(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void submitProject();
                 if (event.key === "Escape") {
-                  onNewProjectNameChange("");
+                  setNewProjectName("");
                   setIsCreatingProject(false);
                 }
               }}
@@ -221,7 +220,7 @@ export function FileExplorer({
               aria-label="取消新建项目"
               className="icon-button"
               onClick={() => {
-                onNewProjectNameChange("");
+                setNewProjectName("");
                 setIsCreatingProject(false);
               }}
               title="取消"
@@ -239,11 +238,11 @@ export function FileExplorer({
               autoFocus
               placeholder="例如 C:\\Projects\\sales_churn_analysis"
               value={localProjectPath}
-              onChange={(event) => onLocalProjectPathChange(event.target.value)}
+              onChange={(event) => setLocalProjectPath(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void submitLocalProject();
                 if (event.key === "Escape") {
-                  onLocalProjectPathChange("");
+                  setLocalProjectPath("");
                   setIsOpeningProject(false);
                 }
               }}
@@ -262,7 +261,7 @@ export function FileExplorer({
               aria-label="取消打开本地项目"
               className="icon-button"
               onClick={() => {
-                onLocalProjectPathChange("");
+                setLocalProjectPath("");
                 setIsOpeningProject(false);
               }}
               title="取消"

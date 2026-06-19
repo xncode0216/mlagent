@@ -261,8 +261,6 @@ export function AppShell() {
   const filesQuery = useProjectFilesQuery(project?.id, expandedFolders);
   const files = filesQuery.data ?? [];
   const { createFile, renameFile, deleteFile, uploadFile } = useProjectFileMutations(project?.id);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [localProjectPath, setLocalProjectPath] = useState("");
   const trainingRunsQuery = useTrainingRunsQuery(project?.id);
   const trainingRuns = trainingRunsQuery.data ?? [];
   const gpuStatusQuery = useGpuStatusQuery(project?.id, preferences.gpuRefreshIntervalMs);
@@ -532,26 +530,24 @@ export function AppShell() {
     setWorkspaceStatus("Project files synced");
   }
 
-  async function handleCreateProject() {
-    const name = newProjectName.trim();
-    if (!name) return;
+  async function handleCreateProject(name: string) {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
     setWorkspaceStatus("Creating project...");
-    const created = await createProject(name);
+    const created = await createProject(trimmedName);
     const nextProjects = await listProjects();
     queryClient.setQueryData(projectsQueryKey(), nextProjects);
-    setNewProjectName("");
     await activateProject(created);
     setWorkspaceStatus("Project files synced");
   }
 
-  async function handleOpenLocalProject() {
-    const path = localProjectPath.trim();
-    if (!path) return;
+  async function handleOpenLocalProject(path: string) {
+    const trimmedPath = path.trim();
+    if (!trimmedPath) return;
     setWorkspaceStatus("Opening local project...");
-    const opened = await openLocalProject(path);
+    const opened = await openLocalProject(trimmedPath);
     const nextProjects = await listProjects();
     queryClient.setQueryData(projectsQueryKey(), nextProjects);
-    setLocalProjectPath("");
     await activateProject(opened);
     setWorkspaceStatus("Local project opened");
   }
@@ -1638,13 +1634,9 @@ export function AppShell() {
           <FileExplorer
             currentProjectId={project?.id}
             files={files}
-            localProjectPath={localProjectPath}
-            newProjectName={newProjectName}
             onCreateProject={handleCreateProject}
             onCreateFile={handleCreateFile}
             onDeleteFile={handleDeleteFile}
-            onLocalProjectPathChange={setLocalProjectPath}
-            onNewProjectNameChange={setNewProjectName}
             onOpenLocalProject={handleOpenLocalProject}
             onRenameFile={handleRenameFile}
             onSelect={handleSelectProjectFile}
