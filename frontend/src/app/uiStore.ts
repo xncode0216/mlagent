@@ -35,6 +35,9 @@ interface UiState {
   setTrainingDatasetPath: (value: string) => void;
   setSuggestedTargetColumn: (value: string) => void;
   setSelectedPreprocessingPlanPath: (value: string | null) => void;
+  // 文件树展开集：filesQuery 的 query key 依赖；保留 React setState 式 updater 以零改 handler。
+  expandedFolders: string[];
+  setExpandedFolders: (value: string[] | ((current: string[]) => string[])) => void;
   // 工作区状态串 / 命令结果 / 错误串：AppShell 侧纯写，子组件读。
   workspaceStatus: string;
   trainingResult: TrainingResult | null;
@@ -67,6 +70,11 @@ export const useUiStore = create<UiState>((set) => ({
   setTrainingDatasetPath: (value) => set({ trainingDatasetPath: value }),
   setSuggestedTargetColumn: (value) => set({ suggestedTargetColumn: value }),
   setSelectedPreprocessingPlanPath: (value) => set({ selectedPreprocessingPlanPath: value }),
+  expandedFolders: [],
+  setExpandedFolders: (value) =>
+    set((state) => ({
+      expandedFolders: typeof value === "function" ? value(state.expandedFolders) : value,
+    })),
   workspaceStatus: INITIAL_WORKSPACE_STATUS,
   trainingResult: null,
   trainingError: null,

@@ -255,7 +255,9 @@ export function AppShell() {
   const [project, setProject] = useState<Project | null>(null);
   const sessionsQuery = useSessionsQuery(project?.id);
   const sessions = sessionsQuery.data ?? [];
-  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  // 文件树展开集已迁入 uiStore：filesQuery 与各文件 handler 读其值，子组件直读 store。
+  const expandedFolders = useUiStore((state) => state.expandedFolders);
+  const setExpandedFolders = useUiStore((state) => state.setExpandedFolders);
   const filesQuery = useProjectFilesQuery(project?.id, expandedFolders);
   const files = filesQuery.data ?? [];
   const { createFile, renameFile, deleteFile, uploadFile } = useProjectFileMutations(project?.id);
@@ -1635,7 +1637,6 @@ export function AppShell() {
         {activeActivity === "explorer" ? (
           <FileExplorer
             currentProjectId={project?.id}
-            expandedFolders={expandedFolders}
             files={files}
             localProjectPath={localProjectPath}
             newProjectName={newProjectName}
