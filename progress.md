@@ -807,3 +807,17 @@
 - **U5·表单态局部化（`9d49169`）**：`newProjectName`/`localProjectPath` 是组件级瞬时表单态，**不入全局 store**——下沉进 FileExplorer 自管（它本就自管 `newEntryPath` 等同类态）。`onCreateProject`/`onOpenLocalProject` 签名改收 `name`/`path` 参数，AppShell handler 据此读参数、删 2 个 useState。踩坑：两处清空回调缩进不同（onKeyDown 内层 vs onClick），首次 replace_all 只命中一组，靠 `tsc` 抓出残留的 `onNewProjectNameChange`/`onLocalProjectPathChange` 两处后补修——再次印证「删 prop 后 tsc 即完整清单」的安全网。
 - **刻意未迁**（附理由）：① `localEvents` 只被折叠进 `visibleEvents`（非 props），迁入无消除钻取收益（YAGNI），留待 handler 抽 hook 时再处理；② `preferences` 由 `appPreferences` localStorage 模块（带测试）托管，特殊；③ `project`/`activeSession` 驱动 query key 与 `useAgentStream` 的 WebSocket，耦合最深，单独评估。
 - **现状**：全局 UI/选择态已由 uiStore 托管，RightPanel/ActivityPanel/AgentWorkspace/FileExplorer 的 props 钻取大幅收敛（AppShell 顶层 `useState` 从迁移前的近 20 个降到个位数：仅剩 `preferences`/`project`/`activeSession`/`localEvents`）。**剩余（后续会话）**：把命令式 handler（训练/预处理/导出/课程等 ~40 个，连同 `localEvents`）抽成 feature hooks → 拆 `AppShell` JSX 为容器 + 各区子组件薄分发；按需评估 `project`/`activeSession` 是否入 store。
+
+## 2026-06-26 设计参考资产与 CLAUDE.md 项目配置
+
+- 补充 `CLAUDE.md`（项目级 Claude Code 配置）：记录技术约束（纯 CSS / Catppuccin / lucide-react / Inter+JetBrains Mono）、设计质量护栏（品牌参考资产索引 + 反模式禁止 + 动画约束）和关键文件索引，作为所有 AI 辅助工作的约束基线。
+- 新增品牌设计参考文档（`docs/design-references/`）：
+  - `linear-design.md` — 紧凑操作 UI、命令面板、键盘驱动工作流参考
+  - `cursor-design.md` — AI IDE 编辑器风格、暖色调深色主题、代码优先视觉参考
+  - `supabase-design.md` — 数据仪表板模式、技术向保守配色、产品截图叙事参考
+  - `impeccable-antipatterns.md` — AI-slop 设计反模式规则（字体/色彩/布局/动效/图标/内容六大类禁止项）
+- 新增 `docs/tech-evaluation/shadcn-ui-assessment.md`：评估 shadcn/ui 与 MLAgent 纯 CSS 路线的兼容性，结论为 **暂不引入**（已有 Catppuccin token 体系与 Zustand/React Query 地基，shadcn 价值主张是 Tailwind + Radix，与项目路线不兼容）。
+- 新增 `docs/ui-patterns/animation-patterns.md`：为 MLAgent 工作台量身定制的动效规范，包含状态过渡（150-300ms 缓出）、微交互（骨架屏/加载反馈/hover 操作显露）和 `prefers-reduced-motion` 回退要求。
+- 更新 `AGENTS.md`：增加「项目设计约束」速查表（纯 CSS 架构 / Catppuccin / lucide-react / 锁定字体），并在前端优化 Agent 工作流步骤中补充具体参考文件指引。
+- 更新 `docs/skills/mlagent-frontend-product-designer/SKILL.md`：扩充参考资产索引表（P0/P1/P2 优先级），在设计规则各节插入 Catppuccin 色彩约束、动画约束（引用 `animation-patterns.md`）、设计反模式摘要（引用 `impeccable-antipatterns.md`）和品牌哲学摘要（Linear / Cursor / Supabase），并在实现技术规范末尾加入「绝对禁止引入第三方 UI 框架」与「新 CSS 必须使用 Catppuccin token」两条强约束。
+- 以上均为**文档类变更**，不涉及应用代码；未执行新的测试运行，功能基线保持 `eslint 0 / vitest 93 passed / tsc + build` 全绿。

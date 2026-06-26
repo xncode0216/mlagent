@@ -9,7 +9,18 @@ description: MLAgent-specific frontend product design and optimization skill for
 
 Turn MLAgent's frontend into a product-grade AI/data/ML workbench: operational, dense but calm, inspectable, accessible, and wired end-to-end. Optimize real workflows before decoration.
 
-For detailed standards, read `references/product-ui-principles.md` when making non-trivial layout, interaction, accessibility, or visual-system decisions.
+### 必读参考资产
+
+对于每个前端任务，按需查阅以下参考文件：
+
+| 优先级 | 文件 | 何时查阅 |
+|--------|------|---------|
+| **P0** | `docs/design-references/impeccable-antipatterns.md` | 任何 UI 变更前 — 避免 AI-slop 设计 |
+| **P0** | `references/product-ui-principles.md` | 布局、交互、可访问性或视觉系统决策 |
+| **P1** | `docs/design-references/linear-design.md` | 紧凑操作 UI、命令面板、列表行设计 |
+| **P1** | `docs/design-references/cursor-design.md` | IDE 编辑器风格、代码面板、多面板布局 |
+| **P2** | `docs/design-references/supabase-design.md` | 数据仪表板、数据表、分析面板 |
+| **P2** | `docs/ui-patterns/animation-patterns.md` | 状态过渡动效、微交互、骨架屏 |
 
 ## Operating Model
 
@@ -36,15 +47,43 @@ Keep controls near their domain: file operations in file/data panels, training c
 
 ## Design Rules
 
+### 核心布局
 - Make the first viewport a usable work surface, not a landing page.
 - Favor compact, scannable operational UI over hero blocks, nested cards, or decorative panels.
+- Fit text inside its container on desktop and mobile; long file paths and IDs must wrap gracefully.
+- Prefer direct manipulation and deep links: clicking graph evidence, artifacts, runs, or files should select the canonical object in the app.
+
+### 控件与状态
 - Use icons for known actions, tabs for view groups, segmented controls for modes, toggles for binary choices, tables for comparisons, and menus for option sets.
 - Use clear active, hover, disabled, loading, empty, success, and error states.
 - Keep table rows, buttons, code paths, and panel headers stable in size; avoid layout shift.
+
+### 色彩与视觉
 - Use restrained color: neutral structure, semantic status colors, and sparse accents for attention.
 - Avoid one-note palettes, decorative blobs/orbs, marketing-style gradients, and UI cards inside UI cards.
-- Fit text inside its container on desktop and mobile; long file paths and IDs must wrap gracefully.
-- Prefer direct manipulation and deep links: clicking graph evidence, artifacts, runs, or files should select the canonical object in the app.
+- **全部颜色来自 Catppuccin 暗色 token 体系**。禁止纯黑 (`#000`)、纯灰 (`#808080`)、或灰色文字在彩色背景上。
+- 强调色 (Accent blue `#89b4fa`) 仅用于主交互元素，不得滥用。
+
+### 动画约束（参考 `docs/ui-patterns/animation-patterns.md`）
+- 动画时长 150-300ms，使用标准缓出函数
+- 仅动画 `opacity` 和 `transform`（GPU 加速属性）
+- 动效必须有功能意义：状态过渡、反馈确认、焦点引导
+- **禁止** bounce/elastic 缓动、无限循环装饰动画、在 `:hover` 时启动关键帧动画
+- **必须** 包含 `prefers-reduced-motion` 回退
+
+### 设计反模式（详见 `docs/design-references/impeccable-antipatterns.md`）
+- ❌ 不使用 Arial/Inter/Roboto 之外的默认 AI 字体（项目锁定 Inter + JetBrains Mono）
+- ❌ 不嵌套卡片，不把一切包裹为卡片
+- ❌ 不使用 emoji 作为功能图标（锁定 lucide-react）
+- ❌ 不使用 Lorem Ipsum 或 AI 编造的假数据
+- ❌ 不依赖颜色作为唯一状态区分方式
+- ✅ 所有可交互元素 ≥ 44×44px 触控目标
+- ✅ 所有可交互元素有可见的 `:focus-visible` 样式
+
+### 品牌设计哲学（参考 `docs/design-references/`）
+- **Linear 式操作密度**: 紧凑列表行（~36-40px）、悬停显露操作按钮、键盘驱动工作流、极简视觉
+- **Cursor 式编辑冷静**: 代码优先视觉、细线分割而非阴影、展示字重不走 bold、单一强调色策略
+- **Supabase 式数据清晰**: 紧凑数据面板、产品界面即装饰、按钮方形化不做药丸形
 
 ## Interaction Workflow
 
@@ -77,10 +116,12 @@ When optimizing a screen:
 
 - Follow existing React and CSS patterns before adding abstractions.
 - Prefer typed props and small pure helpers for behavior that deserves tests.
-- Keep CSS in the existing style system unless a local component already owns scoped styles.
+- Keep CSS in the existing style system (`frontend/src/styles.css`) unless a local component already owns scoped styles.
 - Add tests for formatters, navigation helpers, rail/panel configs, reducers, and API contracts.
 - Use lucide icons already in the project when a familiar icon exists.
 - Do not introduce a new UI framework unless the product plan explicitly calls for it.
+- **绝对禁止**: 引入 Tailwind CSS、shadcn/ui、MUI、Ant Design 或任何第三方 UI 组件库。
+- 任何新增 CSS 必须使用 Catppuccin token（参见 `docs/design/design-system.html` 和 `design-spec.md`）。
 
 ## Completion Checklist
 
