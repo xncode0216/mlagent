@@ -821,3 +821,53 @@
 - 更新 `AGENTS.md`：增加「项目设计约束」速查表（纯 CSS 架构 / Catppuccin / lucide-react / 锁定字体），并在前端优化 Agent 工作流步骤中补充具体参考文件指引。
 - 更新 `docs/skills/mlagent-frontend-product-designer/SKILL.md`：扩充参考资产索引表（P0/P1/P2 优先级），在设计规则各节插入 Catppuccin 色彩约束、动画约束（引用 `animation-patterns.md`）、设计反模式摘要（引用 `impeccable-antipatterns.md`）和品牌哲学摘要（Linear / Cursor / Supabase），并在实现技术规范末尾加入「绝对禁止引入第三方 UI 框架」与「新 CSS 必须使用 Catppuccin token」两条强约束。
 - 以上均为**文档类变更**，不涉及应用代码；未执行新的测试运行，功能基线保持 `eslint 0 / vitest 93 passed / tsc + build` 全绿。
+
+## 2026-07-18 前端状态架构（P1-1，U6 领域 action hooks 收口）
+
+- 已执行 `git fetch --all --prune` 并复核提交历史：当前 `feat/p0-backend-hardening` 与 `origin/feat/p0-backend-hardening` 同步，远端最新提交仍为 `74af40e`；已提交基线完整覆盖 P1-1 的 React Query 服务端状态迁移与 Zustand U1-U5。
+- 接续工作区中尚未跟踪的 4 个领域 hook 半成品，先修复 `useFileActions` 的 mutation 类型契约（由 `useProjectFileMutations` 导出稳定的 `ProjectFileMutations` 返回类型），再接入 `AppShell`。
+- **U6·领域命令拆分**：文件域（上传/创建/重命名/删除/选择）、分析域（报告/画像/预处理/清洗/ML 移交）、训练域（训练/重试/评估/导出/GPU）、进化域（提取/重试/采用/拒绝/冲突）分别由 `useFileActions`、`useAnalysisActions`、`useTrainingActions`、`useEvolutionActions` 承担；缓存刷新、任务事件、错误态与导航副作用仍在各自领域内闭环。
+- 行为保持要点：文件选择仍同步数据集/预处理计划上下文；实验选择仍同时聚焦 run、切换 Experiments 活动面板并进入 Machine Learning；训练/评估/导出/学习仍刷新对应 React Query 缓存并写入既有 typed local events；WebSocket approval/resume 继续走 `useAgentStream` 原协议。
+- `AppShell.tsx` 从 HEAD 基线 1,758 行降至 698 行（删除 1,026 行领域 handler 和失效 helper/import），现在仅负责 bootstrap、项目/会话生命周期、query/hook 装配、durable context 派生与已有工作台区域分发。保留 `project`/`activeSession`、`preferences`、`localEvents` 在容器中是刻意边界，不再为了行数引入大 props JSX 包装组件。
+- 验证通过：`npm.cmd run lint`；`npm.cmd test`（16 files / 93 passed，含 `AppShell.smoke.test.tsx`）；`npm.cmd run build`（TypeScript project build + Vite production build）。本片不改变可见 UI，故无需新增浏览器视觉 QA。
+- **P1-1 Frontend state architecture 已完成**。下一优先级回到生产就绪 backlog：P0-2 AuthN/Z + multi-tenancy，或按产品体验路线推进 P1-2 Rich chat + real charts；两者都应另开独立垂直切片，避免与本次结构收口混杂。
+
+## 2026-07-18 认证与多租户（P0-2，JWT 身份 + 资源隔离地基）
+
+- 按生产就绪优先级启动 P0-2。威胁模型聚焦三条边界：伪造 Bearer 身份（Spoofing）、用已知 `project_id`/`session_id` 横向读取另一租户文件/模型/日志（Information Disclosure / Elevation of Privilege）、JWT 模式下利用 `open-local` 注册任意服务器目录（Tampering / Disclosure）。因此没有只给 `/api/projects` 做表面认证，而是把同一身份上下文绑定到全部项目域 HTTP 和 WebSocket 路由。
+- 新增 `backend/app/core/auth.py`：`AuthenticatedUser` + 请求级 `ContextVar`，认证模式显式分为 `development`（兼容本地 `dev-user`）和 `jwt`。JWT 使用 PyJWT 2.13，算法固定 allowlist `HS256`，要求签名、`exp`、`sub`，支持 issuer/audience/leeway；缺失、篡改、过期统一 401 + `WWW-Authenticate: Bearer`，密钥不足 32 bytes 时 503 失败关闭。JWT secret 以 Pydantic `SecretStr` 保存，避免配置 repr 泄漏。
+- `main.py` 对 projects/files/data-analysis/machine-learning/evolution/resources/sessions/WebSocket 集中挂载 `bind_current_user`；health 与只读 LLM status 保持公开。内部 `get_registered_project`/`list_registered_projects` 自动读取同一请求身份，既覆盖 API helper，也覆盖 WebSocket 内 orchestrator 的项目解析。
+- 项目注册表改为真正按租户分区：内存 key 为 `(workspace_key, project_id)`；磁盘目录使用 `usr_<sha256(subject)>`，避免 subject 中路径字符或 PII 直接进入文件系统；`owner_id` 保留真实 subject。registry 加 owner 一致性校验，拒绝把别人的项目写入当前注册表，并忽略 owner 不匹配的磁盘记录。
+- JWT 模式禁用 `/api/projects/open-local`；GPU status/cancel 也补上项目所有权校验，不再只相信 URL 中的 `project_id`。跨租户测试覆盖 project list/detail、file tree、session message、GPU resource，均返回 404；WebSocket 无 token 在握手阶段返回 401，合法 token 可正常建立连接。
+- 依赖与安装：新增 `PyJWT>=2.13.0,<3.0.0`；`.env.example` 增加 auth 配置说明；`pyproject.toml` 显式只发现 `app*` 包、排除 runtime `workspaces*`，修复存在本地工作区数据时 `pip install -e ".[dev]"` 误报多个顶层包。标准 editable install 已实测成功，`python -m pip check` 无 broken requirements。
+- 测试遵循红→绿：新增 JWT 缺失/篡改/过期/短密钥、租户隔离、JWT 禁用 open-local、WebSocket 握手测试；既有 GPU API 测试改为先创建真实项目，以匹配新的所有权前置条件。最终完整后端回归 `177 passed, 3 skipped`；Ruff 全量通过，`python -m pip check` 与 `git diff --check` 通过。
+- **P0-2 仍为进行中**：当前是受信外部 HS256 token 的资源服务器地基，还没有浏览器登录/登出、token issuer、OIDC/JWKS、组织/角色 claims 或 auth audit event。下一切片建议接 OIDC Authorization Code + PKCE / JWKS，并通过 httpOnly + secure + SameSite cookie 或 BFF 会话把身份安全带到前端，禁止把 bearer token 存入 localStorage。
+
+## 2026-07-18 认证与多租户（P0-2，OIDC/JWKS RS256 验签）
+
+- 承接 HS256 资源服务器地基，新增 `auth_mode=oidc`。本片只负责验证由受信 OIDC Provider 签发的 bearer token，不虚构登录页或把 token 暴露给浏览器存储；浏览器授权码流程留给下一独立切片。
+- 信任边界按 RFC 8725 / OIDC Discovery / PyJWT 2.13 行为收紧：OIDC 固定 `RS256`，不与 `HS256` 共用算法集合；token header 必须在取钥前满足 `alg == RS256`、存在非空 `kid`（≤128 字符、无控制字符），因此算法混淆和无 key-id token 不会触发 JWKS 网络访问。应用只读取 operator 配置的 JWKS URL，忽略 token 自带的 `jku`/`x5u`。
+- OIDC 配置必须同时提供 issuer、audience、JWKS URL。issuer 与 JWKS URL 都要求 HTTPS、禁止嵌入用户名/密码与 fragment；issuer 额外禁止 query，JWKS URL保留规范允许的 query。非法 URL、非正缓存 TTL、0/过大 timeout 均以 503 失败关闭。
+- 使用 PyJWT `PyJWKClient` 的 JWK Set cache + signing-key LRU cache，缓存 TTL 默认 300 秒、限制 1–86400 秒；网络 timeout 默认 5 秒、限制 `(0, 30]`，避免 IdP/JWKS 故障无限拖长 API 请求。依赖改为 `PyJWT[crypto]>=2.13.0,<3.0.0`，显式获得 RSA 验签所需 cryptography 支持。
+- token claims 强制 `exp/sub/iss/aud` 并绑定配置 issuer/audience；未知 `kid`、JWKS 获取/解析失败、签名失败、过期或 claims 不匹配统一返回 401 + `WWW-Authenticate: Bearer`，不向调用方暴露 JWKS 地址、key id 查找细节或异常文本。
+- TDD 逐条完成：① 合法 RS256 token（500→200）；② 缺失 `kid` 在 JWKS 前拒绝（500→401）；③ 非 HTTPS issuer 配置失败关闭（401→503）；④ 非法 JWKS timeout（200→503）；随后补齐 HS/RS 混淆、未知 key、issuer/audience 绑定回归。`tests/test_auth.py` 当前 13 passed，认证/注册表/文件/会话聚焦回归 43 passed。
+- 最终门禁：标准 `pip install -e ".[dev]"` 成功；`python -m pip check` 无 broken requirements；ruff 全量通过；完整 backend `184 passed, 3 skipped`；`git diff --check` 通过。
+- **P0-2 仍为进行中**：下一切片实现 OIDC Authorization Code + PKCE 与 BFF/httpOnly cookie 会话，补 state/nonce、回调一次性消费、Secure/SameSite、登出与会话撤销；仍明确禁止把 access/id token 写入 localStorage。
+
+## 2026-07-18 认证与多租户（P0-2，Authorization Code + PKCE / BFF 会话）
+
+- 新增公开认证路由 `backend/app/api/auth.py`：`GET /api/auth/login` 创建 Authorization Code 请求，`GET /api/auth/callback` 换取并验证 ID Token，`GET /api/auth/session` 返回稳定的浏览器登录状态契约，`POST /api/auth/logout` 幂等撤销会话。OIDC authorization/token/callback/return URL 均为 operator 固定配置，要求 HTTPS，不接受请求参数控制回跳地址，避免 SSRF 与 open redirect。
+- PKCE 固定 `S256`：每次登录生成高熵 `code_verifier`、`state`、`nonce`；浏览器只得到 callback path 限定的 `HttpOnly; Secure; SameSite=Lax` 不透明事务 cookie。`AuthSessionService.consume_login_transaction` 在锁内校验并弹出事务，因此同一合法 state/cookie 也只能消费一次；错误 state 不触发 token exchange，错误 nonce 与重放均不能建立会话。
+- token endpoint 只接收 `authorization_code`、固定 redirect URI 与 PKCE verifier。公开客户端在 form 中发送 client id；配置 client secret 时改用 HTTP Basic（OIDC 默认 `client_secret_basic`），secret 不进入 URL、表单、响应或浏览器。第三方响应以大小上限 + Pydantic allow-schema 视为不可信输入，网络错误、非成功响应、畸形/超大 JSON 统一映射为无 provider 内部细节的 502。
+- ID Token 复用既有 RS256/JWKS 固定算法与取钥路径，额外绑定 browser client id audience 和一次性 nonce；当 `aud` 含多个值时强制匹配 `azp`，存在 `azp` 时也必须等于目标 client。成功后只创建服务端随机会话 ID，cookie 为 `HttpOnly; Secure; SameSite=Strict; Path=/`；不保存、不下发 access token 或 ID Token，注销会立即从服务端移除会话。
+- cookie 认证已接入既有 `get_current_user`，因此 projects/files/sessions/resources 和 WebSocket 自动复用原租户隔离。所有 cookie 认证的非安全 HTTP 方法与 WebSocket 握手必须提供匹配 `cors_origins` 或前端 return origin 的 `Origin`；无来源/伪造来源返回 403，Bearer API 客户端不受该浏览器 CSRF 规则影响。登录/回调响应加入 `Cache-Control: no-store`，回调跳转加入 `Referrer-Policy: no-referrer`。
+- TDD 覆盖 10 个浏览器认证用例：PKCE 跳转与 cookie 属性、完整回调→session→受保护项目→logout 黄金路径、错误 state、nonce mismatch、多 audience 缺失 azp、一次性回调重放、CSRF Origin、真实 token exchange form/Basic auth、畸形 provider 响应、非 HTTPS authorization endpoint 失败关闭。认证聚焦回归 `23 passed`；完整 backend `194 passed, 3 skipped`（99.29s）；Ruff 全量、`python -m pip check`、`git diff --check` 均通过。
+- **当前边界与下一步**：事务和浏览器会话当前是单进程内存存储，已经具备 TTL、原子消费和立即撤销语义，但不适用于多 worker/多实例。P0-2 下一切片应迁到 Redis（共享 TTL + 原子 get/delete），随后用项目专用前端设计 skill 接入登录状态与登出入口；组织/角色 claims 和认证审计仍未完成，因此 P0-2 保持进行中。
+
+## 2026-07-20 Git 收口与进度同步
+
+- 执行 `git fetch --all --prune` 后确认 `feat/p0-backend-hardening` 在收口前与 `origin/feat/p0-backend-hardening` 完全对齐（ahead/behind `0/0`），远端基线为 `74af40e`；未混入远端新增提交。
+- P1-1 前端 action hooks 与薄容器收口已提交为 `b5b729a refactor(frontend): complete AppShell action hook decomposition`。提交包含 `useFileActions`、`useAnalysisActions`、`useTrainingActions`、`useEvolutionActions` 以及 `AppShell` 接线，P1-1 保持完成状态。
+- P0-2 JWT/OIDC/多租户与浏览器 PKCE/BFF 会话已提交为 `6e1d301 feat(auth): add tenant isolation and OIDC browser sessions`。该提交包含请求身份、租户资源隔离、RS256/JWKS、Authorization Code + PKCE、一次性登录事务、可撤销 httpOnly 会话、CSRF Origin 防护和对应测试。
+- 提交前重新执行完整门禁：backend `194 passed, 3 skipped`（101.46s）、Ruff 全量通过、`python -m pip check` 无 broken requirements；frontend ESLint 通过、Vitest `16 files / 93 passed`、TypeScript + Vite production build 通过；`git diff --check` 通过，差异扫描未发现疑似硬编码凭据。
+- 本节与 `task_plan.md` 的真实提交号同步作为独立文档提交收口。当前仅创建本地提交，未推送远端；P0-2 后续仍按 Redis 共享会话存储 → 前端认证入口 → 组织/角色 claims 与认证审计的顺序推进。
