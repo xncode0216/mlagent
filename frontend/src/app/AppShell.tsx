@@ -16,17 +16,19 @@ import { readAppPreferences, updateAppPreferences, writeAppPreferences, type App
 import { activityPanels, type ActivityMode } from "./activityRail";
 import { useUiStore } from "./uiStore";
 import { AgentWorkspace } from "../features/chat/AgentWorkspace";
+import { useAnalysisActions } from "../features/chat/useAnalysisActions";
 import {
   taskStatesToEvents,
   trainingContextFromTaskStates,
   type DurableTaskState as FrontendDurableTaskState,
 } from "../features/chat/taskStateEvents";
 import { buildTaskStateInspection } from "../features/chat/taskStateInspector";
-import type { AgentStreamEvent, Artifact, WorkflowStageId } from "../features/chat/types";
+import type { AgentStreamEvent, WorkflowStageId } from "../features/chat/types";
 import { useAgentStream } from "../features/chat/useAgentStream";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { EvolutionWorkspace } from "../features/evolution/EvolutionWorkspace";
+import { useEvolutionActions } from "../features/evolution/useEvolutionActions";
 import { useEvolutionProtocolsQuery } from "../features/evolution/useEvolutionProtocolsQuery";
 import {
   injectionLogsQueryKey,
@@ -34,15 +36,14 @@ import {
   useInjectionLogsQuery,
   useLessonsQuery,
 } from "../features/evolution/useEvolutionQueries";
-import { gpuStatusQueryKey, useGpuStatusQuery } from "../features/right-panel/useGpuStatusQuery";
-import { trainingRunsQueryKey, useTrainingRunsQuery } from "../features/right-panel/useTrainingRunsQuery";
+import { useGpuStatusQuery } from "../features/right-panel/useGpuStatusQuery";
+import { useTrainingRunsQuery } from "../features/right-panel/useTrainingRunsQuery";
 import { FileExplorer } from "../features/files/FileExplorer";
 import { SearchPanel } from "../features/files/SearchPanel";
+import { useFileActions } from "../features/files/useFileActions";
 import { useProjectFileMutations } from "../features/files/useProjectFileMutations";
 import {
   filesQueryKey,
-  filesQueryKeyRoot,
-  listExpandedProjectFiles,
   useProjectFilesQuery,
 } from "../features/files/useProjectFilesQuery";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
@@ -57,45 +58,20 @@ import {
   useSessionTaskStatesQuery,
 } from "../features/sessions/useSessionQueries";
 import { RightPanel } from "../features/right-panel/RightPanel";
+import { useTrainingActions } from "../features/right-panel/useTrainingActions";
 import {
-  adoptLesson,
-  cancelGPUTask,
-  cleanAnalysisDataset,
   createAgentSession,
   createProject,
-  exportRunBundle,
-  extractLesson,
-  extractLessonsFromSession,
-  executePreprocessingPlan,
-  resumeExportBundle,
-  generateEvaluationReport,
-  generateAnalysisReport,
-  generateDataQualityProfile,
-  generatePreprocessingPlan,
-  getGPUStatus,
-  handoffDatasetToMl,
   listFiles,
   listProjectSessions,
   listProjects,
-  markLessonConflict,
   openLocalProject,
-  rejectLesson,
-  resumeEvaluationReport,
-  resumeLessonExtraction,
-  resumeSklearnTraining,
-  trainBaselineModel,
-  trainSklearnModel,
   uploadProjectFile,
   type AgentSession,
-  type ExportBundleResult,
   type FileItem,
-  type Lesson,
   type Project,
-  type EvaluationReportResult,
   abandonTaskState,
 } from "../lib/api";
-
-type TrainingEngine = "baseline" | "sklearn";
 
 const activityIcons: Record<ActivityMode, ReactNode> = {
   explorer: <FolderOpen size={18} />,
@@ -146,58 +122,6 @@ function taskStateSnapshot(taskStates: FrontendDurableTaskState[]) {
   };
 }
 
-function evaluationReportArtifactEvent(
-  projectId: string,
-  sessionId: string,
-  result: EvaluationReportResult,
-): AgentStreamEvent {
-  return {
-    type: "artifact_created",
-    artifact: {
-      id: result.evaluation_report_artifact.id,
-      project_id: projectId,
-      session_id: sessionId,
-      type: "report",
-      name: result.evaluation_report_artifact.name,
-      path: result.evaluation_report_artifact.path,
-      metadata: {
-        experiment_id: result.experiment_id,
-        metrics_path: result.run.metrics_artifact.path,
-        model_path: result.run.model_artifact.path,
-        prediction_samples_path: result.run.prediction_samples_artifact?.path,
-        preprocessing_plan_path: result.run.preprocessing_plan_artifact?.path,
-      },
-      created_at: result.evaluation_report_artifact.created_at,
-    } satisfies Artifact,
-  };
-}
-
-function exportBundleArtifactEvent(
-  projectId: string,
-  sessionId: string,
-  result: ExportBundleResult,
-): AgentStreamEvent {
-  return {
-    type: "artifact_created",
-    artifact: {
-      id: result.export_bundle_artifact.id,
-      project_id: projectId,
-      session_id: sessionId,
-      type: "archive",
-      name: result.export_bundle_artifact.name,
-      path: result.export_bundle_artifact.path,
-      metadata: {
-        experiment_id: result.experiment_id,
-        artifact_role: "export_bundle",
-        metrics_path: result.run.metrics_artifact.path,
-        model_path: result.run.model_artifact.path,
-        report_path: result.run.evaluation_report_artifact?.path,
-      },
-      created_at: result.export_bundle_artifact.created_at,
-    } satisfies Artifact,
-  };
-}
-
 export function AppShell() {
   const deepLink = useMemo(() => readAppDeepLink(), []);
   const queryClient = useQueryClient();
@@ -225,7 +149,6 @@ export function AppShell() {
   const setTrainingResult = useUiStore((state) => state.setTrainingResult);
   const setTrainingError = useUiStore((state) => state.setTrainingError);
   const setGpuActionError = useUiStore((state) => state.setGpuActionError);
-  const setRightPanelTab = useUiStore((state) => state.setRightPanelTab);
   const openLogs = useUiStore((state) => state.openLogs);
   const [preferences, setPreferences] = useState<AppPreferences>(() => readAppPreferences());
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
@@ -260,7 +183,7 @@ export function AppShell() {
   const setExpandedFolders = useUiStore((state) => state.setExpandedFolders);
   const filesQuery = useProjectFilesQuery(project?.id, expandedFolders);
   const files = filesQuery.data ?? [];
-  const { createFile, renameFile, deleteFile, uploadFile } = useProjectFileMutations(project?.id);
+  const fileMutations = useProjectFileMutations(project?.id);
   const trainingRunsQuery = useTrainingRunsQuery(project?.id);
   const trainingRuns = trainingRunsQuery.data ?? [];
   const gpuStatusQuery = useGpuStatusQuery(project?.id, preferences.gpuRefreshIntervalMs);
@@ -272,6 +195,49 @@ export function AppShell() {
   const protocols = protocolsQuery.data ?? [];
   const injectionLogsQuery = useInjectionLogsQuery(project?.id);
   const injectionLogs = injectionLogsQuery.data ?? [];
+
+  const {
+    handleUpload,
+    handleCreateFile,
+    handleRenameFile,
+    handleDeleteFile,
+    handleToggleFolder,
+    handleSelectProjectFile,
+    handleSelectExperimentRun,
+  } = useFileActions({ projectId: project?.id, mutations: fileMutations });
+  const {
+    handleTrainModel,
+    handleRetrySklearnTraining,
+    handleGenerateEvaluationReport,
+    handleRetryEvaluationReport,
+    handleExportRunBundle,
+    handleRetryExportBundle,
+    handleRefreshGpuStatus,
+    handleCancelGpuTask,
+  } = useTrainingActions({ project, activeSession, setLocalEvents });
+  const {
+    handleExtractLessonsFromSession,
+    handleRetryLearningExtraction,
+    handleAdoptLesson,
+    handleRejectLesson,
+    handleMarkLessonConflict,
+  } = useEvolutionActions({ project, activeSession, setLocalEvents });
+  const {
+    handleGenerateReport,
+    handleGenerateProfile,
+    handleGeneratePreprocessingPlan,
+    handleExecutePreprocessingPlan,
+    handleRespondToApproval,
+    handleResumeStep,
+    handleCleanDataset,
+    handleTransferToMl,
+  } = useAnalysisActions({
+    project,
+    activeSession,
+    setLocalEvents,
+    sendApprovalResponse,
+    sendResumeStep,
+  });
 
   const visibleEvents = useMemo(
     () => [...sessionEvents, ...taskStateEvents, ...events, ...localEvents],
@@ -550,1032 +516,6 @@ export function AppShell() {
     queryClient.setQueryData(projectsQueryKey(), nextProjects);
     await activateProject(opened);
     setWorkspaceStatus("Local project opened");
-  }
-
-  async function handleUpload(file: File) {
-    if (!project) return;
-    const targetPath = `data/${file.name}`;
-    await uploadFile.mutateAsync({ path: targetPath, file });
-    setExpandedFolders((current) => (current.includes("data") ? current : [...current, "data"]));
-    setActiveFile(targetPath);
-    setTrainingDatasetPath(targetPath);
-  }
-
-  async function handleCreateFile(path: string, type: "file" | "directory") {
-    if (!project) return;
-    await createFile.mutateAsync({ path, type });
-    // 展开包含文件夹让新条目可见；createFile.onSuccess 已 invalidate 文件树，
-    // 展开集变化亦会改 key 自动重取。
-    const containingFolder = parentPath(path);
-    if (containingFolder) {
-      setExpandedFolders((current) => (current.includes(containingFolder) ? current : [...current, containingFolder]));
-    }
-    if (type === "file") {
-      setActiveFile(path);
-      if (isLikelyDatasetPath(path)) {
-        setTrainingDatasetPath(path);
-      }
-    }
-  }
-
-  async function handleRenameFile(path: string, newPath: string) {
-    if (!project || path === newPath) return;
-    await renameFile.mutateAsync({ path, newPath });
-    const nextExpandedFolders = Array.from(
-      new Set([
-        ...expandedFolders.map((folder) =>
-          folder === path || folder.startsWith(`${path}/`) ? folder.replace(path, newPath) : folder,
-        ),
-        parentPath(path),
-        parentPath(newPath),
-      ].filter(Boolean)),
-    );
-    // renameFile.onSuccess 已 invalidate 文件树；setExpandedFolders 改 key 亦会自动重取。
-    setExpandedFolders(nextExpandedFolders);
-    if (activeFile === path || activeFile.startsWith(`${path}/`)) {
-      setActiveFile(activeFile.replace(path, newPath));
-    }
-    if (trainingDatasetPath === path || trainingDatasetPath.startsWith(`${path}/`)) {
-      setTrainingDatasetPath(trainingDatasetPath.replace(path, newPath));
-    }
-    if (
-      selectedPreprocessingPlanPath &&
-      (selectedPreprocessingPlanPath === path || selectedPreprocessingPlanPath.startsWith(`${path}/`))
-    ) {
-      setSelectedPreprocessingPlanPath(selectedPreprocessingPlanPath.replace(path, newPath));
-    }
-  }
-
-  async function handleDeleteFile(path: string) {
-    if (!project) return;
-    await deleteFile.mutateAsync(path);
-    const nextExpandedFolders = Array.from(
-      new Set([...expandedFolders.filter((folder) => folder !== path && !folder.startsWith(`${path}/`)), parentPath(path)].filter(Boolean)),
-    );
-    // 删除后需要新列表来挑回退的 activeFile/dataset，故直接取数；同时 setQueryData 以同键
-    // 预置缓存（再 setExpandedFolders 让 hook 读到同一键），保留原 .find 回退逻辑。
-    const nextFiles = await listExpandedProjectFiles(project.id, nextExpandedFolders);
-    queryClient.setQueryData(filesQueryKey(project.id, nextExpandedFolders), nextFiles);
-    setExpandedFolders(nextExpandedFolders);
-    if (activeFile === path || activeFile.startsWith(`${path}/`)) {
-      setActiveFile(nextFiles.find((item) => item.type === "file")?.path ?? "");
-    }
-    if (trainingDatasetPath === path || trainingDatasetPath.startsWith(`${path}/`)) {
-      setTrainingDatasetPath(nextFiles.find((item) => item.type === "file" && isLikelyDatasetPath(item.path))?.path ?? "");
-    }
-    if (
-      selectedPreprocessingPlanPath &&
-      (selectedPreprocessingPlanPath === path || selectedPreprocessingPlanPath.startsWith(`${path}/`))
-    ) {
-      setSelectedPreprocessingPlanPath(null);
-    }
-  }
-
-  function handleToggleFolder(path: string) {
-    if (!project) return;
-    // 文件树由 react-query 托管，键含展开集：折叠/展开只改 expandedFolders，key 变化即自动
-    // 重取对应集合（取一次缓存 staleTime 内复用），替代原先的本地 prune / 增量 merge。
-    if (expandedFolders.includes(path)) {
-      setExpandedFolders((current) => current.filter((item) => item !== path && !item.startsWith(`${path}/`)));
-      return;
-    }
-    setExpandedFolders((current) => (current.includes(path) ? current : [...current, path]));
-  }
-
-  async function handleTrainModel(
-    targetColumn: string,
-    engine: TrainingEngine,
-    useGpu: boolean,
-    preprocessingPlanPath?: string | null,
-    datasetPathOverride?: string,
-  ) {
-    if (!project) return;
-    const trainingSessionId = activeSession?.id ?? "manual-training";
-    const datasetPath = datasetPathOverride || trainingDatasetPath || activeFile;
-    setTrainingError(null);
-    setGpuActionError(null);
-    if (useGpu) {
-      try {
-        queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
-      } catch {
-        // Training can continue even if the status refresh fails.
-      }
-    }
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "task_progress",
-        task_id: trainingSessionId,
-        progress: 0.2,
-        label: `Starting ${engine} training`,
-      },
-    ]);
-    try {
-      const result =
-        engine === "sklearn"
-          ? await trainSklearnModel(
-              project.id,
-              datasetPath,
-              targetColumn,
-              trainingSessionId,
-              useGpu,
-              preprocessingPlanPath,
-            )
-          : await trainBaselineModel(project.id, datasetPath, targetColumn, trainingSessionId);
-      setTrainingResult(result);
-      try {
-        queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
-      } catch {
-        // Training completed; keep the result visible even if status refresh fails.
-      }
-      await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-      await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
-      await invalidateSessionTaskStates(trainingSessionId);
-      const lesson = await extractLesson(project.id, {
-        source_type: "training",
-        source_id: result.experiment_id,
-        domain: ["machine_learning", result.engine],
-        observation: `Dataset ${datasetPath} completed a ${result.engine} training run with best model ${String(
-          result.model.strategy ?? result.model.algorithm,
-        )} and accuracy ${(result.metrics.accuracy * 100).toFixed(2)}%.`,
-        recommendation:
-          result.engine === "sklearn"
-            ? "Use the sklearn result as the baseline for follow-up feature engineering, model search, and deployment evaluation."
-            : "Use the baseline run as a cheap comparison point before running heavier sklearn experiments.",
-        confidence: Math.min(0.95, Math.max(0.5, result.metrics.accuracy)),
-        evidence: {
-          accuracy: result.metrics.accuracy,
-          f1_weighted: result.metrics.f1_weighted,
-          runs: result.runs.map((run) => run.model_name),
-          model_path: result.model_artifact.path,
-          evaluation_report_path: result.evaluation_report_artifact?.path,
-          prediction_samples_path: result.prediction_samples_artifact?.path,
-          preprocessing_plan_path: result.preprocessing_plan_artifact?.path ?? preprocessingPlanPath,
-          engine: result.engine,
-        },
-      });
-      await invalidateEvolutionLists(project.id);
-      const reportEvent: AgentStreamEvent | null = result.evaluation_report_artifact
-        ? {
-            type: "artifact_created",
-            artifact: {
-              id: result.evaluation_report_artifact.id,
-              project_id: project.id,
-              session_id: trainingSessionId,
-              type: "report",
-              name: result.evaluation_report_artifact.name,
-              path: result.evaluation_report_artifact.path,
-              metadata: {
-                experiment_id: result.experiment_id,
-                metrics_path: result.metrics_artifact.path,
-                model_path: result.model_artifact.path,
-                prediction_samples_path: result.prediction_samples_artifact?.path,
-                preprocessing_plan_path: result.preprocessing_plan_artifact?.path,
-              },
-              created_at: result.evaluation_report_artifact.created_at,
-            } satisfies Artifact,
-          }
-        : null;
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "artifact_created",
-          artifact: {
-            id: result.metrics_artifact.id,
-            project_id: project.id,
-            session_id: trainingSessionId,
-            type: "training",
-            name: result.metrics_artifact.name,
-            path: result.metrics_artifact.path,
-            metadata: { experiment_id: result.experiment_id },
-            created_at: result.metrics_artifact.created_at,
-          },
-        },
-        ...(reportEvent ? [reportEvent] : []),
-        ...(result.prediction_samples_artifact
-          ? [
-              {
-                type: "artifact_created" as const,
-                artifact: {
-                  id: result.prediction_samples_artifact.id,
-                  project_id: project.id,
-                  session_id: trainingSessionId,
-                  type: "dataframe" as const,
-                  name: result.prediction_samples_artifact.name,
-                  path: result.prediction_samples_artifact.path,
-                  metadata: {
-                    experiment_id: result.experiment_id,
-                    role: "prediction_samples",
-                  },
-                  created_at: result.prediction_samples_artifact.created_at,
-                } satisfies Artifact,
-              },
-            ]
-          : []),
-        {
-          type: "artifact_created",
-          artifact: {
-            id: `${result.experiment_id}-model`,
-            project_id: project.id,
-            session_id: trainingSessionId,
-            type: "model",
-            name: result.model_artifact.name,
-            path: result.model_artifact.path,
-            metadata: { experiment_id: result.experiment_id },
-            created_at: new Date().toISOString(),
-          },
-        },
-        {
-          type: "task_progress",
-          task_id: trainingSessionId,
-          progress: 1,
-          label: `${result.engine} training completed`,
-        },
-        {
-          type: "lesson_extracted",
-          lesson_id: lesson.id,
-          confidence: lesson.confidence,
-        },
-      ]);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Training task failed";
-      setTrainingError(errorMessage);
-      await invalidateSessionTaskStates(trainingSessionId);
-      try {
-        queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
-      } catch {
-        // Preserve the original training error in the UI.
-      }
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "step_failed",
-          task_id: trainingSessionId,
-          stage: "train",
-          label: `${engine} training failed`,
-          error: errorMessage,
-          retryable: engine === "sklearn",
-          resume_stage: "train",
-        },
-        { type: "error", code: "training_failed", message: `${engine} training failed` },
-      ]);
-      throw error;
-    }
-  }
-
-  async function handleRetrySklearnTraining() {
-    if (!project) return;
-    const trainingSessionId = activeSession?.id ?? "manual-training";
-    setTrainingError(null);
-    setGpuActionError(null);
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "task_resumed",
-        task_id: trainingSessionId,
-        stage: "train",
-        label: "Retrying sklearn training",
-      },
-    ]);
-    try {
-      const result = await resumeSklearnTraining(project.id, trainingSessionId);
-      setTrainingResult(result);
-      try {
-        queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
-      } catch {
-        // Training completed; keep the result visible even if status refresh fails.
-      }
-      await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-      await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
-      await invalidateSessionTaskStates(trainingSessionId);
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "artifact_created",
-          artifact: {
-            id: result.metrics_artifact.id,
-            project_id: project.id,
-            session_id: trainingSessionId,
-            type: "training",
-            name: result.metrics_artifact.name,
-            path: result.metrics_artifact.path,
-            metadata: { experiment_id: result.experiment_id },
-            created_at: result.metrics_artifact.created_at,
-          },
-        },
-        ...(result.evaluation_report_artifact
-          ? [
-              {
-                type: "artifact_created" as const,
-                artifact: {
-                  id: result.evaluation_report_artifact.id,
-                  project_id: project.id,
-                  session_id: trainingSessionId,
-                  type: "report" as const,
-                  name: result.evaluation_report_artifact.name,
-                  path: result.evaluation_report_artifact.path,
-                  metadata: {
-                    experiment_id: result.experiment_id,
-                    metrics_path: result.metrics_artifact.path,
-                    model_path: result.model_artifact.path,
-                    prediction_samples_path: result.prediction_samples_artifact?.path,
-                    preprocessing_plan_path: result.preprocessing_plan_artifact?.path,
-                  },
-                  created_at: result.evaluation_report_artifact.created_at,
-                } satisfies Artifact,
-              },
-            ]
-          : []),
-        {
-          type: "artifact_created",
-          artifact: {
-            id: `${result.experiment_id}-model`,
-            project_id: project.id,
-            session_id: trainingSessionId,
-            type: "model",
-            name: result.model_artifact.name,
-            path: result.model_artifact.path,
-            metadata: { experiment_id: result.experiment_id },
-            created_at: new Date().toISOString(),
-          },
-        },
-        {
-          type: "task_progress",
-          task_id: trainingSessionId,
-          progress: 1,
-          label: "sklearn training completed after retry",
-        },
-      ]);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Training task failed";
-      setTrainingError(errorMessage);
-      await invalidateSessionTaskStates(trainingSessionId);
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "step_failed",
-          task_id: trainingSessionId,
-          stage: "train",
-          label: "sklearn training retry failed",
-          error: errorMessage,
-          retryable: true,
-          resume_stage: "train",
-        },
-      ]);
-      throw error;
-    }
-  }
-
-  async function applyEvaluationReportResult(result: EvaluationReportResult, sessionId: string, label: string) {
-    if (!project) return;
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-    await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
-    await invalidateSessionTaskStates(sessionId);
-    setFocusedExperimentId(result.experiment_id);
-    setActiveMode("machine-learning");
-    setRightPanelTab("training");
-    setLocalEvents((current) => [
-      ...current,
-      evaluationReportArtifactEvent(project.id, sessionId, result),
-      {
-        type: "stage_completed",
-        task_id: sessionId,
-        stage: "evaluate",
-        label,
-        completed_at: new Date().toISOString(),
-      },
-    ]);
-  }
-
-  async function handleGenerateEvaluationReport(experimentId: string) {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-training";
-    setTrainingError(null);
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "stage_started",
-        task_id: sessionId,
-        stage: "evaluate",
-        label: "Regenerating evaluation report",
-        started_at: new Date().toISOString(),
-      },
-    ]);
-    try {
-      const result = await generateEvaluationReport(project.id, experimentId, sessionId);
-      await applyEvaluationReportResult(result, sessionId, "Evaluation report regenerated");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Evaluation report generation failed";
-      setTrainingError(errorMessage);
-      await invalidateSessionTaskStates(sessionId);
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "step_failed",
-          task_id: sessionId,
-          stage: "evaluate",
-          label: "Evaluation report generation failed",
-          error: errorMessage,
-          retryable: true,
-          resume_stage: "evaluate",
-        },
-      ]);
-      throw error;
-    }
-  }
-
-  async function handleRetryEvaluationReport() {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-training";
-    setTrainingError(null);
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "task_resumed",
-        task_id: sessionId,
-        stage: "evaluate",
-        label: "Retrying evaluation report",
-      },
-    ]);
-    try {
-      const result = await resumeEvaluationReport(project.id, sessionId);
-      await applyEvaluationReportResult(result, sessionId, "Evaluation report completed after retry");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Evaluation report retry failed";
-      setTrainingError(errorMessage);
-      await invalidateSessionTaskStates(sessionId);
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "step_failed",
-          task_id: sessionId,
-          stage: "evaluate",
-          label: "Evaluation report retry failed",
-          error: errorMessage,
-          retryable: true,
-          resume_stage: "evaluate",
-        },
-      ]);
-      throw error;
-    }
-  }
-
-  async function applyExportBundleResult(result: ExportBundleResult, sessionId: string, label: string) {
-    if (!project) return;
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-    await queryClient.invalidateQueries({ queryKey: trainingRunsQueryKey(project.id) });
-    await invalidateSessionTaskStates(sessionId);
-    setFocusedExperimentId(result.experiment_id);
-    setActiveMode("machine-learning");
-    setRightPanelTab("training");
-    setLocalEvents((current) => [
-      ...current,
-      exportBundleArtifactEvent(project.id, sessionId, result),
-      {
-        type: "stage_completed",
-        task_id: sessionId,
-        stage: "export",
-        label,
-        completed_at: new Date().toISOString(),
-      },
-    ]);
-  }
-
-  async function handleExportRunBundle(experimentId: string) {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-training";
-    setTrainingError(null);
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "stage_started",
-        task_id: sessionId,
-        stage: "export",
-        label: "Exporting model handoff bundle",
-        started_at: new Date().toISOString(),
-      },
-    ]);
-    try {
-      const result = await exportRunBundle(project.id, experimentId, sessionId);
-      await applyExportBundleResult(result, sessionId, "Model handoff bundle exported");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Export bundle failed";
-      setTrainingError(errorMessage);
-      await invalidateSessionTaskStates(sessionId);
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "step_failed",
-          task_id: sessionId,
-          stage: "export",
-          label: "Export bundle failed",
-          error: errorMessage,
-          retryable: true,
-          resume_stage: "export",
-        },
-      ]);
-      throw error;
-    }
-  }
-
-  async function handleRetryExportBundle() {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-training";
-    setTrainingError(null);
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "task_resumed",
-        task_id: sessionId,
-        stage: "export",
-        label: "Retrying export bundle",
-      },
-    ]);
-    try {
-      const result = await resumeExportBundle(project.id, sessionId);
-      await applyExportBundleResult(result, sessionId, "Model handoff bundle exported after retry");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Export bundle retry failed";
-      setTrainingError(errorMessage);
-      await invalidateSessionTaskStates(sessionId);
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "step_failed",
-          task_id: sessionId,
-          stage: "export",
-          label: "Export bundle retry failed",
-          error: errorMessage,
-          retryable: true,
-          resume_stage: "export",
-        },
-      ]);
-      throw error;
-    }
-  }
-
-  async function applyLearnedLessons(items: Lesson[], sessionId: string, label: string) {
-    if (!project) return;
-    await invalidateEvolutionLists(project.id);
-    await invalidateSessionTaskStates(sessionId);
-    setActiveMode("evolution");
-    setActiveActivity("knowledge");
-    setLocalEvents((current) => [
-      ...current,
-      ...items.map(
-        (lesson): AgentStreamEvent => ({
-          type: "lesson_extracted",
-          lesson_id: lesson.id,
-          confidence: lesson.confidence,
-        }),
-      ),
-      {
-        type: "stage_completed",
-        task_id: sessionId,
-        stage: "learn",
-        label,
-        completed_at: new Date().toISOString(),
-      },
-    ]);
-  }
-
-  async function handleExtractLessonsFromSession(sourceSessionId?: string) {
-    if (!project) return;
-    const sessionId = sourceSessionId ?? activeSession?.id;
-    if (!sessionId) return;
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "stage_started",
-        task_id: sessionId,
-        stage: "learn",
-        label: "Extracting learned rules",
-        started_at: new Date().toISOString(),
-      },
-    ]);
-    try {
-      const items = await extractLessonsFromSession(project.id, sessionId);
-      await applyLearnedLessons(items, sessionId, "Learned rule extraction completed");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Lesson extraction failed";
-      await invalidateSessionTaskStates(sessionId);
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "step_failed",
-          task_id: sessionId,
-          stage: "learn",
-          label: "Lesson extraction failed",
-          error: errorMessage,
-          retryable: true,
-          resume_stage: "learn",
-        },
-      ]);
-      throw error;
-    }
-  }
-
-  async function handleRetryLearningExtraction() {
-    if (!project || !activeSession) return;
-    const sessionId = activeSession.id;
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "task_resumed",
-        task_id: sessionId,
-        stage: "learn",
-        label: "Retrying learned rule extraction",
-      },
-    ]);
-    try {
-      const items = await resumeLessonExtraction(project.id, sessionId);
-      await applyLearnedLessons(items, sessionId, "Learned rule extraction completed after retry");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Lesson extraction retry failed";
-      await invalidateSessionTaskStates(sessionId);
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "step_failed",
-          task_id: sessionId,
-          stage: "learn",
-          label: "Lesson extraction retry failed",
-          error: errorMessage,
-          retryable: true,
-          resume_stage: "learn",
-        },
-      ]);
-      throw error;
-    }
-  }
-
-  async function handleAdoptLesson(lessonId: string) {
-    if (!project) return;
-    await adoptLesson(project.id, lessonId);
-    await invalidateEvolutionLists(project.id);
-  }
-
-  async function handleRefreshGpuStatus() {
-    if (!project) return;
-    setGpuActionError(null);
-    try {
-      queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
-    } catch (error) {
-      setGpuActionError(error instanceof Error ? error.message : "GPU status refresh failed");
-      throw error;
-    }
-  }
-
-  async function handleCancelGpuTask(taskId: string) {
-    if (!project) return;
-    setGpuActionError(null);
-    try {
-      await cancelGPUTask(project.id, taskId);
-      queryClient.setQueryData(gpuStatusQueryKey(project.id), await getGPUStatus(project.id));
-      setLocalEvents((current) => [
-        ...current,
-        {
-          type: "task_progress",
-          task_id: taskId,
-          progress: 1,
-          label: "GPU task cancellation requested",
-        },
-      ]);
-    } catch (error) {
-      setGpuActionError(error instanceof Error ? error.message : "GPU task cancellation failed");
-      throw error;
-    }
-  }
-
-  async function handleGenerateReport() {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-analysis";
-    const result = await generateAnalysisReport(project.id, activeFile, sessionId);
-    const reportFolder = parentPath(result.artifact.path);
-    const nextFolders = Array.from(new Set([...expandedFolders, "results", reportFolder].filter(Boolean)));
-    setExpandedFolders(nextFolders);
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "artifact_created",
-        artifact: {
-          id: result.artifact.id,
-          project_id: project.id,
-          session_id: sessionId,
-          type: "report",
-          name: result.artifact.name,
-          path: result.artifact.path,
-          metadata: result.artifact.metadata,
-          created_at: result.artifact.created_at,
-        },
-      },
-      {
-        type: "task_progress",
-        task_id: sessionId,
-        progress: 1,
-        label: "Analysis report generated",
-      },
-    ]);
-    setActiveFile(result.artifact.path);
-  }
-
-  async function handleGenerateProfile() {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-analysis";
-    const result = await generateDataQualityProfile(project.id, activeFile, sessionId);
-    const profileFolder = parentPath(result.artifact.path);
-    const nextFolders = Array.from(new Set([...expandedFolders, "results", profileFolder].filter(Boolean)));
-    setExpandedFolders(nextFolders);
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "artifact_created",
-        artifact: {
-          id: result.artifact.id,
-          project_id: project.id,
-          session_id: sessionId,
-          type: "dataframe",
-          name: result.artifact.name,
-          path: result.artifact.path,
-          metadata: {
-            ...result.artifact.metadata,
-            row_count: result.profile.row_count,
-            column_count: result.profile.column_count,
-            target_candidates: result.profile.target_candidates,
-          },
-          created_at: result.artifact.created_at,
-        },
-      },
-      {
-        type: "task_progress",
-        task_id: sessionId,
-        progress: 1,
-        label: "Data quality profile generated",
-      },
-    ]);
-    setActiveFile(result.artifact.path);
-  }
-
-  async function handleGeneratePreprocessingPlan() {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-analysis";
-    const datasetPath = isLikelyDatasetPath(activeFile) ? activeFile : trainingDatasetPath;
-    const result = await generatePreprocessingPlan(project.id, datasetPath, sessionId);
-    const planFolder = parentPath(result.plan_artifact.path);
-    const nextFolders = Array.from(
-      new Set([
-        ...expandedFolders,
-        "results",
-        planFolder,
-        "notebooks",
-      ].filter(Boolean)),
-    );
-    setExpandedFolders(nextFolders);
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "component_requested",
-        task_id: sessionId,
-        stage: "transform",
-        component: "preprocessing_plan",
-        title: "Review preprocessing plan",
-        artifact_path: result.plan_artifact.path,
-      },
-      {
-        type: "approval_required",
-        task_id: sessionId,
-        approval_id: `${sessionId}-preprocessing-plan`,
-        stage: "transform",
-        title: "Approve preprocessing transform",
-        description: "Review the generated plan before executing dataset transformation.",
-        artifact_path: result.plan_artifact.path,
-        options: ["execute", "revise"],
-      },
-      {
-        type: "artifact_created",
-        artifact: {
-          ...result.plan_artifact,
-          metadata: {
-            ...result.plan_artifact.metadata,
-            output_dataset_path: result.plan.output_dataset_path,
-            feature_columns: result.plan.feature_columns,
-            drop_columns: result.plan.drop_columns,
-          },
-        },
-      },
-      {
-        type: "artifact_created",
-        artifact: result.pipeline_artifact,
-      },
-      {
-        type: "task_progress",
-        task_id: sessionId,
-        progress: 1,
-        label: `Preprocessing plan generated for ${result.plan.target_column || "target"}`,
-      },
-    ]);
-    setTrainingDatasetPath(result.plan.dataset_path);
-    setSelectedPreprocessingPlanPath(result.plan_artifact.path);
-    if (result.plan.target_column) {
-      setSuggestedTargetColumn(result.plan.target_column);
-    }
-    setActiveFile(result.plan_artifact.path);
-  }
-
-  async function handleExecutePreprocessingPlan(preprocessingPlanPath?: string | null) {
-    const planPath = preprocessingPlanPath ?? selectedPreprocessingPlanPath;
-    if (!project || !planPath) return;
-    const sessionId = activeSession?.id ?? "manual-analysis";
-    const datasetPath = isLikelyDatasetPath(activeFile) ? activeFile : null;
-    const result = await executePreprocessingPlan(project.id, datasetPath, planPath, sessionId);
-    const outputFolder = parentPath(result.transformed_data_artifact.path);
-    const summaryFolder = parentPath(result.summary_artifact.path);
-    const reportFolder = parentPath(result.report_artifact.path);
-    const nextFolders = Array.from(
-      new Set([
-        ...expandedFolders,
-        "results",
-        outputFolder,
-        summaryFolder,
-        reportFolder,
-      ].filter(Boolean)),
-    );
-    setExpandedFolders(nextFolders);
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-    setSelectedPreprocessingPlanPath(planPath);
-    setTrainingDatasetPath(result.transformed_data_artifact.path);
-    setActiveFile(result.transformed_data_artifact.path);
-    if (result.summary.target_column) {
-      setSuggestedTargetColumn(result.summary.target_column);
-    }
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "stage_completed",
-        task_id: sessionId,
-        stage: "transform",
-        label: "Preprocessing plan executed",
-      },
-      {
-        type: "component_requested",
-        task_id: sessionId,
-        stage: "train",
-        component: "planned_dataset",
-        title: "Train from planned dataset",
-        artifact_path: result.transformed_data_artifact.path,
-      },
-      {
-        type: "artifact_created",
-        artifact: result.transformed_data_artifact,
-      },
-      {
-        type: "artifact_created",
-        artifact: result.summary_artifact,
-      },
-      {
-        type: "artifact_created",
-        artifact: result.report_artifact,
-      },
-      {
-        type: "task_progress",
-        task_id: sessionId,
-        progress: 1,
-        label: `Preprocessing plan executed, training dataset set to ${result.transformed_data_artifact.path}`,
-      },
-    ]);
-  }
-
-  function handleRespondToApproval(
-    approvalId: string,
-    decision: "execute" | "revise",
-    preprocessingPlanPath?: string | null,
-  ) {
-    sendApprovalResponse({
-      approvalId,
-      decision,
-      context: { projectId: project?.id, activeFile, mode: activeMode },
-    });
-    if (preprocessingPlanPath) {
-      setSelectedPreprocessingPlanPath(preprocessingPlanPath);
-    }
-  }
-
-  function handleResumeStep(stage: WorkflowStageId) {
-    sendResumeStep({
-      stage,
-      context: { projectId: project?.id, activeFile, mode: activeMode },
-    });
-  }
-
-  async function handleCleanDataset() {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-analysis";
-    const result = await cleanAnalysisDataset(project.id, activeFile, sessionId);
-    const nextFolders = Array.from(
-      new Set([
-        ...expandedFolders,
-        "results",
-        parentPath(result.cleaned_data_artifact.path),
-        "notebooks",
-      ].filter(Boolean)),
-    );
-    setExpandedFolders(nextFolders);
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "artifact_created",
-        artifact: {
-          ...result.cleaned_data_artifact,
-          metadata: {
-            ...result.cleaned_data_artifact.metadata,
-            fill_values: result.fill_values,
-          },
-        },
-      },
-      {
-        type: "artifact_created",
-        artifact: result.script_artifact,
-      },
-      {
-        type: "task_progress",
-        task_id: sessionId,
-        progress: 1,
-        label: "Cleaned dataset generated",
-      },
-    ]);
-    setActiveFile(result.cleaned_data_artifact.path);
-  }
-
-  async function handleTransferToMl() {
-    if (!project) return;
-    const sessionId = activeSession?.id ?? "manual-analysis";
-    const result = await handoffDatasetToMl(project.id, activeFile, sessionId);
-    const handoffFolder = parentPath(result.artifact.path);
-    const nextFolders = Array.from(new Set([...expandedFolders, "results", handoffFolder].filter(Boolean)));
-    setExpandedFolders(nextFolders);
-    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
-    setSuggestedTargetColumn(result.recommended_target_column || "churn");
-    setTrainingDatasetPath(result.dataset_path);
-    setActiveMode("machine-learning");
-    setLocalEvents((current) => [
-      ...current,
-      {
-        type: "artifact_created",
-        artifact: {
-          id: result.artifact.id,
-          project_id: project.id,
-          session_id: sessionId,
-          type: result.artifact.type,
-          name: result.artifact.name,
-          path: result.artifact.path,
-          metadata: {
-            ...result.artifact.metadata,
-            target_candidates: result.target_candidates,
-          },
-          created_at: result.artifact.created_at,
-        },
-      },
-      {
-        type: "task_progress",
-        task_id: sessionId,
-        progress: 1,
-        label: `Dataset transferred to ML Agent with target ${result.recommended_target_column || "target"}`,
-      },
-    ]);
-  }
-
-  async function handleRejectLesson(lessonId: string) {
-    if (!project) return;
-    await rejectLesson(project.id, lessonId);
-    await invalidateEvolutionLists(project.id);
-  }
-
-  async function handleMarkLessonConflict(lessonId: string, reason: string) {
-    if (!project) return;
-    await markLessonConflict(project.id, lessonId, reason);
-    await invalidateEvolutionLists(project.id);
-  }
-
-  function handleSelectProjectFile(path: string) {
-    setActiveActivity("explorer");
-    setExpandedFolders((current) => Array.from(new Set([...current, ...parentFolders(path)])));
-    setActiveFile(path);
-    if (isLikelyDatasetPath(path)) {
-      setTrainingDatasetPath(path);
-    }
-    if (path.endsWith("preprocessing_plan.json")) {
-      setSelectedPreprocessingPlanPath(path);
-    }
-  }
-
-  function handleSelectExperimentRun(experimentId: string) {
-    setFocusedExperimentId(experimentId);
-    setActiveActivity("experiments");
-    setActiveMode("machine-learning");
   }
 
   return (

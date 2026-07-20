@@ -40,3 +40,5 @@ export function useProjectFileMutations(projectId: string | undefined) {
 
   return { createFile, renameFile, deleteFile, uploadFile };
 }
+
+export type ProjectFileMutations = ReturnType<typeof useProjectFileMutations>;
