@@ -1,7 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,25 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://mlagent:mlagent@localhost:5432/mlagent"
     redis_url: str = "redis://localhost:6379/0"
     dev_user_id: str = "dev-user"
+    auth_mode: Literal["development", "jwt", "oidc"] = "development"
+    auth_jwt_secret: SecretStr = SecretStr("")
+    auth_jwt_issuer: str = ""
+    auth_jwt_audience: str = ""
+    auth_jwt_leeway_seconds: int = 30
+    auth_oidc_issuer: str = ""
+    auth_oidc_audience: str = ""
+    auth_oidc_jwks_url: str = ""
+    auth_oidc_jwks_cache_seconds: int = 300
+    auth_oidc_jwks_timeout_seconds: float = 5.0
+    auth_oidc_authorization_url: str = ""
+    auth_oidc_token_url: str = ""
+    auth_oidc_client_id: str = ""
+    auth_oidc_client_secret: SecretStr = SecretStr("")
+    auth_oidc_redirect_uri: str = ""
+    auth_browser_return_url: str = ""
+    auth_oidc_token_timeout_seconds: float = 5.0
+    auth_login_transaction_ttl_seconds: int = 600
+    auth_session_ttl_seconds: int = 28_800
     log_level: str = "INFO"
     cors_origins: list[str] = [
         "http://localhost:5173",

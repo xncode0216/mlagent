@@ -16,6 +16,7 @@ dependencies = [
   "matplotlib>=3.9.0",
   "jupyter-client>=8.6.0",
   "httpx>=0.27.0",
+  "PyJWT[crypto]>=2.13.0,<3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,10 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["workspaces*"]
 
 [tool.ruff]
 line-length = 100
