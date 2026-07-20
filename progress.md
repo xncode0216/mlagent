@@ -870,4 +870,4 @@
 - P1-1 前端 action hooks 与薄容器收口已提交为 `b5b729a refactor(frontend): complete AppShell action hook decomposition`。提交包含 `useFileActions`、`useAnalysisActions`、`useTrainingActions`、`useEvolutionActions` 以及 `AppShell` 接线，P1-1 保持完成状态。
 - P0-2 JWT/OIDC/多租户与浏览器 PKCE/BFF 会话已提交为 `6e1d301 feat(auth): add tenant isolation and OIDC browser sessions`。该提交包含请求身份、租户资源隔离、RS256/JWKS、Authorization Code + PKCE、一次性登录事务、可撤销 httpOnly 会话、CSRF Origin 防护和对应测试。
 - 提交前重新执行完整门禁：backend `194 passed, 3 skipped`（101.46s）、Ruff 全量通过、`python -m pip check` 无 broken requirements；frontend ESLint 通过、Vitest `16 files / 93 passed`、TypeScript + Vite production build 通过；`git diff --check` 通过，差异扫描未发现疑似硬编码凭据。
-- 本节与 `task_plan.md` 的真实提交号同步作为独立文档提交收口。当前仅创建本地提交，未推送远端；P0-2 后续仍按 Redis 共享会话存储 → 前端认证入口 → 组织/角色 claims 与认证审计的顺序推进。
+- 本节与 `task_plan.md` 的真实提交号同步作为独立文档提交收口。`b5b729a`、`6e1d301`、`e41627e` 已于 2026-07-20 推送到 `origin/feat/p0-backend-hardening`；P0-2 后续仍按 Redis 共享会话存储 → 前端认证入口 → 组织/角色 claims 与认证审计的顺序推进。
