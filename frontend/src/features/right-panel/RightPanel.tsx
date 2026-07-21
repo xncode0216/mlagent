@@ -1,4 +1,4 @@
-import { BarChart3, Database, Download, FileText, LineChart, Play, RefreshCw, Table2, XCircle } from "lucide-react";
+import { BarChart3, Database, Download, FileText, Play, RefreshCw, Table2, XCircle } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
 import {
@@ -820,7 +820,7 @@ function ActiveFilePreview({
   );
 }
 
-function DemoChartGallery({
+function ChartsEmptyState({
   onCleanDataset,
   onGenerateReport,
   onGenerateProfile,
@@ -833,8 +833,6 @@ function DemoChartGallery({
   onGeneratePreprocessingPlan: () => Promise<void>;
   onTransferToMl: () => Promise<void>;
 }) {
-  const bars = [18, 42, 68, 86, 76, 58, 35, 20, 12];
-  const heatCells = Array.from({ length: 42 }, (_, index) => (index % 9 === 0 ? "hot" : index % 5 === 0 ? "warm" : ""));
   const [submitting, setSubmitting] = useState<"profile" | "report" | "preprocess" | "clean" | "handoff" | null>(null);
 
   async function generateProfile() {
@@ -884,38 +882,10 @@ function DemoChartGallery({
 
   return (
     <div className="chart-gallery">
-      <section className="visual-card wide">
-        <div className="card-heading">
-          <BarChart3 size={15} />
-          缺失值热力图
-        </div>
-        <div className="heatmap-grid" aria-label="缺失值热力图">
-          {heatCells.map((state, index) => (
-            <span key={index} className={state} />
-          ))}
-        </div>
-      </section>
-      <section className="visual-card">
-        <div className="card-heading">
-          <LineChart size={15} />
-          月费分布
-        </div>
-        <div className="histogram" aria-label="月费分布">
-          {bars.map((height, index) => (
-            <span key={index} style={{ height: `${height}%` }} />
-          ))}
-        </div>
-      </section>
-      <section className="visual-card">
-        <div className="card-heading">
-          <Table2 size={15} />
-          特征相关性
-        </div>
-        <div className="correlation-grid" aria-label="特征相关性矩阵">
-          {["1.00", "-0.25", "0.83", "-0.35", "0.65", "1.00", "0.19", "-0.20", "0.42"].map((value, index) => (
-            <span key={`${value}-${index}`}>{value}</span>
-          ))}
-        </div>
+      <section className="charts-empty">
+        <BarChart3 size={22} />
+        <strong>还没有图表产物</strong>
+        <p>运行数据画像、报告或预处理，生成的分布、相关性等图表会显示在这里。</p>
       </section>
       <div className="panel-actions">
         <button disabled={submitting !== null} onClick={() => void generateProfile()}>
@@ -2021,7 +1991,7 @@ export function RightPanel({
           {selectedArtifact ? (
             <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
           ) : (
-            <DemoChartGallery
+            <ChartsEmptyState
               onCleanDataset={onCleanDataset}
               onGenerateReport={onGenerateReport}
               onGenerateProfile={onGenerateProfile}

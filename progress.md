@@ -927,4 +927,13 @@
 - **清理**：删除失效的 `.artifact-histogram`/`span` 色块 CSS 与只服务色块的 `maxCount`，替换为 `.histogram-chart`/`.artifact-histogram-fallback`。
 - **测试**：`histogramSeries.test.ts`（4）——空 bins、count/range 映射、缺省字段不为 NaN、大整数保留可读 + 极值科学计数法。踩坑：初版测试期望 `25000→2.5e+4` 错误（整数走可读分支返回 "25000"），已改用非整数验证科学计数法分支。
 - **门禁**：前端 `vitest` 20 文件 / 110 passed、`eslint` 0、`tsc -b` + `vite build` 全绿。
-- **P1-2 两切片交付**：富文本聊天（Markdown/高亮/流式）+ 真实图表库（Recharts 替换真实数据的直方图色块）。`DemoChartGallery` 的硬编码 demo 柱/热力图/相关性网格是**演示数据**，归 P1-7（清理演示数据、由真实产物驱动）处理，不在此 re-chart 假数据。后续可选增强：特征重要性横向柱状图、混淆矩阵热力图（均为真实 ML 数据）。
+- **P1-2 两切片交付**：富文本聊天（Markdown/高亮/流式）+ 真实图表库（Recharts 替换真实数据的直方图色块）。`DemoChartGallery` 的硬编码 demo 柱/热力图/相关性网格是**演示数据**，归 P1-7（清理演示数据、由真实产物驱动）处理，不在此 re-chart 假数据。后续可选增强：特征重要性横向柱状图、混淆矩阵热力图（均为真实 ML 数据）。P1-2 已标记完成（`1926ef0`）。
+
+## 2026-07-21 清理演示数据（P1-7）
+
+- 承接 P1-2：应用里大量"看起来在工作、其实是占位"的硬编码演示内容，误导真实/演示边界。本次删除并由真实状态/产物驱动空状态。
+- **AgentWorkspace**：① 删除 `sampleRows`（硬编码 Telco 样本表）+ 始终显示的 `.analysis-grid`（假"数据预览（前 4 行）"表 + `copy.code(activeFile)` 模板 pandas 代码）——真实的数据/代码预览本就在 RightPanel 的数据/代码 tab，中间这块是误导性冗余。② 假空状态对话（写死的"你 · 10:21 请分析…"+ `copy.assistant` + `copy.plan` 执行计划）换成真实空状态 `.conversation-empty`（用真实 `copy.title`/`copy.description` + 通用引导语，无伪造对话）。③ 从 `modeCopy` 两个条目删除只服务演示的 `assistant`/`plan`/`code` 字段（`tools`/`description`/quick 动作等真实配置保留）；清理失效的 `Database`/`FileCode2`/`CheckCircle2` 图标 import。
+- **RightPanel**：`DemoChartGallery`（图表 tab 无选中产物时的空状态，含假热力图/假直方图/假相关性网格 + 真实操作按钮）重写为 `ChartsEmptyState`——删除三块假可视化与其 `bars`/`heatCells` 假数据，保留真实的生成画像/报告/预处理/清洗/交接 ML 按钮，加"还没有图表产物"真实空状态提示；清理失效的 `LineChart` import。
+- **顺带（测试可靠性）**：`AppShell.smoke.test.tsx` 的 api catch-all 桩由 `async () => undefined` 改为 `async () => null`——react-query v5 拒绝 undefined 查询数据、间歇性抛未处理拒绝扰乱 vitest 计数；消费方都用 `?? []`/null 检查，改 null 行为等价且被 react-query 接受，显著减少 flaky（残留一个更深层的 effect 时序脆弱仍偶发但不导致测试失败，归 P1-5）。
+- **门禁**：前端 `eslint` 0、`tsc -b` + `vite build`（index 469.75KB，比清理前更小）、`vitest` 20 文件 / 110 passed 全绿。未跑浏览器视觉 QA（沙箱限制）。
+- 遗留（非本次）：`.analysis-grid`/`.visual-card`/`.heatmap-grid` 等失效 CSS 未删（归 P2-1 CSS 令牌化统一清理）；quick 动作 prompt 里的示例 "churn" 是功能性模板文案，保留。

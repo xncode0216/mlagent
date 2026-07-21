@@ -18,7 +18,10 @@ vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
   const mocked: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(actual)) {
-    mocked[key] = typeof value === "function" ? vi.fn(async () => undefined) : value;
+    // Return null (not undefined): react-query v5 rejects undefined query data,
+    // and every consumer already coalesces with `?? []` / null-checks. Undefined
+    // here made the run intermittently emit unhandled query errors.
+    mocked[key] = typeof value === "function" ? vi.fn(async () => null) : value;
   }
   return mocked;
 });
