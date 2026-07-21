@@ -871,3 +871,20 @@
 - P0-2 JWT/OIDC/多租户与浏览器 PKCE/BFF 会话已提交为 `6e1d301 feat(auth): add tenant isolation and OIDC browser sessions`。该提交包含请求身份、租户资源隔离、RS256/JWKS、Authorization Code + PKCE、一次性登录事务、可撤销 httpOnly 会话、CSRF Origin 防护和对应测试。
 - 提交前重新执行完整门禁：backend `194 passed, 3 skipped`（101.46s）、Ruff 全量通过、`python -m pip check` 无 broken requirements；frontend ESLint 通过、Vitest `16 files / 93 passed`、TypeScript + Vite production build 通过；`git diff --check` 通过，差异扫描未发现疑似硬编码凭据。
 - 本节与 `task_plan.md` 的真实提交号同步作为独立文档提交收口。`b5b729a`、`6e1d301`、`e41627e` 已于 2026-07-20 推送到 `origin/feat/p0-backend-hardening`；P0-2 后续仍按 Redis 共享会话存储 → 前端认证入口 → 组织/角色 claims 与认证审计的顺序推进。
+
+## 2026-07-21 环境同步 + 分支收敛（切回 feat/p0-backend-hardening 主线）
+
+- 会话开始时本地检出的是另一条平行分支 `codex/p0-remediation`（2026-07-17 起，仅 3 提交的纯后端 P0 努力，从未推送），其 JWT/observability 与主线 `feat/p0-backend-hardening`（40+ 提交，全栈，P0-1/P0-3/P0-4/P1-1/P1-4/P1-6 + P0-2 OIDC）重复且更弱。经比对提交时间线（主线最新 `8a1df38` @ 2026-07-20 23:17，晚于平行分支）确认主线为「最新进度」。
+- 保全动作：把 `codex/p0-remediation` 工作区里未提交的冗余 LLM 适配草稿（`services/llm/` + config + 两个测试）提交为该分支的 `5bd501f`（durable 留存、不丢失），随后 `git checkout -b feat/p0-backend-hardening origin/feat/p0-backend-hardening` 切回主线，后续工作全部在主线进行。
+- 环境修复：本地 venv 缺 `cryptography`（`PyJWT[crypto]` 未同步），认证测试无法收集 → `pip install -e ".[dev]"` 补齐；Windows 下 pytest 默认 basetemp `C:\Users\DELL\AppData\Local\Temp\pytest-of-DELL` 的 `os.scandir` 被拒（WinError 5），改用 `--basetemp="E:/ml_agent/backend/.tmp_pytest"` 非破坏性重定向后基线可跑。
+
+## 2026-07-21 认证与多租户（P0-2，浏览器会话迁移到 Redis 共享存储）
+
+- 承接 P0-2 既定下一步：登录事务与浏览器会话此前是单进程内存字典，无法用于多 worker/多实例。本切片抽出存储适配层并新增 Redis 后端，使同一份认证状态可跨进程共享。
+- **绿基线修复（预备提交 `a0773d1`）**：完整套件在主线暴露 `test_experiment_service` 因 `created_at` 在同一 Windows 时钟刻度内碰撞而 flaky（`list_runs` 最新优先契约退化为文件系统 glob 序）。从平行分支 cherry-pick 自己此前的 `d5bdb8d`（`_next_created_at` 让时间戳至少比最近记录晚 1 微秒 + 冻结时钟回归测试），基线恢复 `195 passed, 3 skipped`。
+- **存储抽象**：`auth_session_service.py` 新增 `AuthSessionStore` Protocol（`put/consume_login_transaction`、`put/get/revoke_session`、`clear`），把既有内存逻辑收敛为 `InMemoryAuthSessionStore`，`AuthSessionService` 改为薄领域层（只负责生成高熵 token/TTL，持久化下沉到 store）。`api/auth.py` 与 `core/auth.py` 的公开调用面不变，既有 23 个认证/浏览器测试零改动通过。与 `kernel_service.py` 的 Local/Docker 适配器同构，未引入多余抽象。
+- **Redis 后端**：`RedisAuthSessionStore` 用原生 `SET ... EX` 得到共享 TTL；一次性消费用 redis-py 的 **WATCH/MULTI 乐观锁**保证并发下仅一个消费者删除成功（防重放），state 校验仍在 Python 侧用 `compare_digest` 常量时间比对，保持「错误 state 不消费未决事务」的原语义（未用 Lua，故不需要 `lupa`）。键命名空间 `mlagent:auth:{login,session}:`，`AuthenticatedUser`（id/workspace_key/auth_mode）JSON 序列化往返。
+- **后端选择**：`config.py` 新增 `auth_session_backend: Literal["memory","redis"] = "memory"`（默认内存、保持既有行为与测试），`redis` 时从 `redis_url` 惰性构造客户端（导入期不连接）。模块单例 `auth_session_service` 按 settings 选择后端。
+- **测试（TDD 红→绿）**：新增 `tests/test_auth_session_store.py`，`store` fixture 参数化覆盖内存与 `fakeredis` 两后端跑同一契约（一次性消费、错误 state 不消费、缺失返回 None、会话往返保用户身份、revoke、clear），外加内存墙钟过期、Redis 原生 TTL 断言、service 唯一高熵 token、service+Redis 往返、`_build_store_from_settings` 选择后端。`fakeredis>=2.20.0` 加入 dev 依赖。
+- **门禁**：完整 backend `212 passed, 3 skipped`（19.17s，新增 17 个存储测试）；`ruff check app tests` 全量通过。分支按既定「先留本地」未 push。
+- **follow-up**：`.env.example` 应补一行 `MLAGENT_AUTH_SESSION_BACKEND=memory`（当前工具环境对 `.env*` 路径有安全守卫、无法写入，`config.py` 已是带注释的配置真实来源）。P0-2 仍进行中，后续按 前端认证入口 → 组织/角色 claims 与认证审计 推进。

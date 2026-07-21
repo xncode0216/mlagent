@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     auth_oidc_token_timeout_seconds: float = 5.0
     auth_login_transaction_ttl_seconds: int = 600
     auth_session_ttl_seconds: int = 28_800
+    # "memory" keeps process-local browser auth state (single worker only);
+    # "redis" shares login transactions and sessions across workers/instances.
+    auth_session_backend: Literal["memory", "redis"] = "memory"
     log_level: str = "INFO"
     cors_origins: list[str] = [
         "http://localhost:5173",
