@@ -955,3 +955,12 @@
 - **握手竞态修复（TDD 红→绿）**：首次 E2E 虽通过，但快速页面导航暴露 Uvicorn/Starlette WebSocket 握手期间客户端断开时的重复 `websocket.accept` RuntimeError。先在 `test_websocket_session.py` 加失败回归，再让 `session_socket` 只吞掉明确的 accept 断连竞态，其余 RuntimeError 继续抛出；focused 回归与 Ruff 通过，E2E `--repeat-each=3` 连续 3/3 通过且不再出现 ASGI error。
 - **GitHub CI 修复**：PR #2 首轮 backend job 在 GitHub-hosted Linux runner 上失败 3 条 Docker Kernel 集成测试。根因不是产品回归：runner 的 Docker daemon 可用，使旧 `is_docker_running()` 门槛放行，但本地镜像 `mlagent-kernel:dev` 不存在，Docker 随后尝试拉取不存在/无权限的仓库。经确认后把两处门槛改为 `docker image inspect $MLAGENT_KERNEL_IMAGE`：仅在 CLI、daemon 与指定镜像全部可用时运行；普通 PR CI 稳定跳过，显式准备好镜像的集成环境仍会执行。聚焦验证 `12 passed, 3 skipped`，跳过原因均为 `Docker kernel image is not available`。
 - **门禁**：backend Ruff 全绿、完整 pytest `222 passed, 3 skipped`；frontend Vitest `20 files / 110 tests`、ESLint、TypeScript + Vite build 通过；Playwright golden path 单次及 `repeat-each=3` 通过。P1-5 完成，P0/P1 生产就绪 backlog 至此全部完成，下一主线转入 P2-1 设计令牌系统。
+
+## 2026-07-21 P2-1 设计令牌系统（切片 1：颜色基础）
+
+- **动态审计**：计划文档的旧基线已漂移；当前 `styles.css` 实际约 3757 行、480 个十六进制引用、62 种裸色且没有 CSS 变量。按 P2-1 拆成可验证子切片，先稳定颜色语义，再处理 spacing/radius/z-index 和文件拆分。
+- **TDD 红→绿**：新增 `frontend/tests/design-tokens.test.mjs`，先确认缺少语义令牌、令牌块之外存在裸色、存在装饰性渐变三项均失败；实现后 3/3 通过。测试直接读取真实 CSS 文件，避免 Vitest CSS 代理造成假通过。
+- **令牌化**：在 `:root` 建立 35 个 Catppuccin 语义与 RGB 通道令牌，覆盖 canvas/surface/raised/overlay、边框、文本、accent、success/warning/danger/ML 等；590 处引用全部改为 `var(...)` 或带透明度的 `rgb(var(--rgb-*) / alpha)`，未定义令牌为 0，令牌块之外的颜色字面量为 0。
+- **视觉约束收口**：删除工作台、消息和旧直方图样式中的 4 处装饰性渐变；蓝色实心操作改为 Catppuccin accent + 深色前景，避免彩色背景上的低对比文字。
+- **门禁**：frontend Vitest `21 files / 113 tests`、ESLint、TypeScript + Vite build、Playwright 真实 API golden path 均通过；1440×900 截图复核确认四栏层级、选中态、按钮前景无视觉回归。截图再次暴露 workflow 卡片在窄中心区逐字换行，这是已排期的 P2-3 响应式问题，不扩入本切片。
+- **P2-1 状态**：整体仍为进行中。下一切片按顺序收敛 spacing/radius/z-index，清除 `.analysis-grid`/`.visual-card`/`.heatmap-grid` 等失效 CSS，再拆分全局 stylesheet 的 foundation/feature 层。
