@@ -908,3 +908,13 @@
 - **测试（红→绿）**：`test_auth.py` 增 6 个——`/api/auth/session` 暴露 JWT claims 的 roles/org、单字符串角色、非法项丢弃去重、缺失默认空、嵌套/自定义 claim 路径、`require_roles` 放行/拦截；`test_browser_auth.py` 增 3 个 caplog 审计断言（登录成功/拒绝/登出）。修一个既有测试：session 响应精确断言补 `org_id`/`roles`（契约扩展的合理后果）。踩坑：命名空间 org claim 键 `https://mlagent.example/org` 含点号被点号分割误拆，靠「字面 key 优先」修正。
 - **门禁**：完整 backend `221 passed, 3 skipped`（+9），`ruff check app tests` 全绿。分支按既定「先留本地」未 push。
 - **P0-2 至此后端能力齐备**（JWT/OIDC/PKCE + 租户隔离 + Redis 共享会话 + org/role claims + 认证审计）。收尾前的待办：`.env.example` 补新配置项（`.env*` 工具守卫）、Redis 多实例部署实测、前端可选展示角色/组织；这些属部署/文档/UX 层，不阻断 P0-2 后端。
+
+## 2026-07-21 富文本聊天与图表（P1-2，切片 1：Agent 消息 Markdown 渲染）
+
+- P1-2 拆两切片推进。切片 1 处理富文本聊天：agent 消息此前是 `<p>{content}</p>` 纯文本（无 Markdown/代码高亮），流式回复同样。
+- **`MarkdownMessage` 组件**（`features/chat/`）：`react-markdown` + `remark-gfm`（GFM 表格/列表/删除线）+ `rehype-highlight`（代码块语法高亮）。**安全**：react-markdown 默认转义原始 HTML，刻意不加 `rehype-raw`，模型输出无法注入标记；链接强制 `target="_blank" rel="noreferrer noopener"`。插件数组提到模块级保持稳定引用，利于流式重渲染时 react-markdown 复用 processor。`memo` 包裹避免历史消息在父组件重渲染时重复解析。
+- **接入 `AgentWorkspace`**：仅 agent 消息与流式回复走 Markdown，用户消息保持 `<p>` 纯文本（避免用户输入里的 `*` 等被误解析，符合主流聊天惯例）。空状态 demo 对话不动（属 P1-7）。
+- **样式**：`styles.css` 新增 `.markdown-body`（标题/列表/表格/引用/内联码/代码块，全 Catppuccin 原始 hex，与既有组件一致）+ 一套 Catppuccin Mocha 的 `.hljs-*` 语法主题（keyword=mauve/string=green/number=peach/function=blue/type=yellow 等）。
+- **bundle 控制**：`react-markdown + rehype-highlight(highlight.js)` 让主包从 471KB 涨到 808KB。试过用 rehype-highlight 的 `languages` 选项限定语言集，**无效**（它模块顶部静态 `import {common} from 'lowlight'`，运行时选项不影响打包）。改用 **`React.lazy` 懒加载** `MarkdownMessage`：markdown+highlight 拆成 335KB 按需 chunk，初始包回到 473KB（≈原始，无回归），>500KB 警告消失；两处用 `<Suspense fallback={<p>{content}</p>}>` 包裹，chunk 加载瞬间先显纯文本再升级 Markdown。彻底的路由级分割仍归 P2-8。
+- **测试**：`MarkdownMessage.test.tsx`（jsdom，4 个）——GFM 粗体/表格、Python 代码块 `.hljs`/`.hljs-keyword`、**原始 HTML 不渲染为元素（注入防护）**、链接新标签页 + noreferrer。
+- **门禁**：前端 `vitest` 19 文件 / 106 passed、`eslint` 0、`tsc -b` + `vite build`（拆分为 index 473KB + MarkdownMessage 335KB）全绿。未跑浏览器视觉 QA（沙箱限制）。切片 2（真实图表库替换手写 SVG 色块）待续。

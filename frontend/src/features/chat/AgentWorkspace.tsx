@@ -1,5 +1,5 @@
 import { Bot, CheckCircle2, Database, FileCode2, SendHorizontal, Sparkles, UserRound } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 
 import type { AgentStreamEvent, WorkflowStageId } from "./types";
 import {
@@ -12,6 +12,10 @@ import { buildToolActivitySummaries, type ToolActivityStatus } from "./toolActiv
 import { deriveWorkflowState } from "./workflowState";
 import type { AgentMessage } from "../../lib/api";
 import { useUiStore } from "../../app/uiStore";
+
+// Lazy so react-markdown + highlight.js load only when an agent message needs
+// Markdown rendering, keeping them out of the initial bundle.
+const MarkdownMessage = lazy(() => import("./MarkdownMessage"));
 
 type AgentWorkspaceProps = {
   mode: "analysis" | "machine-learning";
@@ -463,7 +467,13 @@ export function AgentWorkspace({
                 <span className="message-label">
                   {historyMessage.role === "user" ? "你" : copy.title} · {new Date(historyMessage.created_at).toLocaleTimeString()}
                 </span>
-                <p>{historyMessage.content}</p>
+                {historyMessage.role === "user" ? (
+                  <p>{historyMessage.content}</p>
+                ) : (
+                  <Suspense fallback={<p>{historyMessage.content}</p>}>
+                    <MarkdownMessage content={historyMessage.content} />
+                  </Suspense>
+                )}
               </div>
             </div>
           ))
@@ -509,7 +519,9 @@ export function AgentWorkspace({
             </div>
             <div className="message-card agent-message">
               <span className="message-label">{copy.title} · 正在回复</span>
-              <p>{streamingMessage}</p>
+              <Suspense fallback={<p>{streamingMessage}</p>}>
+                <MarkdownMessage content={streamingMessage} />
+              </Suspense>
             </div>
           </div>
         ) : null}
