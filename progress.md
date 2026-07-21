@@ -964,3 +964,13 @@
 - **视觉约束收口**：删除工作台、消息和旧直方图样式中的 4 处装饰性渐变；蓝色实心操作改为 Catppuccin accent + 深色前景，避免彩色背景上的低对比文字。
 - **门禁**：frontend Vitest `21 files / 113 tests`、ESLint、TypeScript + Vite build、Playwright 真实 API golden path 均通过；1440×900 截图复核确认四栏层级、选中态、按钮前景无视觉回归。截图再次暴露 workflow 卡片在窄中心区逐字换行，这是已排期的 P2-3 响应式问题，不扩入本切片。
 - **P2-1 状态**：整体仍为进行中。下一切片按顺序收敛 spacing/radius/z-index，清除 `.analysis-grid`/`.visual-card`/`.heatmap-grid` 等失效 CSS，再拆分全局 stylesheet 的 foundation/feature 层。
+
+## 2026-07-21 P2-1 设计令牌系统（切片 2：尺寸、层级与基础分层）
+
+- **动态审计**：从提交 `116a790` 的真实 CSS 统计出 338 条 spacing、101 条 `border-radius`、2 条 `z-index` 声明；静态类名交叉检索确认 11 组非 `hljs` 选择器没有任何 React/TypeScript 引用。旧计划中“直接完成 P2-1”因此拆成尺寸令牌、死 CSS、基础分层三个可验证目标。
+- **TDD 红→绿**：扩展 `frontend/tests/design-tokens.test.mjs`，先观察 6 项预期失败：缺少 tokens/foundation 文件、缺少 spacing/radius/layer 令牌、实现层仍有裸 spacing/radius/z-index、退役选择器仍存在；实现后契约 7/7 通过。
+- **4px spacing 与圆角层级**：新增 `--space-1` 至 `--space-12` 的 4px 基准刻度，将 feature CSS 的 spacing 声明全部迁移为 token；圆角统一为 4/6/8px、pill、round 五档；两个 popover 的 `z-index: 40` 统一为 `--layer-popover`。实现层对应裸值均为 0。
+- **样式基础分层**：新增 `frontend/src/styles/tokens.css` 与 `foundation.css`，`styles.css` 只保留 product feature selectors 并显式按 tokens → foundation → feature 顺序加载。三文件合计 54 个定义令牌、48 个已引用令牌、0 个未定义引用。
+- **失效 CSS 清理**：删除 `.analysis-grid`、`.visual-card`、`.heatmap-grid`、旧 `.histogram`/`.correlation-grid`、`.plan-card`/`.plan-grid`、`.compact-table`、`.code-preview`、`.code-panel`、`.workbench-card` 等 11 组已确认无引用的演示样式；真实 Recharts `.histogram-chart` 与 `hljs-*` 动态语法类保留。
+- **门禁**：frontend Vitest `21 files / 117 tests`、ESLint、TypeScript + Vite build、Playwright 真实 API golden path 均通过；构建 CSS gzip 从约 9.15KB 降至 8.89KB；1440×900 截图确认操作密度、面板层级和按钮状态无回归。
+- **动态计划调整**：P2-1 暂不勾选。`styles.css` 仍有 3601 行，下一切片按 shell/sidebar、agent/chat、right-panel、evolution/responsive 等产品领域拆分，并补显式 theme/brand override 契约；截图中的 workflow 阶段卡逐字换行继续归 P2-3，不混入本项。

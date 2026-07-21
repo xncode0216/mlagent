@@ -22,12 +22,12 @@
 - GPU 调度基础：GPU scheduler 服务、状态 API、队列结构和测试。
 - 前端稳定性：自进化状态统计抽为可测试函数，修复冲突/拒绝统计反转问题，图谱属性由 `any` 收紧为 `unknown` 并做类型防护。
 - 前端深链与测试：保留覆盖广泛的 `smoke:deep-links`；新增标准 Playwright golden path，以真实 FastAPI + Vite 验证数据画像、预处理执行、baseline 训练和实验详情，并接入 GitHub Actions。
-- P2 视觉基础：完成 P2-1 的颜色子切片，建立 35 个 Catppuccin 语义/RGB 通道令牌，将 590 处颜色引用迁移为 `var(...)`，并把令牌块之外的裸色值与装饰性渐变降为 0。
+- P2 视觉基础：完成 P2-1 的颜色与尺寸/层级两个子切片；现有 54 个 Catppuccin、spacing、radius、layer 令牌，颜色/spacing/radius/z-index 契约无裸值，并拆出 tokens/foundation 基础层、删除 11 组失效演示 CSS。
 
 ## 最近验证
 
 - 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `21 passed files / 113 tests`。
+- 前端测试：`npm.cmd test`，结果 `21 passed files / 117 tests`。
 - 前端 lint：`npm.cmd run lint`，通过。
 - 前端构建：`npm.cmd run build`，通过。
 - Playwright E2E：golden path 通过；此前 `--repeat-each=3` 亦为 3/3，通过失败时保留 screenshot/video/trace。
@@ -36,7 +36,7 @@
 
 ## 下一步优先级
 
-1. P2-1 设计令牌系统：颜色令牌已完成；下一切片收敛 spacing/radius/z-index、删除失效 CSS，并拆分全局样式层。
+1. P2-1 设计令牌系统：颜色和尺寸/层级基础已完成；下一切片按产品领域拆分仍有 3601 行的 feature CSS，并补显式 theme/brand override 契约。
 2. P2-2 动效与加载态：统一 150–300ms 功能性状态过渡、骨架和 reduced-motion 回退。
 3. P2-3 响应式策略：完成窄屏降级，或明确桌面最小宽度与友好提示。
 4. P2-4/P2-5 信息设计与命令系统：隐藏裸 UUID、完善空状态、兑现命令面板与斜杠命令。
