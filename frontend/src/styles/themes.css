@@ -7,6 +7,7 @@
   --color-bg-overlay: var(--palette-surface-0);
   --color-border: var(--palette-surface-1);
   --color-border-strong: var(--palette-surface-2);
+  --color-graph-muted: var(--palette-surface-3);
   --color-text: var(--palette-text);
   --color-text-secondary: var(--palette-subtext-1);
   --color-text-subtle: var(--palette-subtext-0);
@@ -35,6 +36,7 @@
   --rgb-warning-strong: var(--palette-rgb-peach);
   --rgb-danger: var(--palette-rgb-red);
   --rgb-ml: var(--palette-rgb-ml);
+  --rgb-sky: var(--palette-rgb-sky);
   --rgb-shadow: var(--palette-rgb-shadow);
 }
 

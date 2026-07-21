@@ -296,15 +296,15 @@ export function EvolutionWorkspace({
   const getEdgeColor = (type: string) => {
     switch (type) {
       case "produces":
-        return "#f38ba8"; // soft pink/red (column production)
+        return "var(--color-danger)";
       case "uses":
-        return "#89dceb"; // sky blue (feature usage)
+        return "var(--color-sky)";
       case "triggers":
-        return "#f9e2af"; // soft yellow (affects features)
+        return "var(--color-warning)";
       case "supports":
-        return "#a6e3a1"; // emerald green (model adoption verification)
+        return "var(--color-success)";
       default:
-        return "#585b70";
+        return "var(--color-graph-muted)";
     }
   };
 
@@ -350,361 +350,6 @@ export function EvolutionWorkspace({
 
   return (
     <main className="agent-workspace evolution-workspace">
-      <style>{`
-        .view-tabs {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 12px;
-          margin-bottom: 20px;
-          border-bottom: 1.5px solid #313244;
-          padding-bottom: 8px;
-        }
-        .view-tabs button {
-          background: transparent;
-          border: 1px solid transparent;
-          color: #a6adc8;
-          padding: 8px 16px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 14px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          min-height: 38px;
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .view-tabs button:hover {
-          color: #cdd6f4;
-          background: #313244;
-        }
-        .view-tabs button.active {
-          color: #11111b;
-          background: #cba6f7;
-          font-weight: 600;
-          box-shadow: 0 4px 12px rgba(203, 166, 247, 0.35);
-        }
-        .graph-container {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
-          gap: 20px;
-          margin-top: 16px;
-          background: #11111b;
-          border: 1.5px solid #313244;
-          border-radius: 12px;
-          padding: 20px;
-          min-height: 520px;
-          min-width: 0;
-        }
-        .svg-canvas {
-          background-image: radial-gradient(#313244 1.2px, transparent 0);
-          background-size: 24px 24px;
-          border-radius: 8px;
-          background-color: #181825;
-          border: 1px solid #313244;
-          box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
-          min-height: 420px;
-          min-width: 0;
-          position: relative;
-        }
-        .svg-canvas svg {
-          display: block;
-          min-width: 0;
-        }
-        .node-rect {
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          cursor: pointer;
-        }
-        .node-rect:hover {
-          filter: drop-shadow(0 0 10px currentColor);
-        }
-        .edge-line {
-          transition: all 0.3s ease;
-        }
-        @keyframes strokeFlow {
-          to {
-            stroke-dashoffset: -20;
-          }
-        }
-        .flowing-edge {
-          stroke-dasharray: 6, 6;
-          animation: strokeFlow 1.2s linear infinite;
-        }
-        .node-active-highlight {
-          animation: pulseGlow 1.6s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        @keyframes pulseGlow {
-          from {
-            filter: drop-shadow(0 0 3px currentColor);
-            stroke-width: 2.5;
-          }
-          to {
-            filter: drop-shadow(0 0 12px currentColor);
-            stroke-width: 4;
-          }
-        }
-        .graph-detail-sidebar {
-          background: #181825;
-          border: 1px solid #313244;
-          border-radius: 8px;
-          padding: 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          min-height: 0;
-          min-width: 0;
-          overflow-y: auto;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-        }
-        .graph-detail-sidebar h3 {
-          margin: 0;
-          font-size: 16px;
-          color: #cdd6f4;
-          border-bottom: 1px solid #313244;
-          padding-bottom: 8px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .graph-detail-sidebar .badge {
-          align-self: flex-start;
-          font-size: 11px;
-          padding: 2px 8px;
-          border-radius: 4px;
-          font-weight: 500;
-          text-transform: uppercase;
-        }
-        .graph-detail-sidebar .badge.column { background: rgba(137, 220, 235, 0.15); color: #89dceb; border: 1px solid rgba(137, 220, 235, 0.3); }
-        .graph-detail-sidebar .badge.experiment { background: rgba(203, 166, 247, 0.15); color: #cba6f7; border: 1px solid rgba(203, 166, 247, 0.3); }
-        .graph-detail-sidebar .badge.rule { background: rgba(249, 226, 175, 0.15); color: #f9e2af; border: 1px solid rgba(249, 226, 175, 0.3); }
-        .graph-evidence-panel {
-          border: 1px solid rgba(166, 173, 200, 0.16);
-          background: #11111b;
-          border-radius: 8px;
-          padding: 10px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          min-width: 0;
-        }
-        .graph-evidence-panel strong {
-          color: #cdd6f4;
-          font-size: 12px;
-        }
-        .graph-evidence-row {
-          display: grid;
-          grid-template-columns: 84px 1fr;
-          gap: 8px;
-          align-items: start;
-          font-size: 12px;
-          min-width: 0;
-        }
-        .graph-evidence-row span {
-          color: #a6adc8;
-        }
-        .graph-evidence-row code {
-          color: #89dceb;
-          white-space: normal;
-          overflow-wrap: anywhere;
-          font-family: inherit;
-          line-height: 1.35;
-        }
-        .graph-evidence-row button {
-          border: 1px solid rgba(137, 220, 235, 0.28);
-          background: rgba(137, 220, 235, 0.08);
-          color: #89dceb;
-          border-radius: 5px;
-          padding: 2px 7px;
-          font-size: 11px;
-          cursor: pointer;
-          justify-self: start;
-        }
-        .graph-evidence-row button:hover {
-          border-color: rgba(137, 220, 235, 0.58);
-          background: rgba(137, 220, 235, 0.15);
-        }
-
-        .insights-section {
-          margin-top: 24px;
-        }
-        .insights-section h3 {
-          color: #cdd6f4;
-          font-size: 16px;
-          margin-bottom: 14px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .insights-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-          gap: 16px;
-        }
-        .insight-card {
-          padding: 16px;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          position: relative;
-          text-align: left;
-        }
-        button.insight-card {
-          color: inherit;
-          font: inherit;
-        }
-        .insight-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
-        }
-        .graph-retry-button,
-        .graph-node-action {
-          align-self: flex-start;
-          border: 1px solid rgba(203, 166, 247, 0.45);
-          background: rgba(203, 166, 247, 0.12);
-          color: #cba6f7;
-          border-radius: 6px;
-          padding: 7px 12px;
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 600;
-        }
-        .graph-retry-button:hover,
-        .graph-node-action:hover {
-          background: rgba(203, 166, 247, 0.2);
-          border-color: rgba(203, 166, 247, 0.75);
-        }
-        .graph-empty-state {
-          min-height: 400px;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          gap: 18px;
-          background: linear-gradient(135deg, rgba(203, 166, 247, 0.06), rgba(137, 220, 235, 0.03));
-          border: 1px dashed rgba(166, 173, 200, 0.28);
-          border-radius: 12px;
-          padding: 28px;
-        }
-        .graph-empty-state h3 {
-          margin: 0;
-          color: #cdd6f4;
-          font-size: 18px;
-        }
-        .graph-empty-state p {
-          margin: 0;
-          color: #a6adc8;
-          line-height: 1.6;
-          max-width: 680px;
-        }
-        .graph-empty-steps {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 12px;
-        }
-        .graph-empty-step {
-          border: 1px solid rgba(166, 173, 200, 0.16);
-          background: rgba(24, 24, 37, 0.72);
-          border-radius: 8px;
-          padding: 14px;
-          min-height: 92px;
-        }
-        .graph-empty-step strong {
-          display: block;
-          color: #cdd6f4;
-          margin-bottom: 6px;
-        }
-        .graph-empty-step span {
-          color: #a6adc8;
-          font-size: 12px;
-          line-height: 1.45;
-        }
-        @media (max-width: 1100px) {
-          .graph-container {
-            grid-template-columns: 1fr;
-          }
-          .graph-detail-sidebar {
-            max-height: none;
-          }
-          .graph-empty-steps {
-            grid-template-columns: 1fr;
-          }
-        }
-        @container (max-width: 740px) {
-          .graph-container {
-            grid-template-columns: 1fr;
-          }
-          .graph-detail-sidebar {
-            max-height: none;
-          }
-          .graph-empty-steps,
-          .insights-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-        @media (max-width: 620px) {
-          .view-tabs button {
-            flex: 1 1 220px;
-            justify-content: center;
-          }
-          .graph-container {
-            padding: 12px;
-          }
-          .svg-canvas {
-            min-height: 360px;
-            overflow: auto;
-          }
-        }
-        .insight-card.knowledge_gap {
-          background: rgba(243, 139, 168, 0.05);
-          border: 1px solid rgba(243, 139, 168, 0.15);
-          border-left: 4.5px solid #f38ba8;
-        }
-        .insight-card.knowledge_gap:hover {
-          background: rgba(243, 139, 168, 0.08);
-          border-color: rgba(243, 139, 168, 0.3);
-        }
-        .insight-card.surprise_connection {
-          background: rgba(166, 227, 161, 0.05);
-          border: 1px solid rgba(166, 227, 161, 0.15);
-          border-left: 4.5px solid #a6e3a1;
-        }
-        .insight-card.surprise_connection:hover {
-          background: rgba(166, 227, 161, 0.08);
-          border-color: rgba(166, 227, 161, 0.3);
-        }
-        .insight-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          color: #cdd6f4;
-          font-weight: 600;
-          font-size: 14px;
-        }
-        .insight-header span {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .insight-card p {
-          margin: 0;
-          font-size: 13px;
-          line-height: 1.5;
-          color: #bac2de;
-        }
-        .insight-action {
-          align-self: flex-end;
-          font-size: 11px;
-          color: #a6adc8;
-          display: flex;
-          align-items: center;
-          gap: 2px;
-          margin-top: 4px;
-        }
-        .insight-card:hover .insight-action {
-          color: #cba6f7;
-        }
-      `}</style>
 
       <div className="agent-header workbench-header">
         <div>
@@ -959,14 +604,11 @@ export function EvolutionWorkspace({
         /* Knowledge Graph Tab View */
         <div className="graph-view-wrapper">
           {loadingGraph ? (
-            <div className="empty-state" style={{ minHeight: "400px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="empty-state graph-loading-state">
               <div className="loading-spinner">正在加载数据拓扑与高级洞察...</div>
             </div>
           ) : graphError ? (
-            <div
-              className="empty-state"
-              style={{ minHeight: "400px", display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}
-            >
+            <div className="empty-state graph-error-state">
               <strong>知识图谱加载失败</strong>
               <span>{graphError}</span>
               <button className="graph-retry-button" onClick={() => setGraphReloadToken((value) => value + 1)} type="button">
@@ -1012,9 +654,9 @@ export function EvolutionWorkspace({
                     onMouseLeave={() => setHoveredNodeId(null)}
                   >
                     {/* Background indicators */}
-                    <text x="140" y="25" fill="#585b70" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">数据特征 (COLUMNS)</text>
-                    <text x="400" y="25" fill="#585b70" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">模型实验 (EXPERIMENTS)</text>
-                    <text x="660" y="25" fill="#585b70" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">自进化规则 (RULES)</text>
+                    <text x="140" y="25" fill="var(--color-graph-muted)" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">数据特征 (COLUMNS)</text>
+                    <text x="400" y="25" fill="var(--color-graph-muted)" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">模型实验 (EXPERIMENTS)</text>
+                    <text x="660" y="25" fill="var(--color-graph-muted)" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">自进化规则 (RULES)</text>
 
                     {/* Defs for Glow effects */}
                     <defs>
@@ -1069,14 +711,14 @@ export function EvolutionWorkspace({
                       const opacity = isHighlighted ? 1 : 0.2;
 
                       // Colors based on types
-                      let strokeColor = "#585b70";
+                      let strokeColor = "var(--color-graph-muted)";
 
                       if (node.type === "column") {
-                        strokeColor = "#89dceb";
+                        strokeColor = "var(--color-sky)";
                       } else if (node.type === "experiment") {
-                        strokeColor = "#cba6f7";
+                        strokeColor = "var(--color-ml)";
                       } else if (node.type === "rule") {
-                        strokeColor = "#f9e2af";
+                        strokeColor = "var(--color-warning)";
                       }
 
                       if (node.type === "column") {
@@ -1090,7 +732,7 @@ export function EvolutionWorkspace({
                             onKeyDown={(event) => handleGraphNodeKeyDown(event, node)}
                             opacity={opacity}
                             role="button"
-                            style={{ transition: "opacity 0.25s" }}
+                            className="graph-node"
                             tabIndex={0}
                           >
                             <rect
@@ -1099,8 +741,8 @@ export function EvolutionWorkspace({
                               width="130"
                               height="30"
                               rx="6"
-                              fill="#1e1e2e"
-                              stroke={isSelected ? "#f5c2e7" : strokeColor}
+                              fill="var(--color-bg-overlay)"
+                              stroke={isSelected ? "var(--color-pink)" : strokeColor}
                               strokeWidth={isSelected ? 2.5 : 1.5}
                               className={`node-rect ${isSelected ? "node-active-highlight" : ""}`}
                               style={{ color: strokeColor }}
@@ -1108,7 +750,7 @@ export function EvolutionWorkspace({
                             <text
                               textAnchor="middle"
                               y="4"
-                              fill="#cdd6f4"
+                              fill="var(--color-text)"
                               fontSize="11.5"
                               fontWeight="500"
                               pointerEvents="none"
@@ -1128,13 +770,13 @@ export function EvolutionWorkspace({
                             onKeyDown={(event) => handleGraphNodeKeyDown(event, node)}
                             opacity={opacity}
                             role="button"
-                            style={{ transition: "opacity 0.25s" }}
+                            className="graph-node"
                             tabIndex={0}
                           >
                             <circle
                               r="24"
-                              fill="#1e1e2e"
-                              stroke={isSelected ? "#f5c2e7" : strokeColor}
+                              fill="var(--color-bg-overlay)"
+                              stroke={isSelected ? "var(--color-pink)" : strokeColor}
                               strokeWidth={isSelected ? 2.5 : 1.5}
                               className={`node-rect ${isSelected ? "node-active-highlight" : ""}`}
                               style={{ color: strokeColor }}
@@ -1151,7 +793,7 @@ export function EvolutionWorkspace({
                             <text
                               textAnchor="middle"
                               y="4"
-                              fill="#cdd6f4"
+                              fill="var(--color-text)"
                               fontSize="9.5"
                               fontWeight="600"
                               pointerEvents="none"
@@ -1172,7 +814,7 @@ export function EvolutionWorkspace({
                             onKeyDown={(event) => handleGraphNodeKeyDown(event, node)}
                             opacity={opacity}
                             role="button"
-                            style={{ transition: "opacity 0.25s" }}
+                            className="graph-node"
                             tabIndex={0}
                           >
                             <rect
@@ -1181,8 +823,8 @@ export function EvolutionWorkspace({
                               width="150"
                               height="36"
                               rx="8"
-                              fill="#1e1e2e"
-                              stroke={isSelected ? "#f5c2e7" : strokeColor}
+                              fill="var(--color-bg-overlay)"
+                              stroke={isSelected ? "var(--color-pink)" : strokeColor}
                               strokeWidth={isSelected ? 2.5 : 1.5}
                               className={`node-rect ${isSelected ? "node-active-highlight" : ""}`}
                               style={{ color: strokeColor }}
@@ -1190,7 +832,7 @@ export function EvolutionWorkspace({
                             <text
                               textAnchor="middle"
                               y="3"
-                              fill="#cdd6f4"
+                              fill="var(--color-text)"
                               fontSize="11"
                               fontWeight="500"
                               pointerEvents="none"
@@ -1209,14 +851,14 @@ export function EvolutionWorkspace({
                   {selectedGraphNode ? (
                     <>
                       <h3>
-                        <Sparkles size={16} style={{ color: "#cba6f7" }} />
+                        <Sparkles className="graph-detail-icon" size={16} />
                         节点详情
                       </h3>
                       <span className={`badge ${selectedGraphNode.type}`}>
                         {selectedGraphNode.type === "column" ? "数据特征列" :
                          selectedGraphNode.type === "experiment" ? "模型训练实验" : "自进化经验"}
                       </span>
-                      <strong style={{ color: "#cdd6f4", fontSize: "16px", marginTop: "4px" }}>
+                      <strong className="graph-detail-title">
                         {selectedGraphNode.label}
                       </strong>
 
@@ -1228,7 +870,7 @@ export function EvolutionWorkspace({
                             return (
                               <div className="graph-evidence-row" key={`${item.label}-${item.value}`}>
                                 <span>{item.label}</span>
-                                <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                                <div className="graph-evidence-value">
                                   <code>{item.value}</code>
                                   {action?.type === "file" && onSelectProjectFile ? (
                                     <button onClick={() => onSelectProjectFile(action.path)} type="button">
@@ -1247,20 +889,20 @@ export function EvolutionWorkspace({
                         </div>
                       ) : null}
 
-                      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px", fontSize: "13px" }}>
+                      <div className="graph-node-details">
                         {selectedGraphNode.type === "column" && (
                           <>
                             <div>
-                              <span style={{ color: "#a6adc8" }}>特征数据类型：</span>
-                              <span style={{ color: "#89dceb", fontWeight: "600" }}>
+                              <span className="graph-detail-label">特征数据类型：</span>
+                              <span className="graph-detail-value sky">
                                 {stringProperty(selectedGraphNode.properties, "type") === "numeric" ? "数值型 (Numeric)" : "分类码 (Categorical)"}
                               </span>
                             </div>
                             <div>
-                              <span style={{ color: "#a6adc8" }}>缺失值比率：</span>
-                              <span style={{ color: "#f38ba8" }}>{(numberProperty(selectedGraphNode.properties, "missing_rate") * 100).toFixed(2)}%</span>
+                              <span className="graph-detail-label">缺失值比率：</span>
+                              <span className="graph-detail-value danger">{(numberProperty(selectedGraphNode.properties, "missing_rate") * 100).toFixed(2)}%</span>
                             </div>
-                            <div style={{ background: "#313244", padding: "8px", borderRadius: "6px", color: "#a6adc8", lineHeight: "1.4", marginTop: "8px" }}>
+                            <div className="graph-detail-note">
                               <small>该特征列是模型的重要预测自变量。鼠标悬停其上可追溯其在哪些模型实验中被使用，或受到哪些自进化规则的推荐影响。</small>
                             </div>
                           </>
@@ -1269,24 +911,24 @@ export function EvolutionWorkspace({
                         {selectedGraphNode.type === "experiment" && (
                           <>
                             <div>
-                              <span style={{ color: "#a6adc8" }}>算法引擎：</span>
-                              <span style={{ color: "#cba6f7", fontWeight: "600" }}>
+                              <span className="graph-detail-label">算法引擎：</span>
+                              <span className="graph-detail-value ml">
                                 {stringProperty(selectedGraphNode.properties, "engine", "unknown").toUpperCase()}
                               </span>
                             </div>
                             <div>
-                              <span style={{ color: "#a6adc8" }}>模型精度 (Acc)：</span>
-                              <span style={{ color: "#a6e3a1", fontWeight: "600" }}>
+                              <span className="graph-detail-label">模型精度 (Acc)：</span>
+                              <span className="graph-detail-value success">
                                 {(numberProperty(selectedGraphNode.properties, "accuracy") * 100).toFixed(2)}%
                               </span>
                             </div>
                             <div>
-                              <span style={{ color: "#a6adc8" }}>目标列字段：</span>
-                              <span style={{ color: "#f9e2af" }}>{stringProperty(selectedGraphNode.properties, "target_column", "未知")}</span>
+                              <span className="graph-detail-label">目标列字段：</span>
+                              <span className="graph-detail-value warning">{stringProperty(selectedGraphNode.properties, "target_column", "未知")}</span>
                             </div>
                             <div>
-                              <span style={{ color: "#a6adc8" }}>训练时间：</span>
-                              <span style={{ color: "#bac2de" }}>
+                              <span className="graph-detail-label">训练时间：</span>
+                              <span className="graph-detail-value secondary">
                                 {stringProperty(selectedGraphNode.properties, "created_at")
                                   ? new Date(stringProperty(selectedGraphNode.properties, "created_at")).toLocaleString()
                                   : "未知"}
@@ -1298,23 +940,23 @@ export function EvolutionWorkspace({
                         {selectedGraphNode.type === "rule" && (
                           <>
                             <div>
-                              <span style={{ color: "#a6adc8" }}>知识信度：</span>
-                              <span style={{ color: "#a6e3a1", fontWeight: "600" }}>
+                              <span className="graph-detail-label">知识信度：</span>
+                              <span className="graph-detail-value success">
                                 {(numberProperty(selectedGraphNode.properties, "confidence") * 100).toFixed(1)}%
                               </span>
                             </div>
                             <div>
-                              <span style={{ color: "#a6adc8" }}>注入状态：</span>
-                              <span style={{ color: "#f9e2af", fontWeight: "600" }}>
+                              <span className="graph-detail-label">注入状态：</span>
+                              <span className="graph-detail-value warning">
                                 {(() => {
                                   const status = lessonStatusProperty(selectedGraphNode.properties);
                                   return status ? statusLabel[status] : stringProperty(selectedGraphNode.properties, "status", "未知");
                                 })()}
                               </span>
                             </div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <span style={{ color: "#a6adc8" }}>业务规则推荐 (Recommendation)：</span>
-                              <p style={{ color: "#bac2de", background: "#11111b", padding: "8px", borderRadius: "6px", fontSize: "12px", margin: "0", lineHeight: "1.4" }}>
+                            <div className="graph-detail-rule">
+                              <span className="graph-detail-label">业务规则推荐 (Recommendation)：</span>
+                              <p>
                                 {stringProperty(selectedGraphNode.properties, "recommendation", "暂无推荐说明")}
                               </p>
                             </div>
@@ -1328,9 +970,9 @@ export function EvolutionWorkspace({
                       </div>
                     </>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: "#6c7086", textAlign: "center", gap: "10px" }}>
+                    <div className="graph-detail-empty">
                       <HelpCircle size={32} />
-                      <p style={{ margin: "0", fontSize: "13px" }}>点击图谱中的任意节点<br/>查看其演进链路与指标详情</p>
+                      <p>点击图谱中的任意节点<br/>查看其演进链路与指标详情</p>
                     </div>
                   )}
                 </div>
@@ -1339,11 +981,11 @@ export function EvolutionWorkspace({
               {/* Advanced Insights Section */}
               <section className="insights-section">
                 <h3>
-                  <Zap size={18} style={{ color: "#fab387" }} />
+                  <Zap className="insights-section-icon" size={18} />
                   自进化高级洞察 (Self-Evolution Insights)
                 </h3>
                 {graphData.insights.length === 0 ? (
-                  <div className="empty-state compact-empty" style={{ background: "#181825", border: "1px dashed #313244" }}>
+                  <div className="empty-state compact-empty insights-empty">
                     暂未发现明显的知识空白或惊奇连接。系统将持续监控多轮训练与经验审计状态，自动沉淀深度决策洞察。
                   </div>
                 ) : (
@@ -1358,13 +1000,13 @@ export function EvolutionWorkspace({
                         <div className="insight-header">
                           <span>
                             {insight.type === "knowledge_gap" ? (
-                              <AlertTriangle size={15} style={{ color: "#f38ba8" }} />
+                              <AlertTriangle className="insight-type-icon danger" size={15} />
                             ) : (
-                              <TrendingUp size={15} style={{ color: "#a6e3a1" }} />
+                              <TrendingUp className="insight-type-icon success" size={15} />
                             )}
                             {insight.title}
                           </span>
-                          <span style={{ fontSize: "10px", textTransform: "uppercase", background: "rgba(255,255,255,0.06)", padding: "1px 6px", borderRadius: "4px", color: "#a6adc8" }}>
+                          <span className="insight-kind">
                             {insight.type === "knowledge_gap" ? "知识空白" : "惊奇连接"}
                           </span>
                         </div>

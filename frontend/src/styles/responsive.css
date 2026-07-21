@@ -24,6 +24,20 @@
   }
 }
 
+@media (max-width: 1100px) {
+  .graph-container {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-detail-sidebar {
+    max-height: none;
+  }
+
+  .graph-empty-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
 @container (max-width: 740px) {
   .evolution-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -34,6 +48,16 @@
     max-height: none;
     min-height: auto;
     overflow: visible;
+  }
+
+  .graph-container,
+  .graph-empty-steps,
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-detail-sidebar {
+    max-height: none;
   }
 }
 
@@ -89,5 +113,19 @@
   .lesson-filter-bar button {
     flex: 1 1 120px;
     justify-content: center;
+  }
+
+  .view-tabs button {
+    flex: 1 1 220px;
+    justify-content: center;
+  }
+
+  .graph-container {
+    padding: var(--space-3);
+  }
+
+  .svg-canvas {
+    min-height: 360px;
+    overflow: auto;
   }
 }

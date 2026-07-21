@@ -25,6 +25,23 @@ test("设计系统加载领域样式并支持 ML 品牌强调色覆盖", async (
   expect(colors.defaultAccent).toBe("rgb(137, 180, 250)");
   expect(colors.mlAccent).toBe("rgb(203, 166, 247)");
 
+  await page
+    .getByRole("navigation", { name: "Main modes" })
+    .getByRole("button", { name: "Evolution Knowledge" })
+    .click();
+  await expect(page.locator(".evolution-workspace")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "经验审计列表" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  await page.getByRole("tab", { name: "自进化知识图谱 & 高级洞察" }).click();
+  await expect(page.locator(".graph-view-wrapper")).toBeVisible();
+  await expect(
+    page.locator(".graph-container, .graph-empty-state, .graph-error-state").first(),
+  ).toBeVisible();
+  await expect(page.locator(".evolution-workspace style")).toHaveCount(0);
+
   if (process.env.E2E_SCREENSHOT_PATH) {
     await page.screenshot({ path: process.env.E2E_SCREENSHOT_PATH, fullPage: true });
   }

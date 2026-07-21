@@ -8,7 +8,7 @@ type Props = {
   column?: string;
 };
 
-const AXIS_TICK = { fill: "#6c7086", fontSize: 10 };
+const AXIS_TICK = { fill: "var(--color-text-muted)", fontSize: 10 };
 
 /**
  * Real distribution histogram (Recharts) replacing the hand-built div bars.
@@ -22,28 +22,28 @@ export const HistogramChart = memo(function HistogramChart({ bins, column }: Pro
     <div className="histogram-chart" role="img" aria-label={`${column || "字段"} 分布直方图`}>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-          <CartesianGrid stroke="#313244" strokeDasharray="3 3" vertical={false} />
+          <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="label"
             tick={AXIS_TICK}
-            stroke="#45475a"
+            stroke="var(--color-border-strong)"
             interval="preserveStartEnd"
             minTickGap={16}
           />
-          <YAxis tick={AXIS_TICK} stroke="#45475a" allowDecimals={false} width={34} />
+          <YAxis tick={AXIS_TICK} stroke="var(--color-border-strong)" allowDecimals={false} width={34} />
           <Tooltip
-            cursor={{ fill: "rgba(137, 180, 250, 0.12)" }}
+            cursor={{ fill: "rgb(var(--rgb-accent) / 0.12)" }}
             contentStyle={{
-              background: "#11111b",
-              border: "1px solid #313244",
+              background: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
               borderRadius: 8,
-              color: "#cdd6f4",
+              color: "var(--color-text)",
               fontSize: 12,
             }}
-            labelStyle={{ color: "#a6adc8" }}
+            labelStyle={{ color: "var(--color-text-subtle)" }}
             labelFormatter={(label, payload) => payload?.[0]?.payload?.range ?? String(label)}
           />
-          <Bar dataKey="count" name="计数" fill="#89b4fa" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="count" name="计数" fill="var(--color-accent)" radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

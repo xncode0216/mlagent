@@ -461,3 +461,458 @@
   font-size: 12px;
   padding: var(--space-2) var(--space-2);
 }
+
+/* Knowledge graph and advanced insights */
+.view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  border-bottom: 1.5px solid var(--color-border);
+  padding-bottom: var(--space-2);
+}
+.view-tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-subtle);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.view-tabs button:hover {
+  color: var(--color-text);
+  background: var(--color-border);
+}
+.view-tabs button.active {
+  color: var(--color-bg-surface);
+  background: var(--color-ml);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgb(var(--rgb-ml) / 0.35);
+}
+.graph-container {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  gap: var(--space-5);
+  margin-top: var(--space-4);
+  background: var(--color-bg-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  padding: var(--space-5);
+  min-height: 520px;
+  min-width: 0;
+}
+.svg-canvas {
+  border-radius: var(--radius-panel);
+  background-color: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 2px 8px rgb(var(--rgb-shadow) / 0.5);
+  min-height: 420px;
+  min-width: 0;
+  position: relative;
+}
+.svg-canvas svg {
+  display: block;
+  min-width: 0;
+}
+.node-rect {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+.node-rect:hover {
+  filter: drop-shadow(0 0 10px currentColor);
+}
+.edge-line {
+  transition: all 0.3s ease;
+}
+@keyframes strokeFlow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.flowing-edge {
+  stroke-dasharray: 6, 6;
+  animation: strokeFlow 1.2s linear infinite;
+}
+.node-active-highlight {
+  animation: pulseGlow 1.6s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes pulseGlow {
+  from {
+    filter: drop-shadow(0 0 3px currentColor);
+    stroke-width: 2.5;
+  }
+  to {
+    filter: drop-shadow(0 0 12px currentColor);
+    stroke-width: 4;
+  }
+}
+.graph-detail-sidebar {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgb(var(--rgb-shadow) / 0.4);
+}
+.graph-detail-sidebar h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.graph-detail-sidebar .badge {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  text-transform: uppercase;
+}
+.graph-detail-sidebar .badge.column { background: rgb(var(--rgb-sky) / 0.15); color: var(--color-sky); border: 1px solid rgb(var(--rgb-sky) / 0.3); }
+.graph-detail-sidebar .badge.experiment { background: rgb(var(--rgb-ml) / 0.15); color: var(--color-ml); border: 1px solid rgb(var(--rgb-ml) / 0.3); }
+.graph-detail-sidebar .badge.rule { background: rgb(var(--rgb-warning) / 0.15); color: var(--color-warning); border: 1px solid rgb(var(--rgb-warning) / 0.3); }
+.graph-evidence-panel {
+  border: 1px solid rgb(var(--rgb-text-subtle) / 0.16);
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-panel);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.graph-evidence-panel strong {
+  color: var(--color-text);
+  font-size: 12px;
+}
+.graph-evidence-row {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: var(--space-2);
+  align-items: start;
+  font-size: 12px;
+  min-width: 0;
+}
+.graph-evidence-row span {
+  color: var(--color-text-subtle);
+}
+.graph-evidence-row code {
+  color: var(--color-sky);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  line-height: 1.35;
+}
+.graph-evidence-row button {
+  border: 1px solid rgb(var(--rgb-sky) / 0.28);
+  background: rgb(var(--rgb-sky) / 0.08);
+  color: var(--color-sky);
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-2);
+  font-size: 11px;
+  cursor: pointer;
+  justify-self: start;
+}
+.graph-evidence-row button:hover {
+  border-color: rgb(var(--rgb-sky) / 0.58);
+  background: rgb(var(--rgb-sky) / 0.15);
+}
+
+.insights-section {
+  margin-top: var(--space-6);
+}
+.insights-section h3 {
+  color: var(--color-text);
+  font-size: 16px;
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-4);
+}
+.insight-card {
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  position: relative;
+  text-align: left;
+}
+button.insight-card {
+  color: inherit;
+  font: inherit;
+}
+.insight-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgb(var(--rgb-shadow) / 0.45);
+}
+.graph-retry-button,
+.graph-node-action {
+  align-self: flex-start;
+  border: 1px solid rgb(var(--rgb-ml) / 0.45);
+  background: rgb(var(--rgb-ml) / 0.12);
+  color: var(--color-ml);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.graph-retry-button:hover,
+.graph-node-action:hover {
+  background: rgb(var(--rgb-ml) / 0.2);
+  border-color: rgb(var(--rgb-ml) / 0.75);
+}
+.graph-empty-state {
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-5);
+  background: rgb(var(--rgb-ml) / 0.06);
+  border: 1px dashed rgb(var(--rgb-text-subtle) / 0.28);
+  border-radius: var(--radius-panel);
+  padding: var(--space-8);
+}
+.graph-empty-state h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 18px;
+}
+.graph-empty-state p {
+  margin: 0;
+  color: var(--color-text-subtle);
+  line-height: 1.6;
+  max-width: 680px;
+}
+.graph-empty-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.graph-empty-step {
+  border: 1px solid rgb(var(--rgb-text-subtle) / 0.16);
+  background: rgb(var(--rgb-bg-raised) / 0.72);
+  border-radius: var(--radius-panel);
+  padding: var(--space-3);
+  min-height: 92px;
+}
+.graph-empty-step strong {
+  display: block;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+.graph-empty-step span {
+  color: var(--color-text-subtle);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.insight-card.knowledge_gap {
+  background: rgb(var(--rgb-danger) / 0.05);
+  border: 1px solid rgb(var(--rgb-danger) / 0.15);
+  border-left: 4.5px solid var(--color-danger);
+}
+.insight-card.knowledge_gap:hover {
+  background: rgb(var(--rgb-danger) / 0.08);
+  border-color: rgb(var(--rgb-danger) / 0.3);
+}
+.insight-card.surprise_connection {
+  background: rgb(var(--rgb-success) / 0.05);
+  border: 1px solid rgb(var(--rgb-success) / 0.15);
+  border-left: 4.5px solid var(--color-success);
+}
+.insight-card.surprise_connection:hover {
+  background: rgb(var(--rgb-success) / 0.08);
+  border-color: rgb(var(--rgb-success) / 0.3);
+}
+.insight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 14px;
+}
+.insight-header span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.insight-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+.insight-action {
+  align-self: flex-end;
+  font-size: 11px;
+  color: var(--color-text-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.insight-card:hover .insight-action {
+  color: var(--color-ml);
+}
+
+.graph-loading-state {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.graph-error-state {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 400px;
+}
+
+.graph-node {
+  transition: opacity 0.25s ease;
+}
+
+.graph-detail-icon {
+  color: var(--color-ml);
+}
+
+.graph-detail-title {
+  color: var(--color-text);
+  font-size: 16px;
+  margin-top: var(--space-1);
+}
+
+.graph-evidence-value,
+.graph-node-details,
+.graph-detail-rule {
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-evidence-value {
+  gap: var(--space-1);
+}
+
+.graph-node-details {
+  font-size: 13px;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.graph-detail-rule {
+  gap: var(--space-1);
+}
+
+.graph-detail-label {
+  color: var(--color-text-subtle);
+}
+
+.graph-detail-value {
+  font-weight: 600;
+}
+
+.graph-detail-value.sky {
+  color: var(--color-sky);
+}
+
+.graph-detail-value.danger,
+.insight-type-icon.danger {
+  color: var(--color-danger);
+}
+
+.graph-detail-value.ml {
+  color: var(--color-ml);
+}
+
+.graph-detail-value.success,
+.insight-type-icon.success {
+  color: var(--color-success);
+}
+
+.graph-detail-value.warning {
+  color: var(--color-warning);
+}
+
+.graph-detail-value.secondary {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+.graph-detail-note {
+  background: var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-subtle);
+  line-height: 1.4;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+}
+
+.graph-detail-rule p {
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+  padding: var(--space-2);
+}
+
+.graph-detail-empty {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.graph-detail-empty p {
+  font-size: 13px;
+  margin: 0;
+}
+
+.insights-section-icon {
+  color: var(--color-warning-strong);
+}
+
+.insights-empty {
+  background: var(--color-bg-raised);
+  border: 1px dashed var(--color-border);
+}
+
+.insight-kind {
+  background: rgb(var(--rgb-text-subtle) / 0.08);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-subtle);
+  font-size: 10px;
+  padding: var(--space-1) var(--space-2);
+  text-transform: uppercase;
+}

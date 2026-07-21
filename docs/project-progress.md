@@ -22,21 +22,21 @@
 - GPU 调度基础：GPU scheduler 服务、状态 API、队列结构和测试。
 - 前端稳定性：自进化状态统计抽为可测试函数，修复冲突/拒绝统计反转问题，图谱属性由 `any` 收紧为 `unknown` 并做类型防护。
 - 前端深链与测试：保留覆盖广泛的 `smoke:deep-links`；新增标准 Playwright golden path，以真实 FastAPI + Vite 验证数据画像、预处理执行、baseline 训练和实验详情，并接入 GitHub Actions。
-- P2 视觉基础：P2-1 已完成。89 个调色板/语义/尺寸/层级自定义属性无未定义引用，颜色/spacing/radius/z-index 契约无裸值；`styles.css` 收敛为 8 条分层导入，功能规则按 shell、agent、inspector、evolution、responsive 五个产品域拆分，并提供显式主题与 ML 品牌强调色覆盖契约。
+- P2 视觉基础：P2-1 已完成并补齐跨源审计。93 个调色板/语义/尺寸/层级自定义属性中 88 个已引用、0 个未定义；生产 CSS/TS/TSX 中除 `tokens.css` 外无裸色、数值 RGB、渐变或 React `<style>`。`styles.css` 为 8 条分层导入，图谱样式与断点分别归入 evolution/responsive 领域，并提供显式主题与 ML 品牌强调色覆盖契约。
 
 ## 最近验证
 
 - 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `21 passed files / 119 tests`。
+- 前端测试：`npm.cmd test`，结果 `21 passed files / 121 tests`。
 - 前端 lint：`npm.cmd run lint`，通过。
 - 前端构建：`npm.cmd run build`，通过。
-- Playwright E2E：设计系统运行时主题覆盖 + 真实 API golden path 共 `2 passed`；此前 golden path `--repeat-each=3` 亦为 3/3，通过失败时保留 screenshot/video/trace。
+- Playwright E2E：设计系统运行时主题覆盖、Evolution 图谱渲染 + 真实 API golden path 共 `2 passed`；此前 golden path `--repeat-each=3` 亦为 3/3，通过失败时保留 screenshot/video/trace。
 - GitHub：`feat/p0-backend-hardening` 已推送并建立草稿 PR #2；backend/frontend/Playwright 三个 CI 闸门全部通过。
 - 后端健康检查：`http://127.0.0.1:8000/health` 返回 `{"status":"ok","service":"mlagent-api"}`。
 
 ## 下一步优先级
 
-1. P2-2 动效与加载态：先建立 150–300ms duration/easing token、`prefers-reduced-motion` 契约并规范现有 120/140ms 过渡，再为真实高延迟面板增加诚实的 loading/skeleton 状态。
+1. P2-2 动效与加载态：基于跨源审计发现的 3 个 keyframe、7 个过渡和 4 个动画使用点，先建立 150–300ms duration/easing token、移除 `transition: all`、补 `prefers-reduced-motion`，再为真实高延迟面板增加诚实的 loading/skeleton 状态。
 2. P2-3 响应式策略：解决 1440×900 仍可见的 workflow 阶段逐字换行，并完成窄屏降级或明确桌面最小宽度与友好提示。
 3. P2-4/P2-5 信息设计与命令系统：隐藏裸 UUID、完善空状态、兑现命令面板与斜杠命令。
 4. P2-6/P2-7 图谱与可访问性：升级知识图谱交互并补 focus、对比度、自动 a11y 闸门。

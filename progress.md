@@ -983,3 +983,12 @@
 - **运行时验证**：新增 `e2e/design-system.e2e.ts`，真实浏览器确认四栏主工作面可见，默认 accent 计算值为 `rgb(137, 180, 250)`，设置 `data-brand-accent="ml"` 后为 `rgb(203, 166, 247)`；与真实 API 数据画像→预处理→训练 golden path 合跑 2/2 通过。
 - **门禁与视觉复核**：frontend Vitest `21 files / 119 tests`、ESLint、TypeScript + Vite build 全绿；主 JS 仍 469.75KB，CSS gzip 9.21KB（显式 palette→semantic 映射的可接受增量）；1440×900 截图确认操作密度、面板层级、状态和按钮无拆分回归。截图中的 workflow 阶段逐字换行仍按计划归 P2-3。
 - **动态回顾**：P2-1 三个切片的颜色、尺寸/层级、死 CSS、基础层、领域拆分和 theme/brand override 验收项均有直接证据，现勾选完成。重新审计 P2-2：现有 1 个功能性 pulse keyframe、2 处 120/140ms 过渡，但没有 motion token、`prefers-reduced-motion`、skeleton 或 `aria-busy`；下一主线先做动效基础与 reduced-motion 契约，再扩充诚实的异步加载态。
+
+## 2026-07-21 P2-1 设计令牌系统（修正切片 4：跨 CSS/TSX 审计）
+
+- **完成结论复核失败并主动重开**：进入 P2-2 前的跨源动效审计发现 `EvolutionWorkspace.tsx` 仍内嵌约 355 行 `<style>`，同时 Evolution SVG 与 `HistogramChart.tsx` 的 Recharts props 仍有 129 个裸十六进制/数值 RGB 命中和 2 个装饰性渐变。此前 `design-tokens.test.mjs` 只拼接 CSS 文件，因此“全功能层无裸色”的证据范围不足，P2-1 的完成结论暂时撤回并修正。
+- **TDD 红→绿与覆盖扩展**：设计令牌契约由 9 项扩展到 11 项，先观察 3 项跨源失败（129 裸色、渐变、React `<style>`），再观察 1 项 responsive 领域职责失败；实现后 11/11。测试现递归读取全部生产 `.ts/.tsx`，并要求所有 viewport/container query 只存在于 `responsive.css`，堵住相同盲区。
+- **样式归位与令牌化**：把 11.8k 字符图谱 CSS 从组件迁入 `evolution.css`，将三个图谱断点合并进 `responsive.css`；移除点阵/空状态渐变，使用 Catppuccin 平面语义背景；SVG 边/节点、图谱详情和 Recharts 轴/网格/Tooltip/Bar 全部改用 CSS 变量或领域类。新增 graph-muted 与 sky RGB 语义映射后，共 93 个定义属性、88 个引用、0 未定义。
+- **直接审计证据**：生产 CSS/TS/TSX（排除唯一允许裸 palette 的 `tokens.css`）中裸 hex/数值 RGB/HSL、linear/radial gradient、React `<style>` 命中均为 0；shell/agent/inspector/evolution 中 `@media/@container` 命中为 0。
+- **门禁与运行时**：frontend Vitest `21 files / 121 tests`、ESLint、TypeScript + Vite build 全绿；主 JS 由 469.75KB 降至 458.77KB，CSS gzip 10.72KB，合计 gzip 净下降约 1.1KB；Playwright 设计系统 + 真实 API golden path 2/2，通过 1440×900 Evolution 真实图谱截图复核，节点、边、详情与容器断点正常。
+- **动态计划调整**：P2-1 在补齐原验收范围后重新确认为完成。P2-2 真实基线同步修正为 3 个 keyframe、7 个 transition（含 4 个 `transition: all`）、4 个 animation 使用点，无 reduced-motion/motion token/skeleton/`aria-busy`；下一切片先收口动效基础，不沿用先前不完整统计。

@@ -5,6 +5,7 @@
   --palette-surface-0: #1e1e2e;
   --palette-surface-1: #313244;
   --palette-surface-2: #45475a;
+  --palette-surface-3: #585b70;
   --palette-text: #cdd6f4;
   --palette-subtext-1: #bac2de;
   --palette-subtext-0: #a6adc8;
@@ -33,6 +34,7 @@
   --palette-rgb-red: 243 139 168;
   --palette-rgb-mauve: 203 166 247;
   --palette-rgb-ml: var(--palette-rgb-mauve);
+  --palette-rgb-sky: 137 220 235;
   --palette-rgb-shadow: 0 0 0;
   --space-0: 0;
   --space-1: 4px;

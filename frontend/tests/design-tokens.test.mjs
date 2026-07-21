@@ -1,9 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 const stylesPath = fileURLToPath(new globalThis.URL("../src/styles.css", import.meta.url));
+const sourceRoot = fileURLToPath(new globalThis.URL("../src", import.meta.url));
 const tokensPath = fileURLToPath(
   new globalThis.URL("../src/styles/tokens.css", import.meta.url),
 );
@@ -34,6 +36,17 @@ const featureStyles = Object.fromEntries(
 );
 const featureCss = Object.values(featureStyles).join("\n");
 const implementationCss = `${themesCss}\n${foundationCss}\n${featureCss}`;
+
+function readReactSources(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return readReactSources(path);
+    if (!/\.tsx?$/.test(entry.name) || entry.name.includes(".test.")) return [];
+    return [readFileSync(path, "utf8")];
+  });
+}
+
+const reactSource = readReactSources(sourceRoot).join("\n");
 
 const REQUIRED_COLOR_TOKENS = [
   "--color-bg-canvas",
@@ -140,7 +153,7 @@ describe("global design-token contract", () => {
   });
 
   it("keeps literal colors inside the root token definition", () => {
-    const literalColors = implementationCss.match(
+    const literalColors = `${implementationCss}\n${reactSource}`.match(
       /#[\da-f]{3,8}\b|rgba?\(\s*\d|hsla?\(\s*\d|:\s*(?:black|white)\b/gi,
     );
 
@@ -169,7 +182,13 @@ describe("global design-token contract", () => {
   });
 
   it("does not use decorative CSS gradients", () => {
-    expect(implementationCss).not.toMatch(/\b(?:linear|radial)-gradient\(/i);
+    expect(`${implementationCss}\n${reactSource}`).not.toMatch(
+      /\b(?:linear|radial)-gradient\(/i,
+    );
+  });
+
+  it("keeps product styling out of React style blocks", () => {
+    expect(reactSource).not.toMatch(/<style\b/i);
   });
 
   it("keeps each product domain in a dedicated non-empty stylesheet", () => {
@@ -182,5 +201,14 @@ describe("global design-token contract", () => {
     expect(featureStyles.evolution).toMatch(/\.evolution-workspace\s*\{/);
     expect(featureStyles.evolution).toMatch(/\.knowledge-graph-mini\s*\{/);
     expect(featureStyles.responsive).toMatch(/@media\s*\(max-width:\s*1180px\)/);
+  });
+
+  it("keeps viewport and container queries in the responsive domain", () => {
+    for (const domain of ["shell", "agent", "inspector", "evolution"]) {
+      expect(featureStyles[domain], `${domain}.css should not own responsive queries`).not.toMatch(
+        /@(?:media|container)\b/,
+      );
+    }
+    expect(featureStyles.responsive).toMatch(/@container\b/);
   });
 });
