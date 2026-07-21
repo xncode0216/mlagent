@@ -918,3 +918,13 @@
 - **bundle 控制**：`react-markdown + rehype-highlight(highlight.js)` 让主包从 471KB 涨到 808KB。试过用 rehype-highlight 的 `languages` 选项限定语言集，**无效**（它模块顶部静态 `import {common} from 'lowlight'`，运行时选项不影响打包）。改用 **`React.lazy` 懒加载** `MarkdownMessage`：markdown+highlight 拆成 335KB 按需 chunk，初始包回到 473KB（≈原始，无回归），>500KB 警告消失；两处用 `<Suspense fallback={<p>{content}</p>}>` 包裹，chunk 加载瞬间先显纯文本再升级 Markdown。彻底的路由级分割仍归 P2-8。
 - **测试**：`MarkdownMessage.test.tsx`（jsdom，4 个）——GFM 粗体/表格、Python 代码块 `.hljs`/`.hljs-keyword`、**原始 HTML 不渲染为元素（注入防护）**、链接新标签页 + noreferrer。
 - **门禁**：前端 `vitest` 19 文件 / 106 passed、`eslint` 0、`tsc -b` + `vite build`（拆分为 index 473KB + MarkdownMessage 335KB）全绿。未跑浏览器视觉 QA（沙箱限制）。切片 2（真实图表库替换手写 SVG 色块）待续。
+
+## 2026-07-21 富文本聊天与图表（P1-2，切片 2：真实分布直方图 Recharts）
+
+- 切片 2 处理真实图表：数据画像的分布直方图此前在 `RightPanel` 用 `.artifact-histogram span` 定高色块渲染（真实 `bins` 数据但手写 SVG）。引入 **Recharts 3.10** 替换为真正的柱状图。
+- **纯逻辑 + 薄组件**：`histogramSeries.ts::buildHistogramSeries` 把 profiling `bins`（start/end/count）整形为图表行（X 轴 label=下界、tooltip range="start – end"、count 缺省 0 不为 NaN，极值用科学计数法），纯函数便于 node 单测（Recharts 在 jsdom 无布局，渲染不可靠）。`HistogramChart.tsx` 是 Recharts `BarChart`（`ResponsiveContainer` 自适应宽、Catppuccin 配色：网格 #313244 / 轴 #45475a / 柱 #89b4fa / tooltip #11111b），`memo` 包裹。
+- **bundle**：Recharts + d3 依赖约 381KB。与切片 1 同法用 `React.lazy` 懒加载 `HistogramChart`，Recharts 拆成按需 chunk，初始包保持 473KB（无回归）；直方图卡片用 `<Suspense fallback="加载分布图…">` 包裹。构建产物：index 473KB + MarkdownMessage 335KB + HistogramChart 381KB，均 <500KB 无警告。
+- **清理**：删除失效的 `.artifact-histogram`/`span` 色块 CSS 与只服务色块的 `maxCount`，替换为 `.histogram-chart`/`.artifact-histogram-fallback`。
+- **测试**：`histogramSeries.test.ts`（4）——空 bins、count/range 映射、缺省字段不为 NaN、大整数保留可读 + 极值科学计数法。踩坑：初版测试期望 `25000→2.5e+4` 错误（整数走可读分支返回 "25000"），已改用非整数验证科学计数法分支。
+- **门禁**：前端 `vitest` 20 文件 / 110 passed、`eslint` 0、`tsc -b` + `vite build` 全绿。
+- **P1-2 两切片交付**：富文本聊天（Markdown/高亮/流式）+ 真实图表库（Recharts 替换真实数据的直方图色块）。`DemoChartGallery` 的硬编码 demo 柱/热力图/相关性网格是**演示数据**，归 P1-7（清理演示数据、由真实产物驱动）处理，不在此 re-chart 假数据。后续可选增强：特征重要性横向柱状图、混淆矩阵热力图（均为真实 ML 数据）。

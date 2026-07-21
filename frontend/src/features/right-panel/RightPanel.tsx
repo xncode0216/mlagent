@@ -1,5 +1,5 @@
 import { BarChart3, Database, Download, FileText, LineChart, Play, RefreshCw, Table2, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
 import {
   projectFileDownloadUrl,
@@ -12,6 +12,10 @@ import {
   type TrainingResult,
 } from "../../lib/api";
 import type { RightPanelTabId } from "../../app/appDeepLink";
+
+// Lazy so Recharts loads only when a histogram artifact is opened, keeping it
+// out of the initial bundle.
+const HistogramChart = lazy(() => import("./HistogramChart"));
 import { useUiStore } from "../../app/uiStore";
 import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
@@ -520,7 +524,6 @@ function JsonTable({
 
   if ("chart_type" in value && value.chart_type === "histogram" && "bins" in value && Array.isArray(value.bins)) {
     const bins = value.bins as Array<{ start?: number; end?: number; count?: number }>;
-    const maxCount = Math.max(1, ...bins.map((bin) => Number(bin.count ?? 0)));
     const summary =
       "summary" in value && value.summary && typeof value.summary === "object"
         ? (value.summary as Record<string, unknown>)
@@ -531,15 +534,9 @@ function JsonTable({
           <span>分布字段</span>
           <strong>{"column" in value ? String(value.column ?? "-") : "-"}</strong>
         </div>
-        <div className="artifact-histogram" aria-label="真实数据分布图">
-          {bins.map((bin, index) => (
-            <span
-              key={`${bin.start}-${bin.end}-${index}`}
-              style={{ height: `${Math.max(8, ((bin.count ?? 0) / maxCount) * 100)}%` }}
-              title={`${Number(bin.start ?? 0).toFixed(2)} - ${Number(bin.end ?? 0).toFixed(2)}: ${bin.count ?? 0}`}
-            />
-          ))}
-        </div>
+        <Suspense fallback={<div className="artifact-histogram-fallback">加载分布图…</div>}>
+          <HistogramChart bins={bins} column={"column" in value ? String(value.column ?? "") : ""} />
+        </Suspense>
         <div className="chart-summary">
           <span>均值 {typeof summary.mean === "number" ? summary.mean.toFixed(2) : "-"}</span>
           <span>中位数 {typeof summary.median === "number" ? summary.median.toFixed(2) : "-"}</span>

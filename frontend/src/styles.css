@@ -2403,21 +2403,20 @@ button {
   padding: 12px;
 }
 
-.artifact-histogram {
-  align-items: end;
+.histogram-chart {
+  width: 100%;
+  min-height: 200px;
+  padding-top: 4px;
   border-bottom: 1px solid #344154;
-  display: flex;
-  gap: 6px;
-  height: 180px;
-  padding: 12px 4px 0;
 }
 
-.artifact-histogram span {
-  background: linear-gradient(180deg, #93c5fd, #2563eb);
-  border: 1px solid rgba(147, 197, 253, 0.4);
-  border-radius: 4px 4px 0 0;
-  flex: 1;
-  min-width: 12px;
+.artifact-histogram-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #6c7086;
+  font-size: 12px;
 }
 
 .chart-summary {
