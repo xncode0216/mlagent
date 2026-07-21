@@ -83,6 +83,15 @@ const REQUIRED_FOUNDATION_TOKENS = [
   "--layer-popover",
 ];
 
+const REQUIRED_MOTION_TOKENS = [
+  ["--duration-fast", "150ms"],
+  ["--duration-normal", "200ms"],
+  ["--duration-slow", "300ms"],
+  ["--duration-status-cycle", "1200ms"],
+  ["--ease-out", "cubic-bezier(0.4, 0, 0.2, 1)"],
+  ["--ease-in-out", "cubic-bezier(0.4, 0, 0.2, 1)"],
+];
+
 const RETIRED_SELECTORS = [
   "analysis-grid",
   "code-panel",
@@ -150,6 +159,69 @@ describe("global design-token contract", () => {
     for (const token of REQUIRED_FOUNDATION_TOKENS) {
       expect(rootBlock, `${token} should be defined in :root`).toContain(`${token}:`);
     }
+  });
+
+  it("defines a shared motion scale with restrained interaction durations", () => {
+    const rootBlock = extractRootBlock(tokensCss);
+
+    for (const [token, value] of REQUIRED_MOTION_TOKENS) {
+      expect(rootBlock, `${token} should be defined in :root`).toContain(
+        `${token}: ${value};`,
+      );
+    }
+  });
+
+  it("limits transitions to tokenized opacity and transform motion", () => {
+    expect(`${implementationCss}\n${reactSource}`).not.toMatch(
+      /\btransition\s*:\s*[^;{}]*\ball\b/i,
+    );
+
+    const transitionDeclarations = [...implementationCss.matchAll(/\btransition\s*:\s*([^;{}]+)/gi)]
+      .flatMap((match) => match[1].split(","))
+      .map((declaration) => declaration.trim());
+
+    expect(transitionDeclarations.length).toBeGreaterThan(0);
+    for (const declaration of transitionDeclarations) {
+      expect(declaration).toMatch(
+        /^(?:opacity|transform)\s+var\(--duration-(?:fast|normal|slow)\)\s+var\(--ease-(?:out|in-out)\)$/,
+      );
+    }
+  });
+
+  it("keeps continuous animation functional and tokenized", () => {
+    expect(featureStyles.shell).toMatch(
+      /animation:\s*model-status-pulse\s+var\(--duration-status-cycle\)\s+var\(--ease-in-out\)\s+infinite/,
+    );
+    expect(featureStyles.evolution).not.toMatch(/@keyframes\s+(?:strokeFlow|pulseGlow)\b/);
+
+    const continuousAnimations = [
+      ...implementationCss.matchAll(/\banimation\s*:\s*([^;{}]*\binfinite\b[^;{}]*)/gi),
+    ].map((match) => match[1].trim());
+    expect(continuousAnimations.length).toBeGreaterThan(0);
+    for (const declaration of continuousAnimations) {
+      expect(declaration).toMatch(/(?:status|loading|skeleton|progress)/i);
+      expect(declaration).toMatch(/var\(--duration-[\w-]+\)/);
+    }
+
+    const hardcodedAnimationDurations = implementationCss.match(
+      /\banimation\s*:[^;{}]*\b\d+(?:\.\d+)?m?s\b/gi,
+    );
+    expect(hardcodedAnimationDurations ?? []).toEqual([]);
+  });
+
+  it("provides a global reduced-motion fallback", () => {
+    expect(featureStyles.responsive).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)/,
+    );
+    expect(featureStyles.responsive).toMatch(
+      /animation-duration:\s*0\.01ms\s*!important/,
+    );
+    expect(featureStyles.responsive).toMatch(
+      /animation-iteration-count:\s*1\s*!important/,
+    );
+    expect(featureStyles.responsive).toMatch(
+      /transition-duration:\s*0\.01ms\s*!important/,
+    );
   });
 
   it("keeps literal colors inside the root token definition", () => {

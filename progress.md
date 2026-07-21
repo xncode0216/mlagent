@@ -992,3 +992,12 @@
 - **直接审计证据**：生产 CSS/TS/TSX（排除唯一允许裸 palette 的 `tokens.css`）中裸 hex/数值 RGB/HSL、linear/radial gradient、React `<style>` 命中均为 0；shell/agent/inspector/evolution 中 `@media/@container` 命中为 0。
 - **门禁与运行时**：frontend Vitest `21 files / 121 tests`、ESLint、TypeScript + Vite build 全绿；主 JS 由 469.75KB 降至 458.77KB，CSS gzip 10.72KB，合计 gzip 净下降约 1.1KB；Playwright 设计系统 + 真实 API golden path 2/2，通过 1440×900 Evolution 真实图谱截图复核，节点、边、详情与容器断点正常。
 - **动态计划调整**：P2-1 在补齐原验收范围后重新确认为完成。P2-2 真实基线同步修正为 3 个 keyframe、7 个 transition（含 4 个 `transition: all`）、4 个 animation 使用点，无 reduced-motion/motion token/skeleton/`aria-busy`；下一切片先收口动效基础，不沿用先前不完整统计。
+
+## 2026-07-21 P2-2 动效与加载态（切片 1：可访问动效基础）
+
+- **审计分类与 TDD 红→绿**：按跨 CSS/TSX 真实基线把 3 个 keyframe、7 个 transition、4 个 animation 使用点逐一分类；设计系统契约先新增 4 项并观察全部预期失败（缺 motion token、存在 `transition: all`、动画裸时长、缺 reduced-motion），实现后由 11/11 增至 15/15。契约限制普通过渡只动画 token 化的 opacity/transform，并允许名称明确为 status/loading/skeleton/progress 的令牌化持续反馈，避免阻断后续真实加载态。
+- **motion token 与过渡收口**：新增 `--duration-fast/normal/slow`（150/200/300ms）、`--duration-status-cycle`（1200ms）及共享 easing。7 处过渡收敛为 4 处 token 化 opacity/transform，4 处 `transition: all` 清零；文件操作显露、树箭头、洞察卡位移和图谱节点淡化各使用对应档位。
+- **去装饰循环、保留状态语义**：删除 Evolution 的 `strokeFlow` 与 `pulseGlow` 持续动画；支持/触发边继续用静态虚线表达方向类别，选中节点使用静态描边与光晕，不再持续争夺注意力。模型与账户加载圆点的 1200ms opacity 脉冲承担真实状态提示，保留并令牌化。最终为 1 个 keyframe、2 个功能性 animation 使用点，Evolution animation 为 0。
+- **reduced-motion 运行时证据**：在 `responsive.css` 增加全局 `prefers-reduced-motion: reduce`，把动画/过渡压到 0.01ms 且循环限制为 1。临时 Playwright QA 首次因项目级 Desktop Chrome 配置覆盖 `test.use` 而正确暴露 preference=false；改为页面级 `emulateMedia` 后，浏览器返回 preference=true、150/200/300ms token、animation/transition=1e-05s、iteration=1。临时 QA 文件随后删除。
+- **门禁与视觉复核**：frontend Vitest `21 files / 125 tests`、ESLint、TypeScript + Vite build 全绿；主 JS 458.77KB 无回退，正式 Playwright 设计系统/Evolution + 真实 API golden path 2/2；1440×900 图谱截图确认静态虚线、选中节点、边与详情布局正常。当前共 99 个定义 token、94 个引用、0 未定义。
+- **动态完成回顾**：加载态盘点发现 `FileExplorer.tsx` 仍用硬编码 `fallbackItems` 在“pending 或真实空目录”时展示 `customer_churn.csv`/`eda.py` 等假条目，直接削弱 P1-7 完成证据。P1-7 因此暂时重开；下一片不单做装饰 skeleton，而是先移除假 fallback，并把 React Query loading/empty/error 与 `aria-busy` 端到端传入文件工作流，再扩展其他高延迟面板。

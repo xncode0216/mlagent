@@ -144,7 +144,7 @@
 
 .model-status-dot[data-tone="loading"] {
   background: var(--color-accent);
-  animation: model-status-pulse 1.2s ease-in-out infinite;
+  animation: model-status-pulse var(--duration-status-cycle) var(--ease-in-out) infinite;
 }
 
 @keyframes model-status-pulse {
@@ -327,7 +327,7 @@
 
 .auth-menu-dot[data-tone="loading"] {
   background: var(--color-accent);
-  animation: model-status-pulse 1.2s ease-in-out infinite;
+  animation: model-status-pulse var(--duration-status-cycle) var(--ease-in-out) infinite;
 }
 
 .auth-menu-popover {
