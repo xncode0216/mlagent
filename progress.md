@@ -888,3 +888,13 @@
 - **测试（TDD 红→绿）**：新增 `tests/test_auth_session_store.py`，`store` fixture 参数化覆盖内存与 `fakeredis` 两后端跑同一契约（一次性消费、错误 state 不消费、缺失返回 None、会话往返保用户身份、revoke、clear），外加内存墙钟过期、Redis 原生 TTL 断言、service 唯一高熵 token、service+Redis 往返、`_build_store_from_settings` 选择后端。`fakeredis>=2.20.0` 加入 dev 依赖。
 - **门禁**：完整 backend `212 passed, 3 skipped`（19.17s，新增 17 个存储测试）；`ruff check app tests` 全量通过。分支按既定「先留本地」未 push。
 - **follow-up**：`.env.example` 应补一行 `MLAGENT_AUTH_SESSION_BACKEND=memory`（当前工具环境对 `.env*` 路径有安全守卫、无法写入，`config.py` 已是带注释的配置真实来源）。P0-2 仍进行中，后续按 前端认证入口 → 组织/角色 claims 与认证审计 推进。
+
+## 2026-07-21 认证与多租户（P0-2，前端登录/登出入口）
+
+- 承接 P0-2 既定下一步「前端认证入口」。后端 `/api/auth/{login,callback,session,logout}` 已就绪，本切片在顶栏加入账户入口，把浏览器登录/登出接到既有 OIDC + BFF 会话。
+- **顶栏 `AuthMenu`**（`features/auth/AuthMenu.tsx`）：镜像相邻 `ModelStatusIndicator` 的模式——mount 取 `/api/auth/session`、可注入 `loadSession`/`signOut`/`onSignIn` 供测试、click-outside + Escape 关闭 popover、lucide 图标、纯 Catppuccin hex（与相邻组件一致，P2-1 令牌化时统一收敛）。三态：`development` 显示固定 dev 身份且无登录/登出动作；OIDC 匿名给「Sign in」（整页跳 `/api/auth/login` 走 Authorization Code + PKCE）；已登录显示 subject + 可撤销「Sign out」（POST `/api/auth/logout` 后重取 session 保持指示器诚实）。
+- **纯逻辑分离**：`features/auth/authSession.ts` 的 `describeAuthSession` 把 session/loading/error 映射为 `{tone,label,detail,action}` 视图模型（与 `llmStatus.ts` 同构，可无渲染单测）。
+- **API 层**：`lib/api.ts` 的 `request()` 统一加 `credentials: "include"`（dev 模式无 cookie 无副作用，OIDC 模式让 httpOnly 会话 cookie 端到端流转；后端 CORS 已 `allow_credentials=True` + 指定源，安全匹配）；新增 `getAuthSession`/`authLoginUrl`/`logout`（204 不复用 `request` 的 JSON 解析，带 credentials 让后端按 cookie 撤销、浏览器自动带 Origin 满足 CSRF 校验）。
+- **测试**：`authSession.test.ts`（6，纯逻辑各态）+ `AuthMenu.test.tsx`（3，jsdom：登出→重取、匿名→登录跳转、dev 模式无动作；vitest 无 `globals` 故显式 `afterEach(cleanup)`）。AppShell 冒烟测试自动经 `importOriginal` 桩掉新 api 函数，AuthMenu 在 session 未就绪时稳定渲染、冒烟仍绿。
+- **门禁**：前端 `vitest` 18 文件 / 102 passed、`eslint` 0 error、`tsc -b` + `vite build` 生产构建通过。本机未跑浏览器视觉 QA（沙箱对 dist 静态托管有已知路径探测限制），交互接线由 `AuthMenu.test.tsx` 覆盖。`npm install` 对 `package-lock.json` 的版本规范化 churn 已 `git restore` 还原（原 lockfile 已含 jsdom/testing-library）。
+- P0-2 仍进行中，剩余：组织/角色 claims 与认证审计日志；此外 Redis 会话存储的多实例部署验证与 `.env.example` 文档待环境允许时补。

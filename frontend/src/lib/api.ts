@@ -428,7 +428,9 @@ export type DurableTaskState = {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  // Always send credentials so the browser session cookie flows once OIDC auth
+  // is enabled; harmless in development mode where no auth cookie exists.
+  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include", ...init });
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try {
@@ -934,4 +936,32 @@ export type LlmStatus = {
 
 export async function getLlmStatus(): Promise<LlmStatus> {
   return request<LlmStatus>("/api/llm/status");
+}
+
+export type AuthSession = {
+  authenticated: boolean;
+  user_id: string | null;
+  auth_mode: string;
+};
+
+export async function getAuthSession(): Promise<AuthSession> {
+  return request<AuthSession>("/api/auth/session");
+}
+
+/** Full-page entry point for the OIDC Authorization Code + PKCE login redirect. */
+export function authLoginUrl(): string {
+  return `${API_BASE_URL}/api/auth/login`;
+}
+
+export async function logout(): Promise<void> {
+  // 204 No Content, so this cannot reuse `request` (which parses a JSON body).
+  // Credentials carry the session cookie the backend revokes; the browser adds
+  // the Origin header the backend's CSRF check requires.
+  const response = await fetch(`${API_BASE_URL}/api/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
 }

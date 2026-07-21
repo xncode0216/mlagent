@@ -46,6 +46,7 @@ import {
   filesQueryKey,
   useProjectFilesQuery,
 } from "../features/files/useProjectFilesQuery";
+import { AuthMenu } from "../features/auth/AuthMenu";
 import { ModelStatusIndicator } from "../features/llm/ModelStatusIndicator";
 import { projectsQueryKey, useProjectsQuery } from "../features/projects/useProjectsQuery";
 import {
@@ -537,6 +538,7 @@ export function AppShell() {
           </button>
         </nav>
         <ModelStatusIndicator />
+        <AuthMenu />
       </header>
       <aside className="activity-bar" aria-label="Workspace navigation">
         {activityPanels
