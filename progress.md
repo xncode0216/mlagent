@@ -974,3 +974,12 @@
 - **失效 CSS 清理**：删除 `.analysis-grid`、`.visual-card`、`.heatmap-grid`、旧 `.histogram`/`.correlation-grid`、`.plan-card`/`.plan-grid`、`.compact-table`、`.code-preview`、`.code-panel`、`.workbench-card` 等 11 组已确认无引用的演示样式；真实 Recharts `.histogram-chart` 与 `hljs-*` 动态语法类保留。
 - **门禁**：frontend Vitest `21 files / 117 tests`、ESLint、TypeScript + Vite build、Playwright 真实 API golden path 均通过；构建 CSS gzip 从约 9.15KB 降至 8.89KB；1440×900 截图确认操作密度、面板层级和按钮状态无回归。
 - **动态计划调整**：P2-1 暂不勾选。`styles.css` 仍有 3601 行，下一切片按 shell/sidebar、agent/chat、right-panel、evolution/responsive 等产品领域拆分，并补显式 theme/brand override 契约；截图中的 workflow 阶段卡逐字换行继续归 P2-3，不混入本项。
+
+## 2026-07-21 P2-1 设计令牌系统（切片 3：领域样式与主题覆盖，P2-1 完成）
+
+- **边界审计与 TDD 红→绿**：按真实选择器顺序确认 shell/sidebar、agent/chat、right-panel/training/logs、evolution、responsive 五个连续产品域；将 `design-tokens.test.mjs` 从 7 项扩展到 9 项，先观察 4 项预期失败（缺少 theme 层、纯导入 manifest、领域文件、品牌覆盖），实现后 9/9 通过。契约现在读取全部实现层，避免拆文件后颜色/尺寸检查漏扫。
+- **主题/品牌契约**：`tokens.css` 只负责 Catppuccin 原始 palette 与 spacing/radius/layer 基础刻度；新增 `themes.css` 把 palette 映射为 35 个业务语义颜色/RGB 角色，以 `:root, [data-theme="catppuccin-mocha"]` 提供默认主题，并以 `[data-brand-accent="ml"]` 将 accent 从蓝色切换为 ML 紫色。全样式共 89 个自定义属性、83 个被引用、0 个未定义引用；功能层仍为 0 裸颜色/spacing/radius/z-index、0 装饰性渐变。
+- **领域拆分且行为保持**：`styles.css` 从 3601 行降为 8 条有序 `@import`；原 3595 行功能规则按 `shell.css`(899)、`agent.css`(897)、`inspector.css`(1243)、`evolution.css`(463)、`responsive.css`(93) 拆分。把 HEAD 原规则与五文件按边界重组后逐字符比较，73,153/73,153 完全一致，证明未改选择器、声明或级联顺序。
+- **运行时验证**：新增 `e2e/design-system.e2e.ts`，真实浏览器确认四栏主工作面可见，默认 accent 计算值为 `rgb(137, 180, 250)`，设置 `data-brand-accent="ml"` 后为 `rgb(203, 166, 247)`；与真实 API 数据画像→预处理→训练 golden path 合跑 2/2 通过。
+- **门禁与视觉复核**：frontend Vitest `21 files / 119 tests`、ESLint、TypeScript + Vite build 全绿；主 JS 仍 469.75KB，CSS gzip 9.21KB（显式 palette→semantic 映射的可接受增量）；1440×900 截图确认操作密度、面板层级、状态和按钮无拆分回归。截图中的 workflow 阶段逐字换行仍按计划归 P2-3。
+- **动态回顾**：P2-1 三个切片的颜色、尺寸/层级、死 CSS、基础层、领域拆分和 theme/brand override 验收项均有直接证据，现勾选完成。重新审计 P2-2：现有 1 个功能性 pulse keyframe、2 处 120/140ms 过渡，但没有 motion token、`prefers-reduced-motion`、skeleton 或 `aria-busy`；下一主线先做动效基础与 reduced-motion 契约，再扩充诚实的异步加载态。
