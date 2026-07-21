@@ -937,3 +937,12 @@
 - **顺带（测试可靠性）**：`AppShell.smoke.test.tsx` 的 api catch-all 桩由 `async () => undefined` 改为 `async () => null`——react-query v5 拒绝 undefined 查询数据、间歇性抛未处理拒绝扰乱 vitest 计数；消费方都用 `?? []`/null 检查，改 null 行为等价且被 react-query 接受，显著减少 flaky（残留一个更深层的 effect 时序脆弱仍偶发但不导致测试失败，归 P1-5）。
 - **门禁**：前端 `eslint` 0、`tsc -b` + `vite build`（index 469.75KB，比清理前更小）、`vitest` 20 文件 / 110 passed 全绿。未跑浏览器视觉 QA（沙箱限制）。
 - 遗留（非本次）：`.analysis-grid`/`.visual-card`/`.heatmap-grid` 等失效 CSS 未删（归 P2-1 CSS 令牌化统一清理）；quick 动作 prompt 里的示例 "churn" 是功能性模板文案，保留。
+
+## 2026-07-21 持久化决策（P1-3，文件系统优先 + 删死代码）
+
+- 用户拍板：以文件系统 JSON 为持久化真相，删除无引用的 Postgres/SQLAlchemy/ORM 死代码，让代码库诚实反映"文件系统 + Redis"架构（不做数周的 Postgres 全量迁移）。核实前提：`grep` 确认业务代码与测试均无 `app.db`/`app.models`/`sqlalchemy` 引用，`get_db`/`SessionLocal`/`engine`/`Base.metadata` 零调用；`database_url` 仅在 config 定义 + 已删的 `db/session.py` 使用；无 alembic 目录。
+- **删除**：`app/db/{base,session}.py`、`app/models/{artifact,project,session}.py`（`db/`、`models/` 目录随之消失）。
+- **依赖**：`pyproject.toml` 移除 `sqlalchemy`/`psycopg[binary]`/`alembic`（保留 `redis`——P0-2 起承载 auth 会话，是真实依赖）。
+- **配置/基建**：`config.py` 删 `database_url`；`infra/docker-compose.yml` 移除 `postgres` 服务与 `mlagent_postgres` 卷，保留 `redis`。
+- **门禁**：完整 backend `221 passed, 3 skipped`（删死代码零破坏）、`ruff` 全绿、`app.main` 正常导入（15 路由）。
+- **follow-up**：`.env.example` 第 51 行 `MLAGENT_DATABASE_URL` 应删（`.env*` 工具守卫无法编辑；pydantic-settings 默认忽略多余 env，故残留无害）；venv 里 sqlalchemy 等已安装包成为孤儿（无害，重装即清）。Redis 保持真实使用。
