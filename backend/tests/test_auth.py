@@ -17,19 +17,23 @@ JWT_SECRET = "test-secret-that-is-long-enough-for-hs256"
 OIDC_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
-def _token(subject: str, *, expires_in: timedelta = timedelta(minutes=5)) -> str:
+def _token(
+    subject: str,
+    *,
+    expires_in: timedelta = timedelta(minutes=5),
+    extra: dict[str, object] | None = None,
+) -> str:
     now = datetime.now(UTC)
-    return jwt.encode(
-        {
-            "sub": subject,
-            "iat": now,
-            "exp": now + expires_in,
-            "iss": "https://issuer.test",
-            "aud": "mlagent-api",
-        },
-        JWT_SECRET,
-        algorithm="HS256",
-    )
+    claims: dict[str, object] = {
+        "sub": subject,
+        "iat": now,
+        "exp": now + expires_in,
+        "iss": "https://issuer.test",
+        "aud": "mlagent-api",
+    }
+    if extra:
+        claims.update(extra)
+    return jwt.encode(claims, JWT_SECRET, algorithm="HS256")
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -300,3 +304,73 @@ def test_jwt_mode_protects_websocket_handshake(jwt_client):
     ) as websocket:
         websocket.send_json({"type": "unsupported"})
         assert websocket.receive_json()["code"] == "bad_event"
+
+
+def test_session_endpoint_exposes_roles_and_org_from_jwt_claims(jwt_client):
+    client, _ = jwt_client
+    token = _token("tenant-a", extra={"roles": ["admin", "member"], "org_id": "acme"})
+
+    body = client.get("/api/auth/session", headers=_auth(token)).json()
+
+    assert body["authenticated"] is True
+    assert body["user_id"] == "tenant-a"
+    assert body["org_id"] == "acme"
+    assert body["roles"] == ["admin", "member"]
+
+
+def test_single_string_role_claim_becomes_one_role(jwt_client):
+    client, _ = jwt_client
+    body = client.get(
+        "/api/auth/session", headers=_auth(_token("tenant-a", extra={"roles": "admin"}))
+    ).json()
+    assert body["roles"] == ["admin"]
+
+
+def test_malformed_role_entries_are_dropped_and_deduped(jwt_client):
+    client, _ = jwt_client
+    token = _token("tenant-a", extra={"roles": ["ok", 5, "", "   ", "ok"]})
+
+    body = client.get("/api/auth/session", headers=_auth(token)).json()
+
+    assert body["roles"] == ["ok"]
+
+
+def test_missing_role_and_org_claims_default_to_empty(jwt_client):
+    client, _ = jwt_client
+    body = client.get("/api/auth/session", headers=_auth(_token("tenant-a"))).json()
+    assert body["roles"] == []
+    assert body["org_id"] is None
+
+
+def test_nested_and_custom_claim_paths_are_supported(jwt_client, monkeypatch):
+    client, _ = jwt_client
+    monkeypatch.setenv("MLAGENT_AUTH_ROLES_CLAIM", "realm_access.roles")
+    monkeypatch.setenv("MLAGENT_AUTH_ORG_CLAIM", "https://mlagent.example/org")
+    get_settings.cache_clear()
+    token = _token(
+        "tenant-a",
+        extra={
+            "realm_access": {"roles": ["ops"]},
+            "https://mlagent.example/org": "acme",
+        },
+    )
+
+    body = client.get("/api/auth/session", headers=_auth(token)).json()
+
+    assert body["roles"] == ["ops"]
+    assert body["org_id"] == "acme"
+
+
+def test_require_roles_allows_a_matching_role_and_blocks_others():
+    from fastapi import HTTPException
+
+    from app.core.auth import AuthenticatedUser, require_roles
+
+    guard = require_roles("admin", "owner")
+    admin = AuthenticatedUser(id="u", workspace_key="w", auth_mode="jwt", roles=("member", "admin"))
+    assert guard(user=admin) is admin
+
+    member = AuthenticatedUser(id="u", workspace_key="w", auth_mode="jwt", roles=("member",))
+    with pytest.raises(HTTPException) as denied:
+        guard(user=member)
+    assert denied.value.status_code == 403

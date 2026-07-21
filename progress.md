@@ -898,3 +898,13 @@
 - **测试**：`authSession.test.ts`（6，纯逻辑各态）+ `AuthMenu.test.tsx`（3，jsdom：登出→重取、匿名→登录跳转、dev 模式无动作；vitest 无 `globals` 故显式 `afterEach(cleanup)`）。AppShell 冒烟测试自动经 `importOriginal` 桩掉新 api 函数，AuthMenu 在 session 未就绪时稳定渲染、冒烟仍绿。
 - **门禁**：前端 `vitest` 18 文件 / 102 passed、`eslint` 0 error、`tsc -b` + `vite build` 生产构建通过。本机未跑浏览器视觉 QA（沙箱对 dist 静态托管有已知路径探测限制），交互接线由 `AuthMenu.test.tsx` 覆盖。`npm install` 对 `package-lock.json` 的版本规范化 churn 已 `git restore` 还原（原 lockfile 已含 jsdom/testing-library）。
 - P0-2 仍进行中，剩余：组织/角色 claims 与认证审计日志；此外 Redis 会话存储的多实例部署验证与 `.env.example` 文档待环境允许时补。
+
+## 2026-07-21 认证与多租户（P0-2，组织/角色 claims + 认证审计日志）
+
+- P0-2 最后一块：从 token 提取组织/角色授权上下文，并为浏览器认证生命周期建审计轨迹。
+- **组织/角色 claims**：`AuthenticatedUser` 增 `org_id: str | None` 与 `roles: tuple[str,...]`（tuple 保持 frozen dataclass 可哈希，默认值让 `_development_user`/会话反序列化零改动）。claim 名可配（`config.py` 新增 `auth_roles_claim="roles"`/`auth_org_claim="org_id"`）。`_claim_by_path` **先匹配字面 key 再回退点号路径**——既支持 Auth0 命名空间 claim（键含点号，如 `https://app.example/roles`），又支持 Keycloak 嵌套（`realm_access.roles`）。`_extract_roles` 接受 JSON 数组或单字符串，逐项做长度/控制字符/去重清洗、丢弃非法项；`_extract_org` 同样清洗。JWT 与 OIDC 两条路径的 `_authenticated_user_from_claims` 统一注入，`api/auth.py` 回调同步。
+- **暴露与落地**：`GET /api/auth/session` 的 `BrowserSessionResponse` 增 `org_id`/`roles`，Bearer 与 cookie 两种认证都返回；`RedisAuthSessionStore` 会话 JSON 序列化携带 org/roles（`.get` 向后兼容旧会话）。新增 `require_roles(*roles)` 依赖工厂作为 RBAC 落地钩子（持有任一所需角色放行、否则 403；给定空集放行），**不改造现有路由**（哪些端点需要哪些角色属产品决策）。
+- **认证审计**：新增 `app/core/audit.py::record_auth_event`，向专用 `mlagent.audit` logger 发结构化 `key=value` 行（经既有 logging filter 自动带 request id，含空格/引号的值转义）。接入点：回调成功 `login.success`（带 subject/auth_mode/org/roles）、回调失败 `login.callback outcome=failure`（区分 `invalid_transaction`/`token_exchange_failed`/`invalid_id_token`）、登出 `logout`（成功带 subject；无效 Origin 记 `outcome=failure reason=invalid_origin`）。刻意只审计离散的浏览器认证动作，不审计高频的逐请求 bearer 结果（那些在 access log 已可见）；绝不记录 token/cookie/PKCE verifier/client secret，但故意记录 subject（审计的本义是身份归属）。
+- **测试（红→绿）**：`test_auth.py` 增 6 个——`/api/auth/session` 暴露 JWT claims 的 roles/org、单字符串角色、非法项丢弃去重、缺失默认空、嵌套/自定义 claim 路径、`require_roles` 放行/拦截；`test_browser_auth.py` 增 3 个 caplog 审计断言（登录成功/拒绝/登出）。修一个既有测试：session 响应精确断言补 `org_id`/`roles`（契约扩展的合理后果）。踩坑：命名空间 org claim 键 `https://mlagent.example/org` 含点号被点号分割误拆，靠「字面 key 优先」修正。
+- **门禁**：完整 backend `221 passed, 3 skipped`（+9），`ruff check app tests` 全绿。分支按既定「先留本地」未 push。
+- **P0-2 至此后端能力齐备**（JWT/OIDC/PKCE + 租户隔离 + Redis 共享会话 + org/role claims + 认证审计）。收尾前的待办：`.env.example` 补新配置项（`.env*` 工具守卫）、Redis 多实例部署实测、前端可选展示角色/组织；这些属部署/文档/UX 层，不阻断 P0-2 后端。

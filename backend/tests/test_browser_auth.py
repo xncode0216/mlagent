@@ -1,3 +1,4 @@
+import logging
 from base64 import b64decode
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
@@ -143,6 +144,8 @@ def test_callback_creates_revocable_browser_session_for_protected_api(
         "authenticated": True,
         "user_id": "browser-user",
         "auth_mode": "oidc",
+        "org_id": None,
+        "roles": [],
     }
 
     project_response = client.post(
@@ -380,3 +383,57 @@ def test_login_fails_closed_for_insecure_authorization_endpoint(
 
     assert response.status_code == 503
     assert response.json()["detail"] == "OIDC browser authentication is not configured"
+
+
+def _complete_login(client, monkeypatch, *, subject: str = "browser-user"):
+    login_response = client.get("/api/auth/login")
+    state = parse_qs(urlparse(login_response.headers["location"]).query)["state"][0]
+
+    async def exchange(_code, transaction, _settings):
+        return OidcTokenResponse(id_token=_id_token(subject, transaction.nonce))
+
+    monkeypatch.setattr("app.api.auth._exchange_code_for_tokens", exchange)
+    return client.get("/api/auth/callback", params={"code": "authorization-code", "state": state})
+
+
+def test_successful_login_is_audited(browser_auth_client, monkeypatch, caplog):
+    client, _ = browser_auth_client
+
+    with caplog.at_level(logging.INFO, logger="mlagent.audit"):
+        response = _complete_login(client, monkeypatch)
+
+    assert response.status_code == 303
+    assert "event=login.success" in caplog.text
+    assert "outcome=success" in caplog.text
+    assert "subject=browser-user" in caplog.text
+
+
+def test_rejected_login_is_audited_without_exchanging_code(browser_auth_client, caplog):
+    client, _ = browser_auth_client
+    client.get("/api/auth/login")
+
+    with caplog.at_level(logging.INFO, logger="mlagent.audit"):
+        response = client.get(
+            "/api/auth/callback",
+            params={"code": "authorization-code", "state": "attacker-state"},
+        )
+
+    assert response.status_code == 400
+    assert "event=login.callback" in caplog.text
+    assert "outcome=failure" in caplog.text
+    assert "reason=invalid_transaction" in caplog.text
+
+
+def test_logout_is_audited(browser_auth_client, monkeypatch, caplog):
+    client, _ = browser_auth_client
+    assert _complete_login(client, monkeypatch).status_code == 303
+
+    with caplog.at_level(logging.INFO, logger="mlagent.audit"):
+        logout_response = client.post(
+            "/api/auth/logout",
+            headers={"Origin": "https://mlagent.example.test"},
+        )
+
+    assert logout_response.status_code == 204
+    assert "event=logout" in caplog.text
+    assert "subject=browser-user" in caplog.text

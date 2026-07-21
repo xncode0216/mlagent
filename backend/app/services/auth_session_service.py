@@ -208,6 +208,8 @@ def _serialize_session(session: BrowserSession) -> str:
                 "id": session.user.id,
                 "workspace_key": session.user.workspace_key,
                 "auth_mode": session.user.auth_mode,
+                "org_id": session.user.org_id,
+                "roles": list(session.user.roles),
             },
             "expires_at": session.expires_at.isoformat(),
         }
@@ -224,6 +226,8 @@ def _deserialize_session(raw: str) -> BrowserSession | None:
                 id=user["id"],
                 workspace_key=user["workspace_key"],
                 auth_mode=user["auth_mode"],
+                org_id=user.get("org_id"),
+                roles=tuple(user.get("roles", ())),
             ),
             expires_at=datetime.fromisoformat(data["expires_at"]),
         )

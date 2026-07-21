@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import lru_cache
@@ -20,6 +20,8 @@ class AuthenticatedUser:
     id: str
     workspace_key: str
     auth_mode: str
+    org_id: str | None = None
+    roles: tuple[str, ...] = ()
 
 
 _current_user: ContextVar[AuthenticatedUser | None] = ContextVar(
@@ -123,20 +125,71 @@ def _validate_oidc_configuration(settings: Settings) -> None:
         )
 
 
-def _authenticated_user_from_claims(claims: dict[str, object], auth_mode: str) -> AuthenticatedUser:
+def _is_safe_claim_value(value: str, *, max_length: int) -> bool:
+    return bool(
+        value.strip()
+        and len(value) <= max_length
+        and not any(ord(character) < 32 for character in value)
+    )
+
+
+def _claim_by_path(claims: dict[str, object], path: str) -> object:
+    """Resolve a claim by name, falling back to a dot-separated nested path.
+
+    An exact top-level key wins first, so namespaced claim names that contain
+    dots (e.g. Auth0's ``https://app.example/roles``) are matched literally;
+    only otherwise is the name treated as a nested path (e.g. Keycloak's
+    ``realm_access.roles``).
+    """
+    if path in claims:
+        return claims[path]
+    current: object = claims
+    for part in path.split("."):
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+    return current
+
+
+def _extract_org(claims: dict[str, object], settings: Settings) -> str | None:
+    value = _claim_by_path(claims, settings.auth_org_claim)
+    if isinstance(value, str) and _is_safe_claim_value(value, max_length=128):
+        return value.strip()
+    return None
+
+
+def _extract_roles(claims: dict[str, object], settings: Settings) -> tuple[str, ...]:
+    value = _claim_by_path(claims, settings.auth_roles_claim)
+    if isinstance(value, str):
+        candidates: list[object] = [value]
+    elif isinstance(value, (list, tuple)):
+        candidates = list(value)
+    else:
+        return ()
+    roles: list[str] = []
+    for item in candidates:
+        if isinstance(item, str) and _is_safe_claim_value(item, max_length=128):
+            role = item.strip()
+            if role not in roles:
+                roles.append(role)
+    return tuple(roles)
+
+
+def _authenticated_user_from_claims(
+    claims: dict[str, object],
+    auth_mode: str,
+    settings: Settings,
+) -> AuthenticatedUser:
     subject = claims.get("sub")
-    if (
-        not isinstance(subject, str)
-        or not subject.strip()
-        or len(subject) > 255
-        or any(ord(character) < 32 for character in subject)
-    ):
+    if not isinstance(subject, str) or not _is_safe_claim_value(subject, max_length=255):
         raise _unauthorized()
     subject = subject.strip()
     return AuthenticatedUser(
         id=subject,
         workspace_key=_jwt_workspace_key(subject),
         auth_mode=auth_mode,
+        org_id=_extract_org(claims, settings),
+        roles=_extract_roles(claims, settings),
     )
 
 
@@ -260,7 +313,7 @@ def authenticate_request(connection: HTTPConnection, settings: Settings) -> Auth
     except (InvalidTokenError, PyJWKClientError) as exc:
         raise _unauthorized() from exc
 
-    return _authenticated_user_from_claims(claims, settings.auth_mode)
+    return _authenticated_user_from_claims(claims, settings.auth_mode, settings)
 
 
 def get_current_user(
@@ -288,3 +341,25 @@ def current_user() -> AuthenticatedUser:
     if settings.auth_mode != "development":
         raise RuntimeError("Authenticated user context is required")
     return _development_user(settings)
+
+
+def require_roles(*required_roles: str) -> Callable[[AuthenticatedUser], AuthenticatedUser]:
+    """Dependency factory gating a route on token roles.
+
+    Returns the authenticated user when they hold at least one of ``required_roles``
+    (or when none are given), else raises 403. Existing routes stay open; this is
+    the sanctioned hook for gating future endpoints on RBAC claims.
+    """
+    allowed = frozenset(required_roles)
+
+    def dependency(
+        user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    ) -> AuthenticatedUser:
+        if allowed and allowed.isdisjoint(user.roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have the required role",
+            )
+        return user
+
+    return dependency

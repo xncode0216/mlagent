@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from app.core.audit import record_auth_event
 from app.core.auth import (
     _authenticated_user_from_claims,
     _is_secure_oidc_url,
@@ -33,6 +34,8 @@ class BrowserSessionResponse(BaseModel):
     authenticated: bool
     user_id: str | None
     auth_mode: str
+    org_id: str | None = None
+    roles: list[str] = []
 
 
 def _validate_browser_auth_configuration(settings: Settings) -> None:
@@ -150,11 +153,20 @@ async def callback(
     transaction_id = request.cookies.get("mlagent_login", "")
     transaction = auth_session_service.consume_login_transaction(transaction_id, state_value)
     if transaction is None:
+        record_auth_event(
+            "login.callback", outcome="failure", auth_mode="oidc", reason="invalid_transaction"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid authentication transaction",
         )
-    token_response = await _exchange_code_for_tokens(code, transaction, settings)
+    try:
+        token_response = await _exchange_code_for_tokens(code, transaction, settings)
+    except HTTPException:
+        record_auth_event(
+            "login.callback", outcome="failure", auth_mode="oidc", reason="token_exchange_failed"
+        )
+        raise
     try:
         claims = decode_oidc_token(
             token_response.id_token,
@@ -162,13 +174,24 @@ async def callback(
             audience=settings.auth_oidc_client_id,
             nonce=transaction.nonce,
         )
-        user = _authenticated_user_from_claims(claims, "oidc")
+        user = _authenticated_user_from_claims(claims, "oidc", settings)
     except HTTPException as exc:
+        record_auth_event(
+            "login.callback", outcome="failure", auth_mode="oidc", reason="invalid_id_token"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid identity token",
         ) from exc
     session = auth_session_service.create_session(user, settings.auth_session_ttl_seconds)
+    record_auth_event(
+        "login.success",
+        outcome="success",
+        subject=user.id,
+        auth_mode="oidc",
+        org_id=user.org_id,
+        roles=user.roles,
+    )
     response = RedirectResponse(settings.auth_browser_return_url, status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie(
         "mlagent_login",
@@ -212,6 +235,8 @@ def session_status(
         authenticated=True,
         user_id=user.id,
         auth_mode=user.auth_mode,
+        org_id=user.org_id,
+        roles=list(user.roles),
     )
 
 
@@ -222,8 +247,19 @@ def logout(
 ) -> Response:
     session_id = request.cookies.get("mlagent_session", "")
     if session_id:
-        validate_browser_request_origin(request, settings)
+        try:
+            validate_browser_request_origin(request, settings)
+        except HTTPException:
+            record_auth_event("logout", outcome="failure", auth_mode="oidc", reason="invalid_origin")
+            raise
+        session = auth_session_service.get_session(session_id)
         auth_session_service.revoke_session(session_id)
+        record_auth_event(
+            "logout",
+            outcome="success",
+            subject=session.user.id if session else None,
+            auth_mode="oidc",
+        )
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     response.delete_cookie(
         "mlagent_session",

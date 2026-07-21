@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # "memory" keeps process-local browser auth state (single worker only);
     # "redis" shares login transactions and sessions across workers/instances.
     auth_session_backend: Literal["memory", "redis"] = "memory"
+    # Token claims carrying authorization context. Dot paths are supported for
+    # nested claims (e.g. Keycloak "realm_access.roles").
+    auth_roles_claim: str = "roles"
+    auth_org_claim: str = "org_id"
     log_level: str = "INFO"
     cors_origins: list[str] = [
         "http://localhost:5173",
