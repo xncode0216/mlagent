@@ -1,13 +1,31 @@
+import asyncio
 import json
 from pathlib import Path
+from typing import cast
 
+from fastapi import WebSocket
 from fastapi.testclient import TestClient
 
+from app.api.ws import session_socket
 from app.core.config import get_settings
 from app.main import app
 from app.services.experiment_service import ExperimentService
 from app.services.session_service import SessionService
 from app.services.task_state_service import write_task_state
+
+
+class DisconnectDuringAccept:
+    async def accept(self) -> None:
+        raise RuntimeError(
+            "Expected ASGI message 'websocket.send' or 'websocket.close', "
+            "but got 'websocket.accept'."
+        )
+
+
+def test_session_socket_ignores_disconnect_race_during_accept():
+    websocket = cast(WebSocket, DisconnectDuringAccept())
+
+    asyncio.run(session_socket(websocket, "disconnect-during-accept"))
 
 
 def test_session_socket_rejects_active_file_path_escape(tmp_path, monkeypatch):

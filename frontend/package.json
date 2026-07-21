@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4174",
     "smoke:deep-links": "node scripts/deep-link-smoke.mjs",
+    "test:e2e": "playwright test",
     "test": "vitest run",
     "lint": "eslint ."
   },
@@ -26,6 +27,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

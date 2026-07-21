@@ -1,14 +1,17 @@
 # MLAgent 项目进度同步
 
-更新时间：2026-05-24
+更新时间：2026-07-21
 
 ## 当前阶段
 
-项目当前处于“可运行 MVP + 自进化/图谱/GPU 调度增强”阶段。前端已经具备 AI IDE 风格工作台，后端已经具备项目、文件、会话、数据分析、机器学习、自进化知识和资源状态等主要 API。
+项目已完成生产就绪整改的 P0 与 P1 主线，进入 P2 产品质感与可访问性阶段。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
 
 ## 已完成
 
 - 前端工作台：三栏 IDE 布局、顶部数据分析/机器学习/自进化知识切换、左侧项目与文件管理、右侧图表/代码/数据/训练/日志面板。
+- LLM 能力：OpenAI/Anthropic/DeepSeek/vLLM 适配、LLM 意图路由、流式回复、分析工具调用循环和真实模型状态指示器。
+- 认证与隔离：JWT/OIDC、Authorization Code + PKCE、BFF HttpOnly 会话、Redis 共享会话、组织/角色 claims、租户资源隔离和认证审计。
+- 工程架构：React Query 服务端状态、Zustand UI 状态、AppShell 领域 action hooks、拆分后的后端 orchestrator、结构化日志/request-id/统一错误响应。
 - 项目管理：创建项目、打开本地项目、项目文件树、上传/新建/重命名/删除/下载/预览文件。
 - Agent 会话：按模式创建会话、加载历史消息、WebSocket 事件流、任务进度和产物事件。
 - 数据分析：CSV profile、缺失值检测、清洗数据、生成分析报告，并把结果同步到右侧面板和项目产物。
@@ -18,29 +21,30 @@
 - 知识图谱：后端 `/evolution/graph` API，前端图谱/高级洞察 tab，图谱加载失败反馈、空态引导、节点键盘访问、规则节点跳转经验详情。
 - GPU 调度基础：GPU scheduler 服务、状态 API、队列结构和测试。
 - 前端稳定性：自进化状态统计抽为可测试函数，修复冲突/拒绝统计反转问题，图谱属性由 `any` 收紧为 `unknown` 并做类型防护。
-- 前端深链与烟测：支持 `mode`、`activity`、`rightTab`、`evolutionTab`、`file`、`projectId`、`sessionId`、`experimentId` 入口；`npm.cmd run smoke:deep-links` 会准备稳定项目/数据/分析产物/训练记录/自进化经验并验证关键 DOM 状态。
+- 前端深链与测试：保留覆盖广泛的 `smoke:deep-links`；新增标准 Playwright golden path，以真实 FastAPI + Vite 验证数据画像、预处理执行、baseline 训练和实验详情，并接入 GitHub Actions。
 
 ## 最近验证
 
-- 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `73 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `6 passed files / 18 tests`。
+- 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
+- 前端测试：`npm.cmd test`，结果 `20 passed files / 110 tests`。
 - 前端 lint：`npm.cmd run lint`，通过。
 - 前端构建：`npm.cmd run build`，通过。
-- 浏览器烟测：`npm.cmd run smoke:deep-links` 通过，覆盖原始数据预览、数据质量画像、分析报告预览、ML handoff、清洗数据、ML 训练、实验聚焦、知识摘要、自进化日志、规则注入审计和图谱惊奇连接。
+- Playwright E2E：`npm.cmd run test:e2e -- --repeat-each=3`，3/3 通过；失败时保留 screenshot/video/trace。
+- GitHub：`feat/p0-backend-hardening` 已推送，并建立草稿 PR #2；backend/frontend CI 已作为 PR 闸门运行，新增 E2E job 将随本次提交触发。
 - 后端健康检查：`http://127.0.0.1:8000/health` 返回 `{"status":"ok","service":"mlagent-api"}`。
 
 ## 下一步优先级
 
-1. 完善真实 Docker/Jupyter Kernel 沙箱：容器生命周期、workspace 挂载隔离、资源限制、异常恢复。
-2. 强化 Phase 10 图谱能力：节点定位到文件/实验/日志，补充证据详情面板，增加更稳定的图谱布局。
-3. 完善 GPU 调度闭环：前端队列状态、取消任务、超时释放、真实 GPU worker 绑定。
-4. 增强数据分析和 ML 工具库：Excel/Parquet、大文件采样、更多清洗/特征工程/模型评估工具；下一步优先丰富 sklearn 评估产物和模型对比视图。
-5. 增加企业内部登录与用户记录：用户登录、会话归属、项目权限、审计日志。
-6. 增强数据分析和 ML 工具库：基于已验证的 smoke/golden path 继续扩展数据画像、特征工程、模型评估和可视化解释能力。
+1. P2-1 设计令牌系统：收敛裸色值与失效 CSS，维持 Catppuccin 暗色体系并为主题扩展打地基。
+2. P2-2 动效与加载态：统一 150–300ms 功能性状态过渡、骨架和 reduced-motion 回退。
+3. P2-3 响应式策略：完成窄屏降级，或明确桌面最小宽度与友好提示。
+4. P2-4/P2-5 信息设计与命令系统：隐藏裸 UUID、完善空状态、兑现命令面板与斜杠命令。
+5. 继续扩展真实数据/ML 工具、Docker Kernel 部署验证与 Redis 多实例验证。
 
 ## 当前注意事项
 
 - `.codex-runs/` 是本地浏览器烟测截图和服务日志目录，已加入 `.gitignore`。
+- `playwright-report/`、`test-results/` 与 `.playwright-workspaces/` 是 E2E 临时产物，均已忽略。
 - Docker/Jupyter 真实沙箱仍是后续硬化重点，当前可继续使用本地开发模式验证核心流程。
 - 自进化规则仍应保持人工审核或高置信门槛，避免经验污染 Agent 行为。
 

@@ -14,13 +14,18 @@ from app.services.kernel_service import (
 import app.services.kernel_service as kernel_service
 
 
-def is_docker_running() -> bool:
+def is_docker_kernel_available() -> bool:
     docker_exe = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
     if not shutil.which(docker_exe):
         return False
+    image = os.environ.get("MLAGENT_KERNEL_IMAGE", "mlagent-kernel:dev")
     try:
-        import subprocess
-        res = subprocess.run([docker_exe, "ps"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        res = subprocess.run(
+            [docker_exe, "image", "inspect", image],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        )
         return res.returncode == 0
     except Exception:
         return False
@@ -167,7 +172,9 @@ def test_docker_kernel_rejects_invalid_workspace_mount_mode(tmp_path: Path):
         )
 
 
-@pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
+@pytest.mark.skipif(
+    not is_docker_kernel_available(), reason="Docker kernel image is not available"
+)
 def test_jupyter_kernel_service_executes_in_docker(tmp_path: Path):
     docker_executable = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
     service = JupyterKernelService(
@@ -180,7 +187,9 @@ def test_jupyter_kernel_service_executes_in_docker(tmp_path: Path):
     assert result.stdout.strip() == "hello docker kernel"
 
 
-@pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
+@pytest.mark.skipif(
+    not is_docker_kernel_available(), reason="Docker kernel image is not available"
+)
 def test_jupyter_kernel_service_reads_workspace_csv(tmp_path: Path):
     docker_executable = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
     (tmp_path / "data.csv").write_text("a,b\n1,2\n3,4\n", encoding="utf-8")

@@ -5,9 +5,23 @@ from app.services.agent_orchestrator_service import AgentOrchestrator
 router = APIRouter(tags=["websocket"])
 
 
+async def _accept_websocket(websocket: WebSocket) -> bool:
+    try:
+        await websocket.accept()
+    except WebSocketDisconnect:
+        return False
+    except RuntimeError as exc:
+        message = str(exc)
+        if "Expected ASGI message" not in message or "websocket.accept" not in message:
+            raise
+        return False
+    return True
+
+
 @router.websocket("/ws/sessions/{session_id}")
 async def session_socket(websocket: WebSocket, session_id: str) -> None:
-    await websocket.accept()
+    if not await _accept_websocket(websocket):
+        return
     try:
         while True:
             payload = await websocket.receive_json()

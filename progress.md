@@ -946,3 +946,12 @@
 - **配置/基建**：`config.py` 删 `database_url`；`infra/docker-compose.yml` 移除 `postgres` 服务与 `mlagent_postgres` 卷，保留 `redis`。
 - **门禁**：完整 backend `221 passed, 3 skipped`（删死代码零破坏）、`ruff` 全绿、`app.main` 正常导入（15 路由）。
 - **follow-up**：`.env.example` 第 51 行 `MLAGENT_DATABASE_URL` 应删（`.env*` 工具守卫无法编辑；pydantic-settings 默认忽略多余 env，故残留无害）；venv 里 sqlalchemy 等已安装包成为孤儿（无害，重装即清）。Redis 保持真实使用。
+
+## 2026-07-21 GitHub 进度入口 + 测试补强（P1-5）
+
+- **GitHub 同步**：确认 `feat/p0-backend-hardening` 工作树干净且与 `origin/feat/p0-backend-hardening` 一致；该分支相对 `master` 领先 50 个提交、103 个文件，但此前没有 PR。创建草稿 PR #2 `feat: production-ready LLM, auth, observability, and frontend foundations`，用完成矩阵同步 P0-1/P0-2/P0-3/P0-4 与 P1-1/P1-2/P1-3/P1-4/P1-6/P1-7，并把 P1-5 标为当前工作。
+- **Playwright golden path（TDD 红→绿）**：新增 `@playwright/test`、`frontend/playwright.config.ts` 和 `frontend/e2e/golden-path.e2e.ts`。测试以真实 API 创建隔离项目和 CSV，生成数据画像/预处理计划，执行预处理并训练 baseline；浏览器随后验证画像表、变换后数据预览、机器学习模式、聚焦实验与评估报告路径。Playwright 自动拉起 FastAPI + Vite，本地 Windows 优先复用已安装 Chrome，CI 安装 Chromium；失败时保留 screenshot/video，首重试保留 trace。
+- **CI 闸门**：`.github/workflows/ci.yml` 新增独立 `Playwright golden path` job，依赖 backend/frontend 单元闸门；安装后端运行依赖、前端依赖与 Chromium 后执行 `npm run test:e2e`，并上传 7 天 HTML 报告。Vitest 与 E2E 用 `.test.ts(x)` / `.e2e.ts` 命名隔离，避免两个 runner 互相收集。
+- **握手竞态修复（TDD 红→绿）**：首次 E2E 虽通过，但快速页面导航暴露 Uvicorn/Starlette WebSocket 握手期间客户端断开时的重复 `websocket.accept` RuntimeError。先在 `test_websocket_session.py` 加失败回归，再让 `session_socket` 只吞掉明确的 accept 断连竞态，其余 RuntimeError 继续抛出；focused 回归与 Ruff 通过，E2E `--repeat-each=3` 连续 3/3 通过且不再出现 ASGI error。
+- **GitHub CI 修复**：PR #2 首轮 backend job 在 GitHub-hosted Linux runner 上失败 3 条 Docker Kernel 集成测试。根因不是产品回归：runner 的 Docker daemon 可用，使旧 `is_docker_running()` 门槛放行，但本地镜像 `mlagent-kernel:dev` 不存在，Docker 随后尝试拉取不存在/无权限的仓库。经确认后把两处门槛改为 `docker image inspect $MLAGENT_KERNEL_IMAGE`：仅在 CLI、daemon 与指定镜像全部可用时运行；普通 PR CI 稳定跳过，显式准备好镜像的集成环境仍会执行。聚焦验证 `12 passed, 3 skipped`，跳过原因均为 `Docker kernel image is not available`。
+- **门禁**：backend Ruff 全绿、完整 pytest `222 passed, 3 skipped`；frontend Vitest `20 files / 110 tests`、ESLint、TypeScript + Vite build 通过；Playwright golden path 单次及 `repeat-each=3` 通过。P1-5 完成，P0/P1 生产就绪 backlog 至此全部完成，下一主线转入 P2-1 设计令牌系统。
