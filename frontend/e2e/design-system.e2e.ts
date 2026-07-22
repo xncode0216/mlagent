@@ -25,6 +25,25 @@ test("设计系统加载领域样式并支持 ML 品牌强调色覆盖", async (
   expect(colors.defaultAccent).toBe("rgb(137, 180, 250)");
   expect(colors.mlAccent).toBe("rgb(203, 166, 247)");
 
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const reducedMotion = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.className = "workflow-completion-feedback";
+    document.body.append(probe);
+    const styles = getComputedStyle(probe);
+    const result = {
+      animationDuration: styles.animationDuration,
+      animationIterationCount: styles.animationIterationCount,
+      matches: matchMedia("(prefers-reduced-motion: reduce)").matches,
+    };
+    probe.remove();
+    return result;
+  });
+  expect(reducedMotion.matches).toBe(true);
+  expect(Number.parseFloat(reducedMotion.animationDuration)).toBeLessThanOrEqual(0.00001);
+  expect(reducedMotion.animationIterationCount).toBe("1");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+
   const modelTrigger = page.getByRole("button", { name: /^Model service:/ });
   await modelTrigger.click();
   const modelDialog = page.getByRole("dialog", { name: "Model service status" });

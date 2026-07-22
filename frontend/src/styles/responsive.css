@@ -100,6 +100,15 @@
     grid-template-columns: 1fr;
   }
 
+  .workflow-completion-feedback {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+
+  .workflow-completion-feedback button {
+    grid-column: 2;
+    justify-self: start;
+  }
+
   .agent-header {
     align-items: flex-start;
   }

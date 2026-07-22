@@ -44,7 +44,7 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
       type: "file",
       content: DATASET_CSV,
     });
-    const profile = await postJson<ArtifactResponse>(api, `/api/projects/${project.id}/analysis/profile`, {
+    await postJson<ArtifactResponse>(api, `/api/projects/${project.id}/analysis/profile`, {
       dataset_path: DATASET_PATH,
       session_id: E2E_SESSION_ID,
     });
@@ -69,12 +69,24 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
     });
 
     await page.goto(
-      `/?mode=analysis&activity=data&rightTab=data&projectId=${project.id}&file=${encodeURIComponent(profile.artifact.path)}`,
+      `/?mode=analysis&activity=data&rightTab=data&projectId=${project.id}&file=${encodeURIComponent(DATASET_PATH)}`,
     );
     await expect(page).toHaveTitle("MLAgent");
     await expect(page.getByRole("navigation", { name: "Main modes" }).getByRole("button", { name: "Data Analysis" }))
       .toHaveClass(/active/);
+
+    const dataQualityCard = page.locator('[data-cockpit-component="data_quality"]');
+    await dataQualityCard.getByRole("button", { name: "Generate Profile" }).click();
+    const completionStatus = page.getByRole("status", { name: "Latest workflow completion" });
+    await expect(completionStatus).toContainText("Artifact created");
+    const generatedProfilePath = await completionStatus.locator("code").innerText();
+    expect(generatedProfilePath).toMatch(/^results\/.+\/data_quality_profile\.json$/);
+    await completionStatus.getByRole("button", { name: /^Open completed artifact/ }).click();
+    await expect(page.locator(".status-bar")).toContainText(generatedProfilePath);
     await expect(page.locator(".data-quality-profile")).toContainText("churn");
+    if (process.env.E2E_COMPLETION_SCREENSHOT_PATH) {
+      await page.screenshot({ path: process.env.E2E_COMPLETION_SCREENSHOT_PATH, fullPage: true });
+    }
     await expect(page.locator(".data-quality-profile th")).toContainText([
       "字段",
       "类型",

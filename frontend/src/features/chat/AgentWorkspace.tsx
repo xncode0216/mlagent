@@ -1,4 +1,4 @@
-import { Bot, SendHorizontal, Sparkles, UserRound } from "lucide-react";
+import { Bot, CheckCircle2, ExternalLink, FileCheck2, SendHorizontal, Sparkles, UserRound } from "lucide-react";
 import { lazy, Suspense, useMemo, useRef, useState } from "react";
 
 import type { AgentStreamEvent, WorkflowStageId } from "./types";
@@ -7,6 +7,7 @@ import {
   type CockpitComponentAction,
   type CockpitComponentCard,
 } from "./componentRegistry";
+import { deriveWorkflowCompletionFeedback } from "./completionFeedback";
 import type { TaskStateInspection } from "./taskStateInspector";
 import { buildToolActivitySummaries, type ToolActivityStatus } from "./toolActivity";
 import { deriveWorkflowState } from "./workflowState";
@@ -135,6 +136,7 @@ export function AgentWorkspace({
   const lastSubmissionRef = useRef<{ content: string; submittedAt: number } | null>(null);
   const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
   const workflow = useMemo(() => deriveWorkflowState(events, mode, activeFile), [activeFile, events, mode]);
+  const completionFeedback = useMemo(() => deriveWorkflowCompletionFeedback(events), [events]);
   const cockpitCards = useMemo(
     () =>
       buildCockpitComponentCards({
@@ -391,7 +393,41 @@ export function AgentWorkspace({
             <span className="section-kicker">Workflow</span>
             <strong>{workflow.currentStage.label}</strong>
           </div>
-          <p>{workflow.nextAction}</p>
+          <div className="workflow-cockpit-summary-copy">
+            <p>{workflow.nextAction}</p>
+            {completionFeedback ? (
+              <div
+                aria-atomic="true"
+                aria-label="Latest workflow completion"
+                aria-live="polite"
+                className="workflow-completion-feedback"
+                data-completion-kind={completionFeedback.kind}
+                key={completionFeedback.id}
+                role="status"
+              >
+                {completionFeedback.kind === "artifact" ? (
+                  <FileCheck2 aria-hidden="true" size={16} />
+                ) : (
+                  <CheckCircle2 aria-hidden="true" size={16} />
+                )}
+                <div>
+                  <span>{completionFeedback.label}</span>
+                  <strong>{completionFeedback.title}</strong>
+                  {completionFeedback.detail ? <code title={completionFeedback.detail}>{completionFeedback.detail}</code> : null}
+                </div>
+                {completionFeedback.artifactPath && onSelectFile ? (
+                  <button
+                    aria-label={`Open completed artifact ${completionFeedback.title}`}
+                    onClick={() => onSelectFile(completionFeedback.artifactPath!)}
+                    type="button"
+                  >
+                    Open artifact
+                    <ExternalLink aria-hidden="true" size={14} />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="workflow-stage-strip" role="list">
           {workflow.stages.map((stage, index) => (

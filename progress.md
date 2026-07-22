@@ -1051,3 +1051,12 @@
 - **裁切修复与视觉证据**：顶栏保留 mode tabs 自身横向滚动，但允许 service popover 溢出显示，修复此前绝对定位弹层被 header 裁切的问题。Playwright 真实打开并刷新两个服务弹层，确认 `aria-busy` 回落；1440×900 截图确认账户弹层完整覆盖在工作台上层、顶栏入口仍落在 48px 行内，信息密度与层级稳定。
 - **门禁**：frontend Vitest `27 files / 156 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿（主包 467.17KB / gzip 132.70KB，CSS gzip 11.78KB）；真实 FastAPI + Vite Playwright 设计系统/model/auth/Evolution 与数据画像→训练 golden path `2 passed`。
 - **动态计划调整**：P2-2 基础异步查询面已覆盖项目、会话、文件、产物、图谱、活动文件、模型与账户。下一片不再扩张 query 组件，按原计划补克制的阶段/产物完成反馈，然后基于原始 motion/loading 验收边界做一次关闭审计。
+
+## 2026-07-22 P2-2 动效与加载态（切片 7：阶段/产物完成反馈与关闭审计）
+
+- **事件契约与 TDD 红→绿**：新增纯函数 `deriveWorkflowCompletionFeedback`，只消费 `stage_completed`、`step_completed`、`artifact_created` 三类结构化完成事件；普通 `task_progress` 不制造成功，新完成事件按事件序替换旧反馈。新增 AgentWorkspace 真实组件测试，先稳定观察 `3 failed / 1 passed`，实现后聚焦 `4/4`、全量 `28 files / 160 tests`。
+- **克制的产品反馈**：最近完成状态放在 Workflow 摘要内，不新增遮挡工作台的全局 toast。阶段和产物使用 lucide 状态图标、Catppuccin success token 与 `aria-live="polite"`；产物显示规范名称/路径并提供 44px `Open artifact` 真操作，直接复用项目文件选择链。
+- **动效与响应式边界**：完成反馈只执行一次 token 化 200ms opacity/2px transform 入场，无渐变、无装饰循环；窄于 900px 时文字与操作重排为两列。正式 Playwright 通过 `emulateMedia` 证明 reduced-motion 下时长不超过 0.01ms、循环数为 1。
+- **P2-2 关闭审计**：原始范围“统一 transition、骨架、乐观更新、阶段/产物微动画”均已处理。普通 transition 无 `all` 且只动画 opacity/transform；项目/会话/文件/产物/图谱/活动文件/model/auth 均有真实首次加载、刷新、错误、恢复与 `aria-busy`；文件保存等成功响应即时写缓存，刷新失败保留旧数据。对文件、训练等服务端规范写入不做会预先宣告成功的乐观更新，保留真实 pending/error，仅在服务端成功后提交缓存，这是本项目的数据完整性边界。
+- **浏览器与视觉复核**：真实 API golden path 从数据集点击 `Generate Profile`，验证可访问完成状态、动态产物路径和打开动作，再继续预处理与训练；设计系统与 golden path `2 passed`。1440×900 截图确认反馈不遮挡工作台、产物操作和右侧画像可用，也再次确认 workflow 阶段逐字换行仍是 P2-3 的真实问题。
+- **门禁与动态计划**：Vitest `28 files / 160 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build、Playwright `2 passed` 全绿，P2-2 关闭。下一项严格按计划进入 P2-3，先修 workflow 阶段布局，再验证 1440×900、900px 与移动窄屏降级；不把 P2-4 信息设计混入响应式切片。
