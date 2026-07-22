@@ -31,7 +31,7 @@ export function describeLlmStatus({ status, loading, error }: DescribeInput): Ll
   if (loading && !status) {
     return { tone: "loading", label: "LLM…", detail: "Checking model service…" };
   }
-  if (error) {
+  if (error && !status) {
     return {
       tone: "error",
       label: "LLM offline",
@@ -41,15 +41,23 @@ export function describeLlmStatus({ status, loading, error }: DescribeInput): Ll
   if (!status) {
     return { tone: "loading", label: "LLM…", detail: "Checking model service…" };
   }
+  let current: LlmStatusView;
   if (status.configured) {
     const name = status.provider_label || status.provider || "LLM";
     const detail = status.model ? `${name} · ${status.model}` : name;
-    return { tone: "live", label: name, detail };
+    current = { tone: "live", label: name, detail };
+  } else {
+    current = {
+      tone: "offline",
+      label: "No LLM",
+      detail: "No model configured. Set MLAGENT_LLM_PROVIDER (and credentials) on the backend.",
+    };
   }
+  if (!error) return current;
   return {
-    tone: "offline",
-    label: "No LLM",
-    detail: "No model configured. Set MLAGENT_LLM_PROVIDER (and credentials) on the backend.",
+    tone: "error",
+    label: current.label,
+    detail: current.detail,
   };
 }
 

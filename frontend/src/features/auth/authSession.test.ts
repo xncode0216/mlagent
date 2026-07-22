@@ -21,6 +21,17 @@ describe("describeAuthSession", () => {
     expect(view.action).toBe("none");
   });
 
+  it("keeps the last identity and sign-out action when a refresh fails", () => {
+    const view = describeAuthSession({
+      session: session({ authenticated: true, user_id: "alice" }),
+      error: "Failed to refresh",
+    });
+    expect(view.tone).toBe("error");
+    expect(view.label).toBe("alice");
+    expect(view.detail).toContain("Signed in as alice");
+    expect(view.action).toBe("sign-out");
+  });
+
   it("treats a missing session as loading rather than crashing", () => {
     const view = describeAuthSession({ session: null });
     expect(view.tone).toBe("loading");

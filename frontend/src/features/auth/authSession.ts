@@ -36,7 +36,7 @@ export function describeAuthSession({ session, loading, error }: DescribeInput):
   if (loading && !session) {
     return { tone: "loading", label: "Account…", detail: "Checking sign-in status…", action: "none" };
   }
-  if (error) {
+  if (error && !session) {
     return {
       tone: "error",
       label: "Account offline",
@@ -47,18 +47,25 @@ export function describeAuthSession({ session, loading, error }: DescribeInput):
   if (!session) {
     return { tone: "loading", label: "Account…", detail: "Checking sign-in status…", action: "none" };
   }
+  let current: AuthMenuView;
   if (session.auth_mode === "development") {
     const who = session.user_id || "dev-user";
-    return {
+    current = {
       tone: "development",
       label: who,
       detail: `Development mode — authentication is disabled. Acting as ${who}.`,
       action: "none",
     };
-  }
-  if (session.authenticated) {
+  } else if (session.authenticated) {
     const who = session.user_id || "Signed in";
-    return { tone: "authenticated", label: who, detail: `Signed in as ${who}.`, action: "sign-out" };
+    current = { tone: "authenticated", label: who, detail: `Signed in as ${who}.`, action: "sign-out" };
+  } else {
+    current = { tone: "anonymous", label: "Sign in", detail: "You are not signed in.", action: "sign-in" };
   }
-  return { tone: "anonymous", label: "Sign in", detail: "You are not signed in.", action: "sign-in" };
+  if (!error) return current;
+  return {
+    ...current,
+    tone: "error",
+    detail: current.detail,
+  };
 }

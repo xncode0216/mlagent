@@ -25,6 +25,27 @@ test("设计系统加载领域样式并支持 ML 品牌强调色覆盖", async (
   expect(colors.defaultAccent).toBe("rgb(137, 180, 250)");
   expect(colors.mlAccent).toBe("rgb(203, 166, 247)");
 
+  const modelTrigger = page.getByRole("button", { name: /^Model service:/ });
+  await modelTrigger.click();
+  const modelDialog = page.getByRole("dialog", { name: "Model service status" });
+  await expect(modelDialog).toBeVisible();
+  await expect(modelDialog).toHaveAttribute("aria-busy", "false");
+  await modelDialog.getByRole("button", { name: "Refresh model status" }).click();
+  await expect(modelDialog).toHaveAttribute("aria-busy", "false");
+  await page.keyboard.press("Escape");
+
+  const accountTrigger = page.getByRole("button", { name: /^Account:/ });
+  await accountTrigger.click();
+  const accountDialog = page.getByRole("dialog", { name: "Account" });
+  await expect(accountDialog).toBeVisible();
+  await expect(accountDialog).toHaveAttribute("aria-busy", "false");
+  await accountDialog.getByRole("button", { name: "Refresh account status" }).click();
+  await expect(accountDialog).toHaveAttribute("aria-busy", "false");
+  if (process.env.E2E_SERVICE_STATUS_SCREENSHOT_PATH) {
+    await page.screenshot({ path: process.env.E2E_SERVICE_STATUS_SCREENSHOT_PATH, fullPage: true });
+  }
+  await page.keyboard.press("Escape");
+
   await page
     .getByRole("navigation", { name: "Main modes" })
     .getByRole("button", { name: "Evolution Knowledge" })

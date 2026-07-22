@@ -1041,3 +1041,13 @@
 - **可访问状态与二进制动作**：预览成为 `aria-label="活动文件预览"` 的 region，覆盖无项目、无活动文件、首次骨架、后台刷新、读取/保存错误与重试；刷新、保存、重试和下载控件均具备 44px 目标与 `:focus-visible`。415 内容不再提供无意义读取重试，而是展示真实“下载二进制文件”链接。新增样式继续只使用 Catppuccin token 与既有 opacity skeleton，无渐变或装饰动画。
 - **门禁与浏览器复核**：frontend Vitest `26 files / 146 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿；Playwright 设计系统 + 真实 API golden path `2 passed`。golden path 在真实转换 CSV 上触发 ActiveFilePreview 刷新并确认表格持续可见；1440×900 截图确认路径、刷新控件和横向表格可用。截图中 workflow 阶段逐字换行仍是既有 P2-3 响应式问题，本片不扩张范围。
 - **动态计划调整**：P2-2 保持进行中。下一片按计划处理 model/auth 查询面的真实 loading/error/retry 语义，完成基础异步闭环后再添加克制的阶段/产物完成反馈。
+
+## 2026-07-22 P2-2 动效与加载态（切片 6：Model/Auth 服务查询状态）
+
+- **真实链路审计**：`ModelStatusIndicator` 与 `AuthMenu` 仍在组件内以 `useEffect` + 本地 loading/error state 请求。模型手动刷新返回的 cleanup 无调用方，竞态响应可能倒序覆盖；认证首次失败没有重试动作，后台失败会把已知身份降级成离线并移除登出入口，登出失败同样丢失身份动作。两个 popover 还被 `.top-nav { overflow: hidden }` 裁在 48px 顶栏内，刷新按钮只有 24px 且缺 `:focus-visible`。
+- **TDD 红→绿**：新增 ModelStatusIndicator 真实组件测试并扩展 AuthMenu/纯 view-model 契约，覆盖首次请求 `aria-busy`、初始失败局部重试、后台刷新保留 provider/身份、登出失败保留身份与重试，以及登出成功但验证失败时仍提交匿名缓存。首次聚焦运行稳定得到 `9 failed / 17 passed`，实现和文案分层后收敛为 `27/27`；全量为 `27 files / 156 tests`。
+- **Query 与 mutation 闭环**：新增 `useLlmStatusQuery`、`useAuthSessionQuery` 和稳定查询键，删除两处命令式读取及手写竞态保护。React Query 托管取消、去重、缓存和 refetch；刷新失败时旧 provider 列表/账户身份继续可见，同时顶栏错误 tone、accessible name 和弹层 alert 报告失败。登出改用 mutation：失败就地重试且保持已知身份；成功先把会话缓存提交为匿名，再失效查询向服务端确认。
+- **可访问紧凑状态**：两个 dialog 均暴露 `aria-busy`、首次检查/后台刷新 `role=status` 和失败 `role=alert`；模型与账户都获得真实刷新和错误重试动作。受影响的顶栏入口、刷新、登录/登出和重试控件均达到 44px 并补 `:focus-visible`，继续使用 lucide-react 和 Catppuccin token，无新动画或渐变。
+- **裁切修复与视觉证据**：顶栏保留 mode tabs 自身横向滚动，但允许 service popover 溢出显示，修复此前绝对定位弹层被 header 裁切的问题。Playwright 真实打开并刷新两个服务弹层，确认 `aria-busy` 回落；1440×900 截图确认账户弹层完整覆盖在工作台上层、顶栏入口仍落在 48px 行内，信息密度与层级稳定。
+- **门禁**：frontend Vitest `27 files / 156 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿（主包 467.17KB / gzip 132.70KB，CSS gzip 11.78KB）；真实 FastAPI + Vite Playwright 设计系统/model/auth/Evolution 与数据画像→训练 golden path `2 passed`。
+- **动态计划调整**：P2-2 基础异步查询面已覆盖项目、会话、文件、产物、图谱、活动文件、模型与账户。下一片不再扩张 query 组件，按原计划补克制的阶段/产物完成反馈，然后基于原始 motion/loading 验收边界做一次关闭审计。

@@ -1,8 +1,10 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, LogIn, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, LogIn, LogOut, RefreshCw, UserRound } from "lucide-react";
 
 import { authLoginUrl, getAuthSession, logout, type AuthSession } from "../../lib/api";
 import { describeAuthSession } from "./authSession";
+import { authSessionQueryKey, useAuthSessionQuery } from "./useAuthSessionQuery";
 
 type Props = {
   /** Injectable for tests; defaults to the real API call. */
@@ -20,33 +22,20 @@ type Props = {
  * redirect when anonymous and a revocable sign-out when a session exists.
  */
 export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSignIn }: Props) {
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  function refresh() {
-    let active = true;
-    setLoading(true);
-    setError(null);
-    loadSession()
-      .then((next) => {
-        if (active) setSession(next ?? null);
-      })
-      .catch((err: unknown) => {
-        if (active) setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }
-
-  useEffect(() => refresh(), []);
+  const queryClient = useQueryClient();
+  const sessionQuery = useAuthSessionQuery(loadSession);
+  const signOutMutation = useMutation({
+    mutationFn: signOut,
+    onSuccess: async () => {
+      queryClient.setQueryData<AuthSession>(authSessionQueryKey, (current) =>
+        current ? { ...current, authenticated: false, user_id: null } : current,
+      );
+      await queryClient.invalidateQueries({ queryKey: authSessionQueryKey });
+      setOpen(false);
+    },
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -73,33 +62,35 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
   }
 
   function handleSignOut() {
-    setBusy(true);
-    setError(null);
-    signOut()
-      .then(() => {
-        setOpen(false);
-        refresh();
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        setBusy(false);
-      });
+    signOutMutation.mutate();
   }
 
-  const view = describeAuthSession({ session, loading, error });
+  const session = sessionQuery.data ?? null;
+  const sessionError = sessionQuery.error instanceof Error
+    ? sessionQuery.error.message
+    : sessionQuery.error
+      ? String(sessionQuery.error)
+      : null;
+  const signOutError = signOutMutation.error instanceof Error
+    ? signOutMutation.error.message
+    : signOutMutation.error
+      ? String(signOutMutation.error)
+      : null;
+  const view = describeAuthSession({ session, loading: sessionQuery.isPending, error: sessionError });
+  const triggerDetail = sessionError && session
+    ? `${view.detail} Refresh failed: ${sessionError}`
+    : view.detail;
 
   return (
     <div className="auth-menu" ref={containerRef}>
       <button
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label={`Account: ${view.detail}`}
+        aria-label={`Account: ${triggerDetail}`}
         className="auth-menu-trigger"
         data-tone={view.tone}
         onClick={() => setOpen((value) => !value)}
-        title={view.detail}
+        title={triggerDetail}
         type="button"
       >
         {view.action === "sign-in" ? <LogIn size={14} /> : <UserRound size={14} />}
@@ -108,13 +99,60 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
         <ChevronDown size={14} />
       </button>
       {open ? (
-        <div aria-label="Account" className="auth-menu-popover" role="dialog">
+        <div
+          aria-busy={sessionQuery.isFetching || signOutMutation.isPending}
+          aria-label="Account"
+          className="auth-menu-popover"
+          role="dialog"
+        >
           <header className="auth-menu-popover-head">
             <span>Account</span>
+            <button
+              aria-label="Refresh account status"
+              className="auth-menu-refresh"
+              disabled={sessionQuery.isFetching || signOutMutation.isPending}
+              onClick={() => void sessionQuery.refetch()}
+              type="button"
+            >
+              <RefreshCw aria-hidden="true" size={14} />
+            </button>
           </header>
+          {sessionQuery.isFetching ? (
+            <p className="service-query-state progress" role="status">
+              {session ? "Refreshing account status…" : "Checking sign-in status…"}
+            </p>
+          ) : null}
           <p className="auth-menu-detail" data-tone={view.tone}>
             {view.detail}
           </p>
+          {sessionError ? (
+            <div className="service-query-state error" role="alert">
+              <span>{sessionError}</span>
+              <button
+                aria-label="Retry account status"
+                disabled={sessionQuery.isFetching}
+                onClick={() => void sessionQuery.refetch()}
+                type="button"
+              >
+                <RefreshCw aria-hidden="true" size={14} />
+                Retry status
+              </button>
+            </div>
+          ) : null}
+          {signOutError ? (
+            <div className="service-query-state error" role="alert">
+              <span>{signOutError}</span>
+              <button
+                aria-label="Retry sign out"
+                disabled={signOutMutation.isPending}
+                onClick={handleSignOut}
+                type="button"
+              >
+                <LogOut aria-hidden="true" size={14} />
+                Retry sign out
+              </button>
+            </div>
+          ) : null}
           {view.action === "sign-in" ? (
             <button className="auth-menu-action" onClick={handleSignIn} type="button">
               <LogIn size={14} />
@@ -122,10 +160,17 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
             </button>
           ) : null}
           {view.action === "sign-out" ? (
-            <button className="auth-menu-action" disabled={busy} onClick={handleSignOut} type="button">
-              <LogOut size={14} />
-              {busy ? "Signing out…" : "Sign out"}
-            </button>
+            signOutError ? null : (
+              <button
+                className="auth-menu-action"
+                disabled={signOutMutation.isPending}
+                onClick={handleSignOut}
+                type="button"
+              >
+                <LogOut aria-hidden="true" size={14} />
+                {signOutMutation.isPending ? "Signing out…" : "Sign out"}
+              </button>
+            )
           ) : null}
         </div>
       ) : null}

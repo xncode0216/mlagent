@@ -35,6 +35,16 @@ describe("describeLlmStatus", () => {
     expect(view.detail).toContain("Failed to fetch");
   });
 
+  it("keeps the last provider label when a refresh fails", () => {
+    const view = describeLlmStatus({
+      status: status({ configured: true, provider_label: "Local vLLM", model: "qwen2.5" }),
+      error: "Failed to refresh",
+    });
+    expect(view.tone).toBe("error");
+    expect(view.label).toBe("Local vLLM");
+    expect(view.detail).toContain("Local vLLM · qwen2.5");
+  });
+
   it("shows a live tone with provider and model when configured", () => {
     const view = describeLlmStatus({
       status: status({ configured: true, provider: "vllm", provider_label: "Local vLLM", model: "qwen2.5" }),

@@ -3,6 +3,7 @@ import { ChevronDown, Cpu, RefreshCw } from "lucide-react";
 
 import { getLlmStatus, type LlmStatus } from "../../lib/api";
 import { buildProviderRows, describeLlmStatus } from "./llmStatus";
+import { useLlmStatusQuery } from "./useLlmStatusQuery";
 
 type Props = {
   /** Injectable for tests; defaults to the real API call. */
@@ -16,32 +17,9 @@ type Props = {
  * surface, not a runtime switch — the backend is configured via environment.
  */
 export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
-  const [status, setStatus] = useState<LlmStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  function refresh() {
-    let active = true;
-    setLoading(true);
-    setError(null);
-    loadStatus()
-      .then((next) => {
-        if (active) setStatus(next);
-      })
-      .catch((err: unknown) => {
-        if (active) setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }
-
-  useEffect(() => refresh(), []);
+  const statusQuery = useLlmStatusQuery(loadStatus);
 
   useEffect(() => {
     if (!open) return;
@@ -59,19 +37,26 @@ export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
     };
   }, [open]);
 
-  const view = describeLlmStatus({ status, loading, error });
+  const status = statusQuery.data ?? null;
+  const error = statusQuery.error instanceof Error
+    ? statusQuery.error.message
+    : statusQuery.error
+      ? String(statusQuery.error)
+      : null;
+  const view = describeLlmStatus({ status, loading: statusQuery.isPending, error });
   const rows = buildProviderRows(status);
+  const triggerDetail = error && status ? `${view.detail}. Refresh failed: ${error}` : view.detail;
 
   return (
     <div className="model-status" ref={containerRef}>
       <button
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label={`Model service: ${view.detail}`}
+        aria-label={`Model service: ${triggerDetail}`}
         className="model-status-trigger"
         data-tone={view.tone}
         onClick={() => setOpen((value) => !value)}
-        title={view.detail}
+        title={triggerDetail}
         type="button"
       >
         <Cpu size={14} />
@@ -80,22 +65,46 @@ export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
         <ChevronDown size={14} />
       </button>
       {open ? (
-        <div aria-label="Model service status" className="model-status-popover" role="dialog">
+        <div
+          aria-busy={statusQuery.isFetching}
+          aria-label="Model service status"
+          className="model-status-popover"
+          role="dialog"
+        >
           <header className="model-status-popover-head">
             <span>Model service</span>
             <button
               aria-label="Refresh model status"
               className="model-status-refresh"
-              disabled={loading}
-              onClick={refresh}
+              disabled={statusQuery.isFetching}
+              onClick={() => void statusQuery.refetch()}
               type="button"
             >
-              <RefreshCw size={13} />
+              <RefreshCw aria-hidden="true" size={14} />
             </button>
           </header>
+          {statusQuery.isFetching ? (
+            <p className="service-query-state progress" role="status">
+              {status ? "Refreshing model status…" : "Checking model service…"}
+            </p>
+          ) : null}
           <p className="model-status-detail" data-tone={view.tone}>
             {view.detail}
           </p>
+          {error ? (
+            <div className="service-query-state error" role="alert">
+              <span>{error}</span>
+              <button
+                aria-label="Retry model status"
+                disabled={statusQuery.isFetching}
+                onClick={() => void statusQuery.refetch()}
+                type="button"
+              >
+                <RefreshCw aria-hidden="true" size={14} />
+                Retry status
+              </button>
+            </div>
+          ) : null}
           {rows.length > 0 ? (
             <ul className="model-status-providers">
               {rows.map((row) => (
