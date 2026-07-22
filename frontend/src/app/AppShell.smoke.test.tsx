@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 
 import { renderWithProviders } from "../test/renderWithProviders";
 import { installWebSocketStub } from "../test/websocketStub";
@@ -21,7 +21,28 @@ vi.mock("../lib/api", async (importOriginal) => {
     // Return null (not undefined): react-query v5 rejects undefined query data,
     // and every consumer already coalesces with `?? []` / null-checks. Undefined
     // here made the run intermittently emit unhandled query errors.
-    mocked[key] = typeof value === "function" ? vi.fn(async () => null) : value;
+    let result: unknown = null;
+    if (key.startsWith("list")) result = [];
+    if (key === "createProject") {
+      result = {
+        id: "auto-demo-project",
+        owner_id: "dev-user",
+        name: "sales_churn_analysis",
+        workspace_path: "E:/workspaces/auto-demo-project",
+      };
+    }
+    if (key === "createAgentSession") {
+      result = {
+        id: "auto-session",
+        project_id: "auto-demo-project",
+        mode: "analysis",
+        title: "Auto session",
+        created_at: "2026-07-21T00:00:00Z",
+        updated_at: "2026-07-21T00:00:00Z",
+        message_count: 0,
+      };
+    }
+    mocked[key] = typeof value === "function" ? vi.fn(async () => result) : value;
   }
   return mocked;
 });
@@ -29,6 +50,10 @@ vi.mock("../lib/api", async (importOriginal) => {
 beforeAll(() => {
   installWebSocketStub();
 });
+
+beforeEach(() => vi.clearAllMocks());
+
+afterEach(() => cleanup());
 
 describe("AppShell 冒烟", () => {
   it("后端数据未就绪时仍渲染出工作台骨架", async () => {
@@ -42,5 +67,16 @@ describe("AppShell 冒烟", () => {
     expect(within(nav).getByRole("button", { name: "Data Analysis" })).toBeTruthy();
     expect(within(nav).getByRole("button", { name: "Machine Learning" })).toBeTruthy();
     expect(within(nav).getByRole("button", { name: "Evolution Knowledge" })).toBeTruthy();
+  });
+
+  it("没有项目时保持空工作台而不自动创建或上传演示数据", async () => {
+    const api = await import("../lib/api");
+    const { AppShell } = await import("./AppShell");
+    renderWithProviders(<AppShell />);
+
+    await waitFor(() => expect(screen.getByText("还没有项目。使用上方的新建或打开操作开始。")).toBeTruthy());
+    expect(api.createProject).not.toHaveBeenCalled();
+    expect(api.uploadProjectFile).not.toHaveBeenCalled();
+    expect(screen.queryByText("customer_churn.csv")).toBeNull();
   });
 });

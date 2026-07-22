@@ -10,6 +10,7 @@ import {
   FolderOpen,
   FolderPlus,
   Pencil,
+  RefreshCw,
   Trash2,
   Upload,
   X,
@@ -19,15 +20,6 @@ import { useState } from "react";
 import { projectFileDownloadUrl, type AgentSession, type FileItem, type Project } from "../../lib/api";
 import { useUiStore } from "../../app/uiStore";
 import { buildVisibleTree, getDepth } from "./fileTree";
-
-const fallbackItems: FileItem[] = [
-  { name: "customer_churn.csv", path: "data/customer_churn.csv", type: "file" },
-  { name: "eda.py", path: "notebooks/eda.py", type: "file" },
-  { name: "profile.json", path: "results/profile.json", type: "file" },
-  { name: "models", path: "models", type: "directory" },
-  { name: "agent_schema", path: "agent_schema", type: "directory" },
-  { name: "evolution", path: "evolution", type: "directory" },
-];
 
 type FileExplorerProps = {
   currentProjectId?: string;
@@ -47,7 +39,83 @@ type FileExplorerProps = {
   projects: Project[];
   sessions: AgentSession[];
   activeSessionId?: string;
+  projectsBusy?: boolean;
+  projectsError?: string | null;
+  onRetryProjects?: () => void;
+  sessionsBusy?: boolean;
+  sessionsError?: string | null;
+  onRetrySessions?: () => void;
+  filesBusy?: boolean;
+  filesError?: string | null;
+  onRetryFiles?: () => void;
 };
+
+type SidebarCollectionFeedbackProps = {
+  busy: boolean;
+  emptyMessage: string;
+  error: string | null;
+  hasData: boolean;
+  loadingLabel: string;
+  onRetry?: () => void;
+  refreshingLabel: string;
+  retryLabel: string;
+};
+
+function SidebarCollectionFeedback({
+  busy,
+  emptyMessage,
+  error,
+  hasData,
+  loadingLabel,
+  onRetry,
+  refreshingLabel,
+  retryLabel,
+}: SidebarCollectionFeedbackProps) {
+  if (error) {
+    return (
+      <div className="sidebar-async-state error" role="alert">
+        <span>{error}</span>
+        {onRetry ? (
+          <button aria-label={retryLabel} onClick={onRetry} type="button">
+            <RefreshCw aria-hidden="true" size={12} />
+            <span>{retryLabel}</span>
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (busy && !hasData) {
+    return (
+      <div className="sidebar-async-state loading" role="status">
+        <span>{loadingLabel}</span>
+        <div aria-hidden="true" className="sidebar-skeleton">
+          <span className="sidebar-skeleton-row" />
+          <span className="sidebar-skeleton-row" />
+          <span className="sidebar-skeleton-row" />
+        </div>
+      </div>
+    );
+  }
+
+  if (busy) {
+    return (
+      <div className="sidebar-async-state refreshing" role="status">
+        {refreshingLabel}
+      </div>
+    );
+  }
+
+  if (!hasData) {
+    return (
+      <div className="sidebar-async-state empty" role="status">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return null;
+}
 
 function getFileIcon(item: FileItem) {
   if (item.type === "directory") return <Folder size={14} />;
@@ -74,6 +142,15 @@ export function FileExplorer({
   projects,
   sessions,
   activeSessionId,
+  projectsBusy = false,
+  projectsError = null,
+  onRetryProjects,
+  sessionsBusy = false,
+  sessionsError = null,
+  onRetrySessions,
+  filesBusy = false,
+  filesError = null,
+  onRetryFiles,
 }: FileExplorerProps) {
   // 工作区状态串 / 当前文件已迁入 uiStore，直接订阅（替代原先经 AppShell 钻取的 props）。
   const activePath = useUiStore((state) => state.activeFile);
@@ -89,7 +166,7 @@ export function FileExplorer({
   const [newEntryType, setNewEntryType] = useState<"file" | "directory">("file");
   const [renamingPath, setRenamingPath] = useState("");
   const [renameTargetPath, setRenameTargetPath] = useState("");
-  const visibleFiles = buildVisibleTree(files.length > 0 ? files : fallbackItems, expandedFolders);
+  const visibleFiles = buildVisibleTree(files, expandedFolders);
 
   async function submitProject() {
     const name = newProjectName.trim();
@@ -139,7 +216,7 @@ export function FileExplorer({
 
   return (
     <div className="file-explorer">
-      <section className="workspace-panel" aria-label="项目管理">
+      <section aria-busy={projectsBusy} className="workspace-panel" aria-label="项目管理">
         <div className="workspace-header">
           <div>
             <span className="sidebar-kicker">EXPLORER</span>
@@ -189,6 +266,17 @@ export function FileExplorer({
             </option>
           ))}
         </select>
+
+        <SidebarCollectionFeedback
+          busy={projectsBusy}
+          emptyMessage="还没有项目。使用上方的新建或打开操作开始。"
+          error={projectsError}
+          hasData={projects.length > 0}
+          loadingLabel="正在加载项目列表…"
+          onRetry={onRetryProjects}
+          refreshingLabel="正在刷新项目列表…"
+          retryLabel="重试项目列表"
+        />
 
         {isCreatingProject ? (
           <div className="new-project-row">
@@ -278,14 +366,22 @@ export function FileExplorer({
         </div>
       </section>
 
-      <section className="session-section" aria-label="会话记录">
+      <section aria-busy={sessionsBusy} className="session-section" aria-label="会话记录">
         <div className="section-header">
           <span className="panel-title">会话记录</span>
           <span className="sidebar-kicker">{sessions.length}</span>
         </div>
-        {sessions.length === 0 ? (
-          <div className="sidebar-status">当前项目还没有会话记录。</div>
-        ) : (
+        <SidebarCollectionFeedback
+          busy={sessionsBusy}
+          emptyMessage={currentProjectId ? "当前项目还没有会话记录。" : "选择项目后查看会话记录。"}
+          error={sessionsError}
+          hasData={sessions.length > 0}
+          loadingLabel="正在加载会话记录…"
+          onRetry={onRetrySessions}
+          refreshingLabel="正在刷新会话记录…"
+          retryLabel="重试会话记录"
+        />
+        {sessions.length > 0 ? (
           <ul className="session-list">
             {sessions.slice(0, 6).map((session) => (
               <li key={session.id} className={session.id === activeSessionId ? "selected" : ""}>
@@ -296,16 +392,17 @@ export function FileExplorer({
               </li>
             ))}
           </ul>
-        )}
+        ) : null}
       </section>
 
-      <section className="file-section" aria-label="项目文件">
+      <section aria-busy={filesBusy} className="file-section" aria-label="项目文件">
         <div className="section-header">
           <span className="panel-title">项目文件</span>
           <div className="workspace-actions">
             <button
               aria-label="新建文件"
               className="icon-button"
+              disabled={!currentProjectId}
               onClick={() => {
                 setNewEntryType("file");
                 setIsCreatingEntry(true);
@@ -318,6 +415,7 @@ export function FileExplorer({
             <button
               aria-label="新建文件夹"
               className="icon-button"
+              disabled={!currentProjectId}
               onClick={() => {
                 setNewEntryType("directory");
                 setIsCreatingEntry(true);
@@ -327,10 +425,17 @@ export function FileExplorer({
             >
               <FolderPlus size={15} />
             </button>
-            <label className="icon-button upload-button" aria-label="上传 CSV" title="上传 CSV">
+            <label
+              aria-disabled={!currentProjectId}
+              aria-label="上传 CSV"
+              className="icon-button upload-button"
+              title="上传 CSV"
+            >
               <Upload size={15} />
               <input
                 accept=".csv,text/csv"
+                aria-disabled={!currentProjectId}
+                disabled={!currentProjectId}
                 type="file"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -341,7 +446,7 @@ export function FileExplorer({
             </label>
           </div>
         </div>
-        <div className="sidebar-status">{workspaceStatus}</div>
+        {currentProjectId ? <div className="sidebar-status">{workspaceStatus}</div> : null}
         {isCreatingEntry ? (
           <div className="new-entry-row">
             <input
@@ -382,7 +487,23 @@ export function FileExplorer({
             </button>
           </div>
         ) : null}
-        <ul className="file-list">
+        {currentProjectId ? (
+          <SidebarCollectionFeedback
+            busy={filesBusy}
+            emptyMessage="当前项目还没有文件。使用上方的新建或上传操作添加第一个文件。"
+            error={filesError}
+            hasData={files.length > 0}
+            loadingLabel="正在加载项目文件…"
+            onRetry={onRetryFiles}
+            refreshingLabel="正在刷新项目文件…"
+            retryLabel="重试项目文件"
+          />
+        ) : (
+          <div className="sidebar-async-state empty" role="status">
+            创建或选择项目后管理文件。
+          </div>
+        )}
+        {visibleFiles.length > 0 ? <ul className="file-list">
           {visibleFiles.map((item) => (
             <li key={item.path} className={item.path === activePath ? "selected" : ""}>
               {renamingPath === item.path ? (
@@ -481,7 +602,7 @@ export function FileExplorer({
               )}
             </li>
           ))}
-        </ul>
+        </ul> : null}
       </section>
     </div>
   );

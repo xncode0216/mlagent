@@ -44,6 +44,7 @@ import { useFileActions } from "../features/files/useFileActions";
 import { useProjectFileMutations } from "../features/files/useProjectFileMutations";
 import {
   filesQueryKey,
+  listExpandedProjectFiles,
   useProjectFilesQuery,
 } from "../features/files/useProjectFilesQuery";
 import { AuthMenu } from "../features/auth/AuthMenu";
@@ -63,11 +64,9 @@ import { useTrainingActions } from "../features/right-panel/useTrainingActions";
 import {
   createAgentSession,
   createProject,
-  listFiles,
   listProjectSessions,
   listProjects,
   openLocalProject,
-  uploadProjectFile,
   type AgentSession,
   type FileItem,
   type Project,
@@ -84,10 +83,6 @@ const activityIcons: Record<ActivityMode, ReactNode> = {
   account: <UserCircle size={18} />,
   settings: <Settings size={18} />,
 };
-
-const sampleCsv = new Blob(["age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n"], {
-  type: "text/csv",
-});
 
 function parentPath(path: string) {
   return path.split("/").slice(0, -1).join("/");
@@ -306,19 +301,8 @@ export function AppShell() {
     let cancelled = false;
 
     async function loadProject(current: Project) {
-      let rootFiles = await listFiles(current.id);
-      let dataFiles: FileItem[] = [];
-      if (rootFiles.some((item) => item.path === "data" && item.type === "directory")) {
-        dataFiles = await listFiles(current.id, "data");
-      }
-      if (!dataFiles.some((item) => item.path === "data/customer_churn.csv")) {
-        await uploadProjectFile(current.id, "data/customer_churn.csv", sampleCsv);
-        rootFiles = await listFiles(current.id);
-        dataFiles = await listFiles(current.id, "data");
-      }
-
       if (!cancelled) {
-        await activateProject(current, [...rootFiles, ...dataFiles], ["data"]);
+        await activateProject(current);
         setWorkspaceStatus("Project files synced");
       }
     }
@@ -327,21 +311,29 @@ export function AppShell() {
       try {
         // 首读走 fetchQuery：与 useProjectsQuery 同键去重，只发一次请求，且建项后用
         // setQueryData 写回的列表不会被 hook 的并发空列表覆盖。
-        let initialProjects = await queryClient.fetchQuery({
+        const initialProjects = await queryClient.fetchQuery({
           queryKey: projectsQueryKey(),
           queryFn: () => listProjects(),
         });
-        let current = initialProjects[0];
-        if (!current) {
-          current = await createProject("sales_churn_analysis");
-          initialProjects = [current];
-        }
 
         if (!cancelled) {
           queryClient.setQueryData(projectsQueryKey(), initialProjects);
         }
-        const deepLinkedProject = deepLink.projectId ? initialProjects.find((item) => item.id === deepLink.projectId) : undefined;
-        await loadProject(deepLinkedProject ?? current);
+        const current = deepLink.projectId
+          ? initialProjects.find((item) => item.id === deepLink.projectId) ?? initialProjects[0]
+          : initialProjects[0];
+        if (!current) {
+          if (!cancelled) {
+            setProject(null);
+            setActiveSession(null);
+            setActiveFile("");
+            setTrainingDatasetPath("");
+            setExpandedFolders([]);
+            setWorkspaceStatus("No project selected. Create or open a project to begin.");
+          }
+          return;
+        }
+        await loadProject(current);
       } catch {
         if (!cancelled) {
           setWorkspaceStatus("Backend is unavailable; showing static workbench shell");
@@ -458,16 +450,19 @@ export function AppShell() {
   }
 
   async function activateProject(nextProject: Project, projectFiles?: FileItem[], folders?: string[]) {
-    const nextFiles = projectFiles ?? (await listFiles(nextProject.id));
-    setProject(nextProject);
     const deepLinkFolders = deepLink.file ? parentFolders(deepLink.file) : [];
     const nextExpandedFolders = Array.from(new Set([...(folders ?? []), ...deepLinkFolders]));
+    const nextFiles = projectFiles ?? (await listExpandedProjectFiles(nextProject.id, nextExpandedFolders));
+    setProject(nextProject);
     // 用 setQueryData 以 nextExpandedFolders 对应的键预置缓存，避免激活后闪空树/触发一次重取。
     queryClient.setQueryData(filesQueryKey(nextProject.id, nextExpandedFolders), nextFiles);
     setExpandedFolders(nextExpandedFolders);
     const nextActiveFile = deepLink.file ?? nextFiles.find((item) => item.type === "file")?.path ?? "";
     setActiveFile(nextActiveFile);
-    setTrainingDatasetPath(isLikelyDatasetPath(nextActiveFile) ? nextActiveFile : "data/customer_churn.csv");
+    const nextDatasetPath = isLikelyDatasetPath(nextActiveFile)
+      ? nextActiveFile
+      : nextFiles.find((item) => item.type === "file" && isLikelyDatasetPath(item.path))?.path ?? "";
+    setTrainingDatasetPath(nextDatasetPath);
     setActiveSession(null);
     setTrainingResult(null);
     setTrainingError(null);
@@ -576,6 +571,15 @@ export function AppShell() {
           <FileExplorer
             currentProjectId={project?.id}
             files={files}
+            filesBusy={filesQuery.isFetching}
+            filesError={
+              filesQuery.error instanceof Error
+                ? filesQuery.error.message
+                : filesQuery.error
+                  ? "项目文件加载失败"
+                  : null
+            }
+            onRetryFiles={() => void filesQuery.refetch()}
             onCreateProject={handleCreateProject}
             onCreateFile={handleCreateFile}
             onDeleteFile={handleDeleteFile}
@@ -586,10 +590,28 @@ export function AppShell() {
             onToggleFolder={(path) => void handleToggleFolder(path)}
             onUpload={handleUpload}
             projects={projects}
+            projectsBusy={projectsQuery.isFetching}
+            projectsError={
+              projectsQuery.error instanceof Error
+                ? projectsQuery.error.message
+                : projectsQuery.error
+                  ? "项目列表加载失败"
+                  : null
+            }
+            onRetryProjects={() => void projectsQuery.refetch()}
             projectName={project?.name}
             projectPath={project?.workspace_path}
             sessions={sessions}
+            sessionsBusy={sessionsQuery.isFetching}
+            sessionsError={
+              sessionsQuery.error instanceof Error
+                ? sessionsQuery.error.message
+                : sessionsQuery.error
+                  ? "会话记录加载失败"
+                  : null
+            }
             activeSessionId={activeSession?.id}
+            onRetrySessions={() => void sessionsQuery.refetch()}
             onSelectSession={(sessionId) => void handleSelectSession(sessionId)}
           />
         ) : activeActivity === "search" ? (

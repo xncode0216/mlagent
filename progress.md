@@ -1001,3 +1001,13 @@
 - **reduced-motion 运行时证据**：在 `responsive.css` 增加全局 `prefers-reduced-motion: reduce`，把动画/过渡压到 0.01ms 且循环限制为 1。临时 Playwright QA 首次因项目级 Desktop Chrome 配置覆盖 `test.use` 而正确暴露 preference=false；改为页面级 `emulateMedia` 后，浏览器返回 preference=true、150/200/300ms token、animation/transition=1e-05s、iteration=1。临时 QA 文件随后删除。
 - **门禁与视觉复核**：frontend Vitest `21 files / 125 tests`、ESLint、TypeScript + Vite build 全绿；主 JS 458.77KB 无回退，正式 Playwright 设计系统/Evolution + 真实 API golden path 2/2；1440×900 图谱截图确认静态虚线、选中节点、边与详情布局正常。当前共 99 个定义 token、94 个引用、0 未定义。
 - **动态完成回顾**：加载态盘点发现 `FileExplorer.tsx` 仍用硬编码 `fallbackItems` 在“pending 或真实空目录”时展示 `customer_churn.csv`/`eda.py` 等假条目，直接削弱 P1-7 完成证据。P1-7 因此暂时重开；下一片不单做装饰 skeleton，而是先移除假 fallback，并把 React Query loading/empty/error 与 `aria-busy` 端到端传入文件工作流，再扩展其他高延迟面板。
+
+## 2026-07-22 P1-7 修正 + P2-2 动效与加载态（切片 2：真实 File Explorer 状态）
+
+- **完成边界重审**：沿 P2-2 加载态盘点继续追踪数据来源，确认真实性缺口不只在 `FileExplorer.fallbackItems`：`AppShell` 还会在空账户启动时自动创建 `sales_churn_analysis` 并上传 `data/customer_churn.csv`，`uiStore` 与项目激活流程也把该路径作为默认选择。因而将验收范围扩大为“生产代码无 demo bootstrap/default/fallback”，而不是只删一个数组。
+- **TDD 红→绿**：新增 `tests/no-demo-data.test.mjs`，递归扫描生产 TS/TSX 并禁止 `sampleCsv`、`fallbackItems`、退役 demo 路径与自动建项；新增 `FileExplorer.test.tsx` 5 项，覆盖无项目、首次加载骨架、已加载空目录、带旧数据的刷新失败 + 重试、项目/会话独立刷新；AppShell 冒烟新增“空账户不自动创建或上传”回归。先稳定观察 `7 failed / 1 passed` 的预期红灯，实现后聚焦 `8/8`、全量 `23 files / 132 tests`。
+- **真实启动语义**：删除自动演示项目和 CSV 写入，空账户保持未选项目；`activeFile`/`trainingDatasetPath` 初始值为空，项目激活只从真实文件中选择活动文件和数据集；展开目录预取复用 `listExpandedProjectFiles`，不再依赖特殊 `data/` 目录。
+- **可访问异步状态**：项目、会话、文件区域分别接入 React Query `isFetching`、error、`refetch`，用 `aria-busy` 区分忙态；首次加载显示稳定三行骨架，保有数据时显示“正在刷新”，错误就地展示并提供重试，旧文件/会话列表不因刷新失败消失；无项目时文件新建、建目录、上传操作明确禁用。
+- **视觉与动效约束**：新增平面 Catppuccin 骨架，颜色/间距/圆角/动画全部来自 token；仅循环 opacity 状态动画，无渐变、位移动效或布局抖动，并继承全局 `prefers-reduced-motion` 回退。空工作区截图人工复核确认三段引导、禁用态和 `Project: None / Session: None` 状态一致。
+- **门禁**：生产 demo-data 直接扫描为 0 命中；frontend `npm.cmd test` 23 文件 / 132 tests、`npm.cmd run lint`、`npm.cmd run build` 全绿（index 460.66KB、CSS gzip 10.91KB）；Playwright 设计系统 + 真实 API 数据画像→训练 golden path `2 passed`。一次 Chrome 启动在页面执行前自行退出，随后完整重跑通过，判定为瞬时浏览器进程问题而非产品回归。
+- **动态计划调整**：P1-7 在补齐跨启动/Store/File Explorer 的原验收范围后重新标记完成。P2-2 保持进行中，下一切片优先把同一 async-state 契约扩展到 Artifact Preview、Evolution 图谱和其他高延迟查询面板，再处理阶段/产物完成反馈；不继续给 File Explorer 添加装饰。
