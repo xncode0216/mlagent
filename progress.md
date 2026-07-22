@@ -1069,3 +1069,12 @@
 - **门禁**：Vitest `28 files / 160 tests`（设计令牌契约 15/15 未破——132px 属 `grid-auto-columns` 而非 gap/padding/margin/radius/z-index，不触发裸值检查）、ESLint、TypeScript + Vite build 全绿（主包 469.59KB、CSS gzip 12.06KB）；Playwright 三条 E2E（design-system / golden-path / responsive）`3 passed`。
 - **浏览器复核**：1440×900 与 1200×900 阶段条单行、卡片可读、标签不换行、页面无横向溢出（docScroll==innerWidth）；390×800 移动端阶段条仍单行可横向滚动、signal/component 网格正确降为单列，唯余 17px 页面溢出来自 top-bar（MLAgent 品牌 + 模型/账户入口在 390px 挤不下），与阶段条无关。
 - **动态计划调整**：P2-3 保持进行中，仅完成 workflow 阶段布局子切片。下一子切片处理 top-bar 在窄/移动视口的横向溢出与文件路径逐字换行（P2-3 evidence 明列的两项），再收口显式移动降级；不把 P2-4 信息设计混入。
+
+## 2026-07-22 P2-3 响应式重构（切片 2：顶栏移动溢出）
+
+- **真实链路审计（探针定位）**：用临时 Playwright 探针在 640/480/390 逐一测顶栏子元素右边界，确认 390px 下 22px 页面横向溢出的唯一来源是 `.auth-menu`（右边界 412 > 390）；status-bar 右边界=390 正常。顶栏是 `brand`(flex 0 0 auto) + `mode-tabs`(flex 1 1 auto，自身横向滚动) + `ModelStatusIndicator` + `AuthMenu` 的 flex 行，`gap: space-5`(20px)；两个服务入口 `flex 0 0 auto` 不收缩（图标 + 状态点 + 文字标签 + chevron），加上 3×20px gap 使固定 chrome 在约 448px 以下超出视口；480/640 各有约 12px 余量，故溢出仅在窄于约 448px 时出现。
+- **TDD 红→绿**：在 `responsive.e2e.ts` 新增顶栏用例，在 768/480/400/360 断言页面无横向溢出（`documentElement.scrollWidth <= innerWidth`）且最右的 `.auth-menu` 右边界落在视口内。先观察红：390/360 溢出（Expected `<=391`，Received `412`）；实现后 4 宽度全绿。
+- **移动压缩实现**：在既有 `@media (max-width: 480px)` 内把 `.top-nav` gap 收敛为 `space-2`、隐藏 `.model-status-label`/`.auth-menu-label`、`.auth-menu` margin-left 归零。两个服务入口降为"图标 + 状态点 + chevron"的紧凑控件（`aria-label`/`title` 保留完整信息，可访问性不受影响），固定 chrome 从约 424px 降到约 231px，360/320 均留有可滚动的 mode-tabs 空间。改动只落在 `responsive.css`，不新增断点、不触碰组件。
+- **门禁**：Vitest `28 files / 160 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿（主包 469.59KB、CSS gzip 12.09KB）；Playwright 四条 E2E（design-system / golden-path / 阶段条 / 顶栏）`4 passed`。
+- **浏览器复核**：390/360 顶栏图标化后完整落在视口内、无横向溢出；服务入口压缩后 mode-tabs 重获空间显示活动标签（可滚动）。过程中一次 `_probe.tmp.mjs` 因 PowerShell 工作目录回退到项目根、`Remove-Item` 静默失败而残留，被 `eslint .` 扫出 `no-undef`；用绝对路径删除后 lint 恢复干净——后续自管命令统一显式 `Set-Location frontend`。
+- **动态计划调整**：P2-3 仍进行中，已完成阶段布局 + 顶栏溢出两个子切片。剩余：文件路径逐字换行（<900px 时 file-sidebar 隐藏，需在 900–1180px 窄侧栏区间核查）与显式移动降级/守卫收口；不把 P2-4 信息设计混入。

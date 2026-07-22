@@ -64,3 +64,29 @@ test("workflow 阶段条在桌面与窄中心列下单行可读且不逐字换�
   }));
   expect(scroll.scrollWidth).toBeGreaterThan(scroll.clientWidth);
 });
+
+test("顶栏在窄与移动视口下不产生页面横向溢出", async ({ page }) => {
+  // 覆盖压缩断点两侧（768/480）与小屏（400/360）：溢出此前从约 448px 以下出现，源自 auth-menu。
+  for (const width of [768, 480, 400, 360]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/?mode=analysis");
+    await expect(page.locator(".top-nav")).toBeVisible();
+
+    const info = await page.evaluate(() => ({
+      win: window.innerWidth,
+      doc: document.documentElement.scrollWidth,
+      authRight: Math.round(
+        document.querySelector(".auth-menu")?.getBoundingClientRect().right ?? 0,
+      ),
+    }));
+
+    // 页面不得出现横向滚动：顶栏内容必须落在视口内或由子容器自身滚动吸收。
+    expect(info.doc, `viewport ${width} should not overflow horizontally`).toBeLessThanOrEqual(
+      info.win + 1,
+    );
+    // 最右侧的账户入口必须完整落在视口内。
+    expect(info.authRight, `account entry should stay within viewport ${width}`).toBeLessThanOrEqual(
+      info.win,
+    );
+  }
+});

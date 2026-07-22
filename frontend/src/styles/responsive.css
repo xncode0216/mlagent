@@ -123,6 +123,19 @@
 }
 
 @media (max-width: 480px) {
+  .top-nav {
+    gap: var(--space-2);
+  }
+
+  .auth-menu {
+    margin-left: 0;
+  }
+
+  .model-status-label,
+  .auth-menu-label {
+    display: none;
+  }
+
   .evolution-stats {
     grid-template-columns: 1fr;
   }
