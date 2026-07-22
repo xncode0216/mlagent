@@ -1060,3 +1060,12 @@
 - **P2-2 关闭审计**：原始范围“统一 transition、骨架、乐观更新、阶段/产物微动画”均已处理。普通 transition 无 `all` 且只动画 opacity/transform；项目/会话/文件/产物/图谱/活动文件/model/auth 均有真实首次加载、刷新、错误、恢复与 `aria-busy`；文件保存等成功响应即时写缓存，刷新失败保留旧数据。对文件、训练等服务端规范写入不做会预先宣告成功的乐观更新，保留真实 pending/error，仅在服务端成功后提交缓存，这是本项目的数据完整性边界。
 - **浏览器与视觉复核**：真实 API golden path 从数据集点击 `Generate Profile`，验证可访问完成状态、动态产物路径和打开动作，再继续预处理与训练；设计系统与 golden path `2 passed`。1440×900 截图确认反馈不遮挡工作台、产物操作和右侧画像可用，也再次确认 workflow 阶段逐字换行仍是 P2-3 的真实问题。
 - **门禁与动态计划**：Vitest `28 files / 160 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build、Playwright `2 passed` 全绿，P2-2 关闭。下一项严格按计划进入 P2-3，先修 workflow 阶段布局，再验证 1440×900、900px 与移动窄屏降级；不把 P2-4 信息设计混入响应式切片。
+
+## 2026-07-22 P2-3 响应式重构（切片 1：workflow 阶段条布局）
+
+- **真实链路审计**：`.workflow-stage-strip` 用 `grid-template-columns: repeat(9, minmax(72px, 1fr))`，但 `workflowState.ts` 的 `STAGES` 实际有 10 个阶段（含 `iterate`），第 10 个 `Learn` 掉到隐式第二行；四栏布局下中心列在 1440×900 仅约 686px（agent-workspace + cockpit padding 后可用约 638px），9 列网格最小需 712px，于是每卡被压到 72px 并触发横向滚动；`.workflow-stage small` 的 `overflow-wrap: anywhere` 使 detail 在约 28px 文本区逐字换行。这正是历次截图反复记录的"workflow 阶段逐字换行"根因。
+- **TDD 红→绿**：新增 `e2e/responsive.e2e.ts`，在 1440×900 与 1200×900（最窄中心列约 446px）断言阶段条 10 卡同一行（`offsetTop` 唯一）、每卡宽 ≥120px 可读、标签单行（高度 ≤24px）、溢出被阶段条自身横向滚动吸收而不撑破外层 cockpit。先观察红：1440×900 下阶段跨 2 行（`offsetTop` 集合大小=2，期望 1）；实现后该用例通过。
+- **优雅降级实现**：`.workflow-stage-strip` 从固定 9 列改为 `grid-auto-flow: column` + `grid-auto-columns: minmax(132px, 1fr)` 的单行步进器——阶段数不再硬编码，任意数量都单行排布、窄列横向滚动、宽列按 1fr 填充。`.workflow-stage strong` 单列出 `white-space: nowrap` + 溢出省略号（内层 `> div` 补 `min-width: 0` 使省略号生效）。`.workflow-stage small` 从 `overflow-wrap: anywhere` 改为 2 行 `line-clamp` + 词边界换行（`overflow-wrap/word-break: normal`）；signal-grid 的 `small` 拆出并保留原 break-anywhere 语义（承载可任意断行的路径值）。改动全部在 `agent.css`，不引入 `@media`（响应式查询仍只归 `responsive.css`）。
+- **门禁**：Vitest `28 files / 160 tests`（设计令牌契约 15/15 未破——132px 属 `grid-auto-columns` 而非 gap/padding/margin/radius/z-index，不触发裸值检查）、ESLint、TypeScript + Vite build 全绿（主包 469.59KB、CSS gzip 12.06KB）；Playwright 三条 E2E（design-system / golden-path / responsive）`3 passed`。
+- **浏览器复核**：1440×900 与 1200×900 阶段条单行、卡片可读、标签不换行、页面无横向溢出（docScroll==innerWidth）；390×800 移动端阶段条仍单行可横向滚动、signal/component 网格正确降为单列，唯余 17px 页面溢出来自 top-bar（MLAgent 品牌 + 模型/账户入口在 390px 挤不下），与阶段条无关。
+- **动态计划调整**：P2-3 保持进行中，仅完成 workflow 阶段布局子切片。下一子切片处理 top-bar 在窄/移动视口的横向溢出与文件路径逐字换行（P2-3 evidence 明列的两项），再收口显式移动降级；不把 P2-4 信息设计混入。
