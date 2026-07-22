@@ -96,7 +96,7 @@ function stringValue(value: unknown) {
 }
 
 function runCandidateLabel(candidate: Record<string, unknown>) {
-  return stringValue(candidate.experiment_id) ?? "Unknown run";
+  return stringValue(candidate.experiment_id) ?? "未知实验";
 }
 
 function runCandidateFacts(candidate: Record<string, unknown>) {
@@ -104,11 +104,11 @@ function runCandidateFacts(candidate: Record<string, unknown>) {
   const datasetPath = stringValue(candidate.dataset_path) ?? "-";
   const targetColumn = stringValue(candidate.target_column) ?? "-";
   const bestModelName = stringValue(candidate.best_model_name) ?? "-";
-  return `${experimentId} | ${datasetPath} | target ${targetColumn} | ${bestModelName}`;
+  return `${experimentId} | ${datasetPath} | 目标列 ${targetColumn} | ${bestModelName}`;
 }
 
 function datasetCandidateLabel(candidate: Record<string, unknown>) {
-  return stringValue(candidate.dataset_path) ?? "Unknown dataset";
+  return stringValue(candidate.dataset_path) ?? "未知数据集";
 }
 
 function datasetCandidateTarget(candidate: Record<string, unknown>) {
@@ -122,7 +122,7 @@ function datasetCandidateFacts(candidate: Record<string, unknown>) {
   const rowCount = stringValue(candidate.row_count) ?? "-";
   const columnCount = stringValue(candidate.column_count) ?? "-";
   const targetCandidates = stringValue(candidate.target_candidates) ?? "-";
-  return `${datasetPath} | ${datasetVersionId} | ${rowCount} rows x ${columnCount} columns | targets ${targetCandidates}`;
+  return `${datasetPath} | ${datasetVersionId} | ${rowCount} 行 × ${columnCount} 列 | 目标列候选 ${targetCandidates}`;
 }
 
 function latestMissingRunCommand(events: AgentStreamEvent[]) {
@@ -227,11 +227,11 @@ function collectSignals(events: AgentStreamEvent[]) {
 }
 
 function disabledWithoutProject(projectId?: string) {
-  return projectId ? undefined : "Open or create a project before running this action.";
+  return projectId ? undefined : "执行此操作前请先打开或创建项目。";
 }
 
 function disabledWithoutDataset(datasetPath?: string) {
-  return isDatasetPath(datasetPath) ? undefined : "Select a dataset file before running this action.";
+  return isDatasetPath(datasetPath) ? undefined : "执行此操作前请先选择数据集文件。";
 }
 
 function action(
@@ -411,22 +411,22 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "experiment-run-selection",
       kind: "experiment_run_selection",
       stage,
-      title: "Select experiment run",
+      title: "选择实验运行",
       description:
-        "The agent found multiple completed runs. Choose the run to continue before opening evaluation, diagnosis, or export cards.",
+        "智能体发现了多个已完成的运行。请先选择要继续的运行，再打开评估、诊断或导出卡片。",
       status: "blocked",
       facts: [
-        { label: "Missing", value: "experiment_id" },
-        { label: "Intent", value: intent },
-        { label: "Candidates", value: String(missingRunCandidates.length) },
+        { label: "缺少", value: "experiment_id" },
+        { label: "意图", value: intent },
+        { label: "候选数", value: String(missingRunCandidates.length) },
         ...missingRunCandidates.slice(0, 3).map((candidate, index) => ({
-          label: `Run ${index + 1}`,
+          label: `运行 ${index + 1}`,
           value: runCandidateFacts(candidate),
         })),
       ],
       actions: missingRunCandidates.slice(0, 5).map((candidate, index) =>
-        action("select_experiment_run", `Use ${runCandidateLabel(candidate)}`, {
-          disabledReason: projectDisabled ?? (stringValue(candidate.experiment_id) ? undefined : "This run is missing an id."),
+        action("select_experiment_run", `使用 ${runCandidateLabel(candidate)}`, {
+          disabledReason: projectDisabled ?? (stringValue(candidate.experiment_id) ? undefined : "此运行缺少 id。"),
           payload: {
             experimentId: stringValue(candidate.experiment_id),
             intent,
@@ -449,23 +449,23 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "dataset-selection",
       kind: "dataset_selection",
       stage,
-      title: "Select training dataset",
+      title: "选择训练数据集",
       description:
-        "The agent needs a concrete dataset before configuring training. Choose the source dataset to keep the run auditable.",
+        "智能体需要一个明确的数据集才能配置训练。请选择源数据集，以保证运行可审计。",
       status: "blocked",
       facts: [
-        { label: "Missing", value: "dataset_path" },
-        { label: "Intent", value: intent },
-        { label: "Candidates", value: String(missingDatasetCandidates.length) },
+        { label: "缺少", value: "dataset_path" },
+        { label: "意图", value: intent },
+        { label: "候选数", value: String(missingDatasetCandidates.length) },
         ...missingDatasetCandidates.slice(0, 3).map((candidate, index) => ({
-          label: `Dataset ${index + 1}`,
+          label: `数据集 ${index + 1}`,
           value: datasetCandidateFacts(candidate),
         })),
       ],
       actions: missingDatasetCandidates.slice(0, 5).map((candidate, index) =>
-        action("select_training_dataset", `Use ${datasetCandidateLabel(candidate)}`, {
+        action("select_training_dataset", `使用 ${datasetCandidateLabel(candidate)}`, {
           disabledReason:
-            projectDisabled ?? (stringValue(candidate.dataset_path) ? undefined : "This dataset is missing a path."),
+            projectDisabled ?? (stringValue(candidate.dataset_path) ? undefined : "此数据集缺少路径。"),
           payload: {
             datasetPath: stringValue(candidate.dataset_path),
             datasetVersionId: stringValue(candidate.dataset_version_id),
@@ -482,16 +482,16 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
   if (taskInspection) {
     const inspectionArtifactLabel =
       taskInspection.stage === "evaluate" && taskInspection.planPath
-        ? "Open Metrics"
+        ? "打开指标"
         : taskInspection.stage === "export" && taskInspection.planPath
-          ? "Open Report"
+          ? "打开报告"
         : taskInspection.planPath
-          ? "Open Plan"
-          : "Open Dataset";
+          ? "打开计划"
+          : "打开数据集";
     const inspectionArtifactDisabledReason =
       taskInspection.planPath || taskInspection.datasetPath
         ? undefined
-        : "No saved dataset, plan, or metrics path is available.";
+        : "没有可用的已保存数据集、计划或指标路径。";
 
     cards.push({
       id: "task-state-inspector",
@@ -505,7 +505,7 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       actions: [
         ...(taskInspection.stage === "evaluate"
           ? [
-              action("retry_evaluation_report", "Retry Evaluation", {
+              action("retry_evaluation_report", "重试评估", {
                 disabledReason: projectDisabled,
                 payload: { stage: "evaluate" },
                 tone: "primary" as const,
@@ -514,7 +514,7 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
           : []),
         ...(taskInspection.stage === "export"
           ? [
-              action("retry_export_bundle", "Retry Export", {
+              action("retry_export_bundle", "重试导出", {
                 disabledReason: projectDisabled,
                 payload: { stage: "export" },
                 tone: "primary" as const,
@@ -523,14 +523,14 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
           : []),
         ...(taskInspection.stage === "learn"
           ? [
-              action("retry_lesson_extraction", "Retry Learning", {
+              action("retry_lesson_extraction", "重试沉淀", {
                 disabledReason: projectDisabled,
                 payload: { stage: "learn" },
                 tone: "primary" as const,
               }),
             ]
           : []),
-        action("inspect_logs", "Inspect Logs", {
+        action("inspect_logs", "查看日志", {
           payload: { taskId: taskInspection.taskId },
           tone: ["evaluate", "export", "learn"].includes(taskInspection.stage) ? "secondary" : "primary",
         }),
@@ -539,8 +539,8 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
           payload: { path: taskInspection.planPath ?? taskInspection.datasetPath },
           tone: "secondary",
         }),
-        action("abandon_task_state", "Abandon State", {
-          disabledReason: taskInspection.taskId ? undefined : "No saved task state id is available.",
+        action("abandon_task_state", "放弃状态", {
+          disabledReason: taskInspection.taskId ? undefined : "没有可用的已保存任务状态 id。",
           payload: { taskId: taskInspection.taskId, stage: taskInspection.stage },
           tone: "secondary",
         }),
@@ -553,16 +553,16 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "evaluation-retry",
       kind: "evaluation_report",
       stage: "evaluate",
-      title: "Evaluation report failed",
+      title: "评估报告失败",
       description:
-        "The evaluation/report step failed after training. Retry from the saved evaluation state after repairing missing metrics or report dependencies.",
+        "训练后的评估/报告步骤失败。修复缺失的指标或报告依赖后，从已保存的评估状态重试。",
       status: "attention",
       facts: [
-        { label: "Stage", value: "Evaluate" },
-        { label: "Next", value: "Retry the saved evaluation/report step." },
+        { label: "阶段", value: "评估" },
+        { label: "下一步", value: "重试已保存的评估/报告步骤。" },
       ],
       actions: [
-        action("retry_evaluation_report", "Retry Evaluation", {
+        action("retry_evaluation_report", "重试评估", {
           disabledReason: projectDisabled,
           payload: { stage: "evaluate" },
           tone: "primary",
@@ -576,16 +576,16 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "export-retry",
       kind: "export_bundle",
       stage: "export",
-      title: "Export bundle failed",
+      title: "导出包失败",
       description:
-        "The model handoff bundle could not be written. Retry export after repairing missing artifacts or filesystem access.",
+        "模型交接包写入失败。修复缺失的产物或文件系统访问后重试导出。",
       status: "attention",
       facts: [
-        { label: "Stage", value: "Export" },
-        { label: "Next", value: "Retry the saved export bundle step." },
+        { label: "阶段", value: "导出" },
+        { label: "下一步", value: "重试已保存的导出包步骤。" },
       ],
       actions: [
-        action("retry_export_bundle", "Retry Export", {
+        action("retry_export_bundle", "重试导出", {
           disabledReason: projectDisabled,
           payload: { stage: "export" },
           tone: "primary",
@@ -599,16 +599,16 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "learn-retry",
       kind: "lesson_review",
       stage: "learn",
-      title: "Learning extraction failed",
+      title: "经验沉淀失败",
       description:
-        "The lesson extraction step could not read or convert the saved evidence. Retry learning after restoring the session evidence.",
+        "经验提取步骤无法读取或转换已保存的证据。恢复会话证据后重试沉淀。",
       status: "attention",
       facts: [
-        { label: "Stage", value: "Learn" },
-        { label: "Next", value: "Retry lesson extraction from the saved session context." },
+        { label: "阶段", value: "沉淀" },
+        { label: "下一步", value: "从已保存的会话上下文重试经验提取。" },
       ],
       actions: [
-        action("retry_lesson_extraction", "Retry Learning", {
+        action("retry_lesson_extraction", "重试沉淀", {
           disabledReason: projectDisabled,
           payload: { stage: "learn" },
           tone: "primary",
@@ -622,34 +622,34 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "dataset-summary",
       kind: "dataset_summary",
       stage: "ingest",
-      title: datasetRegistryPath ? "Dataset registered" : "Dataset ingest",
+      title: datasetRegistryPath ? "数据集已登记" : "数据集接入",
       description:
-        "Review the active dataset source, version, and schema snapshot before profiling, cleaning, transforming, or training.",
+        "在画像、清洗、变换或训练之前，先查看当前数据集的来源、版本与结构快照。",
       artifactPath: datasetRegistryPath,
       status: datasetRegistryPath ? "ready" : "attention",
       facts: [
-        { label: "Dataset", value: registeredDatasetPath || input.activeFile || "-" },
-        { label: "Version", value: datasetVersionId ?? "Not registered" },
+        { label: "数据集", value: registeredDatasetPath || input.activeFile || "-" },
+        { label: "版本", value: datasetVersionId ?? "未登记" },
         {
-          label: "Shape",
+          label: "规模",
           value:
             datasetRowCount !== undefined && datasetColumnCount !== undefined
-              ? `${datasetRowCount} rows x ${datasetColumnCount} columns`
-              : "Unknown",
+              ? `${datasetRowCount} 行 × ${datasetColumnCount} 列`
+              : "未知",
         },
-        { label: "Sample", value: datasetSampleStrategy ?? "Unknown" },
+        { label: "采样", value: datasetSampleStrategy ?? "未知" },
         {
-          label: "Columns",
-          value: datasetColumns.length > 0 ? datasetColumns.map(String).join(", ") : "Not inspected",
+          label: "列",
+          value: datasetColumns.length > 0 ? datasetColumns.map(String).join(", ") : "未检查",
         },
       ],
       actions: [
-        action("open_artifact", "Open Registry", {
-          disabledReason: datasetRegistryPath ? undefined : "No dataset registry artifact is available.",
+        action("open_artifact", "打开登记表", {
+          disabledReason: datasetRegistryPath ? undefined : "没有可用的数据集登记产物。",
           payload: { path: datasetRegistryPath },
           tone: "secondary",
         }),
-        action("generate_profile", "Generate Profile", {
+        action("generate_profile", "生成画像", {
           disabledReason: projectDisabled ?? disabledWithoutDataset(registeredDatasetPath),
           tone: "primary",
         }),
@@ -667,22 +667,22 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "data-quality",
       kind: "data_quality",
       stage: "profile",
-      title: dataProfilePath ? "Data quality profile ready" : "Profile the active dataset",
+      title: dataProfilePath ? "数据质量画像已就绪" : "为当前数据集生成画像",
       description: dataProfilePath
-        ? "Review the column-level quality profile, then generate a preprocessing plan from the same dataset."
-        : "Create a data quality profile before deciding how to clean, transform, or train from this dataset.",
+        ? "查看列级质量画像，然后基于同一数据集生成预处理计划。"
+        : "在决定如何清洗、变换或训练之前，先为该数据集生成数据质量画像。",
       artifactPath: dataProfilePath,
       status: dataProfilePath ? "complete" : "ready",
       facts: [
-        { label: "Dataset", value: activeDatasetPath || input.activeFile || "-" },
-        { label: "Profile", value: dataProfilePath ?? "Not generated" },
+        { label: "数据集", value: activeDatasetPath || input.activeFile || "-" },
+        { label: "画像", value: dataProfilePath ?? "未生成" },
       ],
       actions: [
-        action("generate_profile", dataProfilePath ? "Refresh Profile" : "Generate Profile", {
+        action("generate_profile", dataProfilePath ? "刷新画像" : "生成画像", {
           disabledReason: projectDisabled ?? datasetDisabled,
           tone: dataProfilePath ? "secondary" : "primary",
         }),
-        action("generate_preprocessing_plan", planPath ? "Refresh Plan" : "Generate Plan", {
+        action("generate_preprocessing_plan", planPath ? "刷新计划" : "生成计划", {
           disabledReason: projectDisabled ?? datasetDisabled,
           tone: "secondary",
         }),
@@ -697,37 +697,37 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       kind: "preprocessing_plan",
       stage: "transform",
       title: retryableTransformFailure
-        ? "Transform execution failed"
+        ? "变换执行失败"
         : failedTransformNeedsRevision
-        ? "Preprocessing plan needs revision"
-        : input.workflow.approval?.title ?? "Review preprocessing plan",
+        ? "预处理计划需要修订"
+        : input.workflow.approval?.title ?? "审核预处理计划",
       description:
         retryableTransformFailure
-          ? "The preprocessing run failed after approval. Retry from the saved transform state, or refresh the plan if the failure came from the plan itself."
+          ? "批准后的预处理运行失败。从已保存的变换状态重试；若问题出在计划本身，请刷新计划。"
           : failedTransformNeedsRevision
-          ? "The approval checkpoint was declined or the transform failed. Refresh the plan before attempting execution again."
+          ? "审批检查点被拒绝或变换失败。请先刷新计划，再尝试执行。"
           : input.workflow.approval?.description ??
-            "Inspect the generated drops, imputers, encoders, and output path before executing the transform.",
+            "执行变换前，先检查生成的丢弃列、填充器、编码器与输出路径。",
       artifactPath: planPath,
       status: plannedDatasetPath ? "complete" : failedTransformNeedsRevision || retryableTransformFailure ? "attention" : "blocked",
       facts: [
-        { label: "Plan", value: planPath ?? "No plan selected" },
-        { label: "Output", value: plannedDatasetPath ?? "Waiting for execution" },
+        { label: "计划", value: planPath ?? "未选择计划" },
+        { label: "输出", value: plannedDatasetPath ?? "等待执行" },
       ],
       actions: [
-        action("open_artifact", "Open Plan", {
-          disabledReason: planPath ? undefined : "No preprocessing plan artifact is available.",
+        action("open_artifact", "打开计划", {
+          disabledReason: planPath ? undefined : "没有可用的预处理计划产物。",
           payload: { path: planPath },
           tone: "secondary",
         }),
         failedTransformNeedsRevision
-          ? action("generate_preprocessing_plan", "Refresh Plan", {
+          ? action("generate_preprocessing_plan", "刷新计划", {
               disabledReason: projectDisabled ?? datasetDisabled,
               tone: "primary",
             })
           : retryableTransformFailure
-          ? action("retry_transform", "Retry Transform", {
-              disabledReason: projectDisabled ?? (planPath ? undefined : "No preprocessing plan artifact is available."),
+          ? action("retry_transform", "重试变换", {
+              disabledReason: projectDisabled ?? (planPath ? undefined : "没有可用的预处理计划产物。"),
               payload: {
                 preprocessingPlanPath: planPath,
                 stage: input.workflow.currentStage.resumeStage ?? "transform",
@@ -736,17 +736,17 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
             })
           : action(
               isPendingApproval ? "approve_preprocessing_plan" : "execute_preprocessing_plan",
-              plannedDatasetPath ? "Re-run Plan" : "Approve & Execute",
+              plannedDatasetPath ? "重新执行计划" : "批准并执行",
               {
-                disabledReason: projectDisabled ?? (planPath ? undefined : "No preprocessing plan artifact is available."),
+                disabledReason: projectDisabled ?? (planPath ? undefined : "没有可用的预处理计划产物。"),
                 payload: { approvalId: input.workflow.approval?.id, preprocessingPlanPath: planPath },
                 tone: "primary",
               },
             ),
         ...(isPendingApproval
           ? [
-              action("revise_preprocessing_plan", "Revise Plan", {
-                disabledReason: projectDisabled ?? (planPath ? undefined : "No preprocessing plan artifact is available."),
+              action("revise_preprocessing_plan", "修订计划", {
+                disabledReason: projectDisabled ?? (planPath ? undefined : "没有可用的预处理计划产物。"),
                 payload: { approvalId: input.workflow.approval?.id, preprocessingPlanPath: planPath },
                 tone: "secondary" as const,
               }),
@@ -754,7 +754,7 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
           : []),
         ...(retryableTransformFailure
           ? [
-              action("generate_preprocessing_plan", "Refresh Plan", {
+              action("generate_preprocessing_plan", "刷新计划", {
                 disabledReason: projectDisabled ?? datasetDisabled,
                 tone: "secondary" as const,
               }),
@@ -769,21 +769,21 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "planned-dataset",
       kind: "planned_dataset",
       stage: "train",
-      title: "Planned dataset ready",
-      description: "The transformed dataset can now become the active training input for sklearn comparison runs.",
+      title: "变换后数据集已就绪",
+      description: "变换后的数据集现在可作为 sklearn 对比运行的训练输入。",
       artifactPath: plannedDatasetPath,
       status: "ready",
       facts: [
-        { label: "Dataset", value: plannedDatasetPath ?? input.trainingDatasetPath ?? "-" },
-        { label: "Target", value: effectiveTargetColumn || "Not selected" },
+        { label: "数据集", value: plannedDatasetPath ?? input.trainingDatasetPath ?? "-" },
+        { label: "目标列", value: effectiveTargetColumn || "未选择" },
       ],
       actions: [
-        action("open_artifact", "Open Dataset", {
-          disabledReason: plannedDatasetPath ? undefined : "No planned dataset artifact is available.",
+        action("open_artifact", "打开数据集", {
+          disabledReason: plannedDatasetPath ? undefined : "没有可用的变换后数据集产物。",
           payload: { path: plannedDatasetPath },
           tone: "secondary",
         }),
-        action("open_training", "Open Training", {
+        action("open_training", "打开训练", {
           disabledReason: projectDisabled,
           tone: "primary",
         }),
@@ -797,32 +797,32 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "training-config",
       kind: "training_config",
       stage: "train",
-      title: retryableTrainingFailure ? "Training execution failed" : "Training configuration",
+      title: retryableTrainingFailure ? "训练执行失败" : "训练配置",
       description: retryableTrainingFailure
-        ? "The sklearn training run failed. Retry from the saved training state, or adjust the dataset, target, GPU, or preprocessing plan first."
-        : "Use the current dataset and target column to start a reproducible sklearn training run.",
+        ? "sklearn 训练运行失败。从已保存的训练状态重试，或先调整数据集、目标列、GPU 或预处理计划。"
+        : "使用当前数据集与目标列，启动一次可复现的 sklearn 训练运行。",
       artifactPath: trainingDataset,
       status: retryableTrainingFailure ? "attention" : effectiveTargetColumn ? "ready" : "attention",
       facts: [
-        { label: "Dataset", value: trainingDataset },
-        { label: "Target", value: effectiveTargetColumn || "Missing" },
-        { label: "Plan", value: planPath ?? "None" },
+        { label: "数据集", value: trainingDataset },
+        { label: "目标列", value: effectiveTargetColumn || "缺失" },
+        { label: "计划", value: planPath ?? "无" },
       ],
       actions: [
-        action("open_training", "Open Training", {
+        action("open_training", "打开训练", {
           disabledReason: projectDisabled,
           tone: "secondary",
         }),
         retryableTrainingFailure
-          ? action("retry_sklearn_training", "Retry Training", {
+          ? action("retry_sklearn_training", "重试训练", {
               disabledReason: projectDisabled,
               payload: { stage: input.workflow.currentStage.resumeStage ?? "train" },
               tone: "primary",
             })
-          : action("start_sklearn_training", "Start sklearn", {
+          : action("start_sklearn_training", "启动 sklearn", {
               disabledReason:
                 projectDisabled ??
-                (effectiveTargetColumn ? undefined : "Choose or infer a target column before training.") ??
+                (effectiveTargetColumn ? undefined : "训练前请选择或推断一个目标列。") ??
                 disabledWithoutDataset(trainingDataset),
               payload: {
                 path: trainingDataset,
@@ -844,24 +844,24 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "model-comparison",
       kind: "model_comparison",
       stage: "evaluate",
-      title: "Model comparison",
+      title: "模型对比",
       description:
-        "Inspect the selected experiment metrics, candidate model comparison, and artifact paths before regenerating reports or moving into diagnosis.",
+        "在重新生成报告或进入诊断之前，检查所选实验的指标、候选模型对比与产物路径。",
       artifactPath: evaluationMetricsPath,
       status: evaluationMetricsPath ? "ready" : "attention",
       facts: [
-        { label: "Experiment", value: evaluationExperimentId ?? "-" },
-        { label: "Dataset", value: evaluationDatasetPath ?? input.trainingDatasetPath ?? "-" },
-        { label: "Target", value: evaluationTargetColumn ?? input.suggestedTargetColumn ?? "-" },
-        { label: "Best model", value: evaluationBestModel ?? "-" },
+        { label: "实验", value: evaluationExperimentId ?? "-" },
+        { label: "数据集", value: evaluationDatasetPath ?? input.trainingDatasetPath ?? "-" },
+        { label: "目标列", value: evaluationTargetColumn ?? input.suggestedTargetColumn ?? "-" },
+        { label: "最佳模型", value: evaluationBestModel ?? "-" },
       ],
       actions: [
-        action("open_training", "Open Training", {
+        action("open_training", "打开训练", {
           disabledReason: projectDisabled,
           tone: "secondary",
         }),
-        action("open_artifact", "Open Metrics", {
-          disabledReason: evaluationMetricsPath ? undefined : "No metrics artifact is available.",
+        action("open_artifact", "打开指标", {
+          disabledReason: evaluationMetricsPath ? undefined : "没有可用的指标产物。",
           payload: { path: evaluationMetricsPath },
           tone: "primary",
         }),
@@ -872,27 +872,27 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "evaluation-report",
       kind: "evaluation_report",
       stage: "evaluate",
-      title: evaluationReportPath ? "Evaluation report ready" : "Evaluation report missing",
+      title: evaluationReportPath ? "评估报告已就绪" : "评估报告缺失",
       description: evaluationReportPath
-        ? "Open the generated model evaluation report, or regenerate it from the saved experiment artifacts."
-        : "This experiment has metrics but no report artifact yet. Regenerate the report from the selected run.",
+        ? "打开已生成的模型评估报告，或从已保存的实验产物重新生成。"
+        : "该实验有指标但尚无报告产物。请从所选运行重新生成报告。",
       artifactPath: evaluationReportPath,
       status: evaluationReportPath ? "ready" : "attention",
       facts: [
-        { label: "Report", value: evaluationReportPath ?? "Not generated" },
-        { label: "Metrics", value: evaluationMetricsPath ?? "-" },
-        { label: "Model", value: evaluationModelPath ?? "-" },
-        { label: "Samples", value: evaluationPredictionSamplesPath ?? "-" },
+        { label: "报告", value: evaluationReportPath ?? "未生成" },
+        { label: "指标", value: evaluationMetricsPath ?? "-" },
+        { label: "模型", value: evaluationModelPath ?? "-" },
+        { label: "样本", value: evaluationPredictionSamplesPath ?? "-" },
       ],
       actions: [
-        action("open_artifact", "Open Report", {
-          disabledReason: evaluationReportPath ? undefined : "No evaluation report artifact is available.",
+        action("open_artifact", "打开报告", {
+          disabledReason: evaluationReportPath ? undefined : "没有可用的评估报告产物。",
           payload: { path: evaluationReportPath },
           tone: evaluationReportPath ? "primary" : "secondary",
         }),
-        action("regenerate_evaluation_report", evaluationReportPath ? "Regenerate Report" : "Generate Report", {
+        action("regenerate_evaluation_report", evaluationReportPath ? "重新生成报告" : "生成报告", {
           disabledReason:
-            projectDisabled ?? (evaluationExperimentId ? undefined : "No experiment id is available for report generation."),
+            projectDisabled ?? (evaluationExperimentId ? undefined : "没有可用于生成报告的实验 id。"),
           payload: evaluationExperimentId ? { experimentId: evaluationExperimentId } : undefined,
           tone: evaluationReportPath ? "secondary" : "primary",
         }),
@@ -908,31 +908,31 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "error-analysis",
       kind: "error_analysis",
       stage: "diagnose",
-      title: "Error analysis",
+      title: "误差分析",
       description:
-        "Inspect class-level error concentration and the strongest confusion direction before deciding whether to adjust features, preprocessing, or caveats.",
+        "在决定是否调整特征、预处理或注意事项之前，检查类别级误差集中度与最强混淆方向。",
       artifactPath: diagnosisMetricsPath,
       status: diagnosisMetricsPath ? "ready" : "attention",
       facts: [
-        { label: "Experiment", value: diagnosisExperimentId ?? "-" },
-        { label: "Dataset", value: diagnosisDatasetPath ?? input.trainingDatasetPath ?? "-" },
-        { label: "Worst class", value: diagnosisWorstClass ?? "None" },
-        { label: "Main confusion", value: diagnosisMainConfusion ?? "None" },
-        { label: "Error rows", value: String(diagnosisErrorCount ?? 0) },
-        { label: "Slices", value: String(diagnosisSliceCount ?? 0) },
+        { label: "实验", value: diagnosisExperimentId ?? "-" },
+        { label: "数据集", value: diagnosisDatasetPath ?? input.trainingDatasetPath ?? "-" },
+        { label: "最差类别", value: diagnosisWorstClass ?? "无" },
+        { label: "主要混淆", value: diagnosisMainConfusion ?? "无" },
+        { label: "误差行数", value: String(diagnosisErrorCount ?? 0) },
+        { label: "切片数", value: String(diagnosisSliceCount ?? 0) },
       ],
       actions: [
-        action("open_training", "Open Training", {
+        action("open_training", "打开训练", {
           disabledReason: projectDisabled,
           tone: "secondary",
         }),
-        action("open_artifact", "Open Metrics", {
-          disabledReason: diagnosisMetricsPath ? undefined : "No metrics artifact is available.",
+        action("open_artifact", "打开指标", {
+          disabledReason: diagnosisMetricsPath ? undefined : "没有可用的指标产物。",
           payload: { path: diagnosisMetricsPath },
           tone: "primary",
         }),
-        action("open_artifact", "Open Report", {
-          disabledReason: diagnosisReportPath ? undefined : "No evaluation report artifact is available.",
+        action("open_artifact", "打开报告", {
+          disabledReason: diagnosisReportPath ? undefined : "没有可用的评估报告产物。",
           payload: { path: diagnosisReportPath },
           tone: "secondary",
         }),
@@ -943,25 +943,25 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "prediction-samples",
       kind: "prediction_samples",
       stage: "diagnose",
-      title: "Prediction samples",
+      title: "预测样本",
       description:
         diagnosisRecommendation ??
-        "Open row-level prediction samples to inspect misclassified examples and feature values behind the diagnostic summary.",
+        "打开行级预测样本，查看诊断摘要背后被误分类的样本及其特征值。",
       artifactPath: diagnosisSamplesPath,
       status: diagnosisSamplesPath ? "ready" : "attention",
       facts: [
-        { label: "Samples", value: diagnosisSamplesPath ?? "Not generated" },
-        { label: "Target", value: diagnosisTargetColumn ?? input.suggestedTargetColumn ?? "-" },
-        { label: "Worst class", value: diagnosisWorstClass ?? "None" },
-        { label: "Recommendation", value: diagnosisRecommendation ?? "Review the focused experiment diagnostics." },
+        { label: "样本", value: diagnosisSamplesPath ?? "未生成" },
+        { label: "目标列", value: diagnosisTargetColumn ?? input.suggestedTargetColumn ?? "-" },
+        { label: "最差类别", value: diagnosisWorstClass ?? "无" },
+        { label: "建议", value: diagnosisRecommendation ?? "查看聚焦实验的诊断结果。" },
       ],
       actions: [
-        action("open_artifact", "Open Samples", {
-          disabledReason: diagnosisSamplesPath ? undefined : "No prediction samples artifact is available.",
+        action("open_artifact", "打开样本", {
+          disabledReason: diagnosisSamplesPath ? undefined : "没有可用的预测样本产物。",
           payload: { path: diagnosisSamplesPath },
           tone: "primary",
         }),
-        action("open_training", "Open Diagnostics", {
+        action("open_training", "打开诊断", {
           disabledReason: projectDisabled,
           tone: "secondary",
         }),
@@ -974,45 +974,45 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "iteration-proposal",
       kind: "iteration_proposal",
       stage: "iterate",
-      title: "Iteration proposal",
+      title: "迭代建议",
       description:
         iterationRecommendation ??
-        "Review the selected experiment diagnostics and decide whether to adjust preprocessing, features, or training before starting another run.",
+        "查看所选实验的诊断结果，在开始下一次运行前决定是否调整预处理、特征或训练。",
       artifactPath: iterationMetricsPath,
       status: "attention",
       facts: [
-        { label: "Experiment", value: iterationExperimentId ?? "-" },
-        { label: "Dataset", value: iterationDatasetPath ?? input.trainingDatasetPath ?? "-" },
-        { label: "Target", value: iterationTargetColumn ?? input.suggestedTargetColumn ?? "-" },
-        { label: "Worst class", value: iterationWorstClass ?? "None" },
-        { label: "Main confusion", value: iterationMainConfusion ?? "None" },
+        { label: "实验", value: iterationExperimentId ?? "-" },
+        { label: "数据集", value: iterationDatasetPath ?? input.trainingDatasetPath ?? "-" },
+        { label: "目标列", value: iterationTargetColumn ?? input.suggestedTargetColumn ?? "-" },
+        { label: "最差类别", value: iterationWorstClass ?? "无" },
+        { label: "主要混淆", value: iterationMainConfusion ?? "无" },
         {
-          label: "Next action",
-          value: iterationNextActions.at(0) ? String(iterationNextActions.at(0)) : "Review diagnostics before retraining.",
+          label: "下一步",
+          value: iterationNextActions.at(0) ? String(iterationNextActions.at(0)) : "重新训练前先查看诊断结果。",
         },
       ],
       actions: [
-        action("open_artifact", "Open Metrics", {
-          disabledReason: iterationMetricsPath ? undefined : "No metrics artifact is available.",
+        action("open_artifact", "打开指标", {
+          disabledReason: iterationMetricsPath ? undefined : "没有可用的指标产物。",
           payload: { path: iterationMetricsPath },
           tone: "primary",
         }),
-        action("open_artifact", "Open Report", {
-          disabledReason: iterationReportPath ? undefined : "No evaluation report artifact is available.",
+        action("open_artifact", "打开报告", {
+          disabledReason: iterationReportPath ? undefined : "没有可用的评估报告产物。",
           payload: { path: iterationReportPath },
           tone: "secondary",
         }),
-        action("open_artifact", "Open Samples", {
-          disabledReason: iterationSamplesPath ? undefined : "No prediction samples artifact is available.",
+        action("open_artifact", "打开样本", {
+          disabledReason: iterationSamplesPath ? undefined : "没有可用的预测样本产物。",
           payload: { path: iterationSamplesPath },
           tone: "secondary",
         }),
-        action("open_artifact", "Open Plan", {
-          disabledReason: iterationPlanPath ? undefined : "No preprocessing plan artifact is available.",
+        action("open_artifact", "打开计划", {
+          disabledReason: iterationPlanPath ? undefined : "没有可用的预处理计划产物。",
           payload: { path: iterationPlanPath },
           tone: "secondary",
         }),
-        action("open_training", "Open Training", {
+        action("open_training", "打开训练", {
           disabledReason: projectDisabled,
           tone: "secondary",
         }),
@@ -1025,39 +1025,39 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "export-bundle",
       kind: "export_bundle",
       stage: "export",
-      title: exportBundlePath ? "Export bundle ready" : "Prepare export bundle",
+      title: exportBundlePath ? "导出包已就绪" : "准备导出包",
       description: exportBundleReady
-        ? "Package the selected run into a reproducible handoff bundle with model, metrics, report, and optional diagnostics."
-        : "Required run artifacts are missing. Regenerate the report or restore missing files before exporting the handoff bundle.",
+        ? "将所选运行打包为可复现的交接包，包含模型、指标、报告与可选诊断。"
+        : "缺少必要的运行产物。导出交接包前，请重新生成报告或恢复缺失文件。",
       artifactPath: exportBundlePath ?? exportReportPath,
       status: exportBundleReady ? "ready" : "attention",
       facts: [
-        { label: "Experiment", value: exportExperimentId ?? "-" },
-        { label: "Dataset", value: exportDatasetPath ?? input.trainingDatasetPath ?? "-" },
-        { label: "Target", value: exportTargetColumn ?? input.suggestedTargetColumn ?? "-" },
-        { label: "Report", value: exportReportPath ?? "Missing" },
-        { label: "Bundle", value: exportBundlePath ?? "Not exported" },
+        { label: "实验", value: exportExperimentId ?? "-" },
+        { label: "数据集", value: exportDatasetPath ?? input.trainingDatasetPath ?? "-" },
+        { label: "目标列", value: exportTargetColumn ?? input.suggestedTargetColumn ?? "-" },
+        { label: "报告", value: exportReportPath ?? "缺失" },
+        { label: "导出包", value: exportBundlePath ?? "未导出" },
         {
-          label: "Missing",
-          value: exportMissingArtifacts.length > 0 ? exportMissingArtifacts.map(String).join(", ") : "None",
+          label: "缺失项",
+          value: exportMissingArtifacts.length > 0 ? exportMissingArtifacts.map(String).join(", ") : "无",
         },
       ],
       actions: [
-        action("open_artifact", exportBundlePath ? "Open Bundle" : "Open Report", {
+        action("open_artifact", exportBundlePath ? "打开导出包" : "打开报告", {
           disabledReason:
-            exportBundlePath || exportReportPath ? undefined : "No bundle or report artifact is available.",
+            exportBundlePath || exportReportPath ? undefined : "没有可用的导出包或报告产物。",
           payload: { path: exportBundlePath ?? exportReportPath },
           tone: exportBundlePath ? "primary" : "secondary",
         }),
-        action("export_run_bundle", exportBundlePath ? "Re-export Bundle" : "Export Bundle", {
+        action("export_run_bundle", exportBundlePath ? "重新导出包" : "导出包", {
           disabledReason:
             projectDisabled ??
-            (exportExperimentId ? undefined : "No experiment id is available for bundle export.") ??
-            (exportBundleReady ? undefined : "Required model, metrics, or report artifacts are missing."),
+            (exportExperimentId ? undefined : "没有可用于导出包的实验 id。") ??
+            (exportBundleReady ? undefined : "缺少必要的模型、指标或报告产物。"),
           payload: exportExperimentId ? { experimentId: exportExperimentId } : undefined,
           tone: exportBundleReady ? "primary" : "secondary",
         }),
-        action("open_training", "Open Training", {
+        action("open_training", "打开训练", {
           disabledReason: projectDisabled,
           tone: "secondary",
         }),
@@ -1068,24 +1068,24 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "export-artifacts",
       kind: "evaluation_report",
       stage: "export",
-      title: "Handoff artifact checklist",
-      description: "Review the artifacts that will be included in the handoff before creating or refreshing the archive.",
+      title: "交接产物清单",
+      description: "在创建或刷新归档之前，检查将纳入交接的产物。",
       artifactPath: exportReportPath,
       status: exportBundleReady ? "ready" : "attention",
       facts: [
-        { label: "Metrics", value: exportMetricsPath ?? "Missing" },
-        { label: "Model", value: exportModelPath ?? "Missing" },
-        { label: "Samples", value: exportSamplesPath ?? "Optional" },
-        { label: "Plan", value: exportPlanPath ?? "Optional" },
+        { label: "指标", value: exportMetricsPath ?? "缺失" },
+        { label: "模型", value: exportModelPath ?? "缺失" },
+        { label: "样本", value: exportSamplesPath ?? "可选" },
+        { label: "计划", value: exportPlanPath ?? "可选" },
       ],
       actions: [
-        action("open_artifact", "Open Report", {
-          disabledReason: exportReportPath ? undefined : "No evaluation report artifact is available.",
+        action("open_artifact", "打开报告", {
+          disabledReason: exportReportPath ? undefined : "没有可用的评估报告产物。",
           payload: { path: exportReportPath },
           tone: "primary",
         }),
-        action("open_artifact", "Open Metrics", {
-          disabledReason: exportMetricsPath ? undefined : "No metrics artifact is available.",
+        action("open_artifact", "打开指标", {
+          disabledReason: exportMetricsPath ? undefined : "没有可用的指标产物。",
           payload: { path: exportMetricsPath },
           tone: "secondary",
         }),
@@ -1098,30 +1098,30 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       id: "lesson-review",
       kind: "lesson_review",
       stage: "learn",
-      title: "Learned-rule review",
+      title: "习得规则审核",
       description:
         lessonHasExtractableCandidates === false
-          ? "This session has evidence, but the current extractor did not find a reusable rule candidate yet."
-          : "Extract reviewable lesson candidates from the current session evidence, then inspect them in Evolution Knowledge before adoption.",
+          ? "本次会话有证据，但当前提取器尚未找到可复用的规则候选。"
+          : "从当前会话证据中提取可审核的经验候选，采纳前先在「自进化知识」中查看。",
       artifactPath: lessonSourceArtifacts.at(-1) ? String(lessonSourceArtifacts.at(-1)) : undefined,
       status: lessonHasExtractableCandidates === false ? "attention" : "ready",
       facts: [
-        { label: "Source session", value: lessonSourceSessionId ?? "-" },
-        { label: "Events", value: String(lessonSourceEventCount ?? 0) },
-        { label: "Candidates", value: String(lessonCandidateCount ?? 0) },
-        { label: "High confidence", value: String(lessonHighConfidenceCount ?? 0) },
-        { label: "Latest event", value: lessonLatestEventType ?? "-" },
+        { label: "来源会话", value: lessonSourceSessionId ?? "-" },
+        { label: "事件数", value: String(lessonSourceEventCount ?? 0) },
+        { label: "候选数", value: String(lessonCandidateCount ?? 0) },
+        { label: "高置信数", value: String(lessonHighConfidenceCount ?? 0) },
+        { label: "最新事件", value: lessonLatestEventType ?? "-" },
       ],
       actions: [
-        action("extract_lessons", "Extract Lessons", {
+        action("extract_lessons", "提取经验", {
           disabledReason:
             projectDisabled ??
-            (lessonSourceSessionId ? undefined : "No source session is available for lesson extraction."),
+            (lessonSourceSessionId ? undefined : "没有可用于经验提取的来源会话。"),
           payload: lessonSourceSessionId ? { sourceSessionId: lessonSourceSessionId } : undefined,
           tone: "primary",
         }),
-        action("open_artifact", "Open Evidence", {
-          disabledReason: lessonSourceArtifacts.at(-1) ? undefined : "No source artifact evidence is available.",
+        action("open_artifact", "打开证据", {
+          disabledReason: lessonSourceArtifacts.at(-1) ? undefined : "没有可用的来源产物证据。",
           payload: { path: lessonSourceArtifacts.at(-1) ? String(lessonSourceArtifacts.at(-1)) : undefined },
           tone: "secondary",
         }),
@@ -1136,13 +1136,13 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       kind: requested.kind,
       stage: requested.stage,
       title: requested.title,
-      description: "The agent requested this contextual component. Open the artifact to inspect its full details.",
+      description: "智能体请求了这个上下文组件。打开产物以查看完整详情。",
       artifactPath: requested.artifactPath,
       status: "ready",
-      facts: [{ label: "Artifact", value: requested.artifactPath ?? "No artifact yet" }],
+      facts: [{ label: "产物", value: requested.artifactPath ?? "暂无产物" }],
       actions: [
-        action("open_artifact", "Open Artifact", {
-          disabledReason: requested.artifactPath ? undefined : "No artifact path is available yet.",
+        action("open_artifact", "打开产物", {
+          disabledReason: requested.artifactPath ? undefined : "暂无可用的产物路径。",
           payload: { path: requested.artifactPath },
           tone: "primary",
         }),

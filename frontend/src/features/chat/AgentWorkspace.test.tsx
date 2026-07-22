@@ -59,7 +59,7 @@ describe("workflow completion feedback", () => {
 
     expect(feedback).toMatchObject({
       kind: "stage",
-      label: "Stage completed",
+      label: "阶段完成",
       stage: "profile",
       title: "Dataset profile completed",
     });
@@ -74,7 +74,7 @@ describe("workflow completion feedback", () => {
 
     expect(feedback).toMatchObject({
       kind: "artifact",
-      label: "Artifact created",
+      label: "产物已创建",
       title: created.name,
       detail: created.path,
       artifactPath: created.path,
@@ -93,13 +93,13 @@ describe("workflow completion feedback", () => {
     const created = artifact();
     const { onSelectFile } = renderWorkspace([{ type: "artifact_created", artifact: created }]);
 
-    const status = screen.getByRole("status", { name: "Latest workflow completion" });
+    const status = screen.getByRole("status", { name: "最新工作流完成" });
     expect(status.getAttribute("aria-live")).toBe("polite");
-    expect(within(status).getByText("Artifact created")).toBeTruthy();
+    expect(within(status).getByText("产物已创建")).toBeTruthy();
     expect(within(status).getByText(created.name)).toBeTruthy();
     expect(within(status).getByText(created.path)).toBeTruthy();
 
-    fireEvent.click(within(status).getByRole("button", { name: `Open completed artifact ${created.name}` }));
+    fireEvent.click(within(status).getByRole("button", { name: `打开已完成产物 ${created.name}` }));
     expect(onSelectFile).toHaveBeenCalledWith(created.path);
   });
 });

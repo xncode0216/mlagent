@@ -1,22 +1,22 @@
 import type { AgentStreamEvent, WorkflowStageId } from "./types";
 
 const stageLabels: Record<WorkflowStageId, string> = {
-  ingest: "Ingest",
-  profile: "Profile",
-  clean: "Clean",
-  transform: "Transform",
-  train: "Train",
-  evaluate: "Evaluate",
-  diagnose: "Diagnose",
-  iterate: "Iterate",
-  export: "Export",
-  learn: "Learn",
+  ingest: "接入",
+  profile: "画像",
+  clean: "清洗",
+  transform: "变换",
+  train: "训练",
+  evaluate: "评估",
+  diagnose: "诊断",
+  iterate: "迭代",
+  export: "导出",
+  learn: "沉淀",
 };
 
 export type WorkflowCompletionFeedback = {
   id: string;
   kind: "stage" | "artifact";
-  label: "Stage completed" | "Step completed" | "Artifact created";
+  label: "阶段完成" | "步骤完成" | "产物已创建";
   title: string;
   detail?: string;
   stage?: WorkflowStageId;
@@ -30,11 +30,11 @@ export function deriveWorkflowCompletionFeedback(
 
   events.forEach((event, index) => {
     if (event.type === "stage_completed") {
-      const title = event.label ?? `${stageLabels[event.stage]} completed`;
+      const title = event.label ?? `${stageLabels[event.stage]} 完成`;
       latest = {
         id: `stage:${index}:${event.task_id}:${event.stage}:${title}`,
         kind: "stage",
-        label: "Stage completed",
+        label: "阶段完成",
         stage: event.stage,
         title,
       };
@@ -45,7 +45,7 @@ export function deriveWorkflowCompletionFeedback(
       latest = {
         id: `step:${index}:${event.task_id}:${event.stage ?? "workflow"}:${event.label}:${event.artifact_path ?? ""}`,
         kind: "stage",
-        label: event.stage ? "Stage completed" : "Step completed",
+        label: event.stage ? "阶段完成" : "步骤完成",
         title: event.label,
         detail: event.artifact_path,
         stage: event.stage,
@@ -58,7 +58,7 @@ export function deriveWorkflowCompletionFeedback(
       latest = {
         id: `artifact:${index}:${event.artifact.id}:${event.artifact.path}`,
         kind: "artifact",
-        label: "Artifact created",
+        label: "产物已创建",
         title: event.artifact.name,
         detail: event.artifact.path,
         artifactPath: event.artifact.path,

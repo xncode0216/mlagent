@@ -64,27 +64,27 @@ describe("cockpit component registry", () => {
     expect(summaryCard).toMatchObject({
       kind: "dataset_summary",
       stage: "ingest",
-      title: "Dataset registered",
+      title: "数据集已登记",
       status: "ready",
       artifactPath: "results/session-1/dataset_registry_entry.json",
       facts: expect.arrayContaining([
-        { label: "Dataset", value: "data/customer_churn.csv" },
-        { label: "Version", value: "csv-customer_churn-session-1" },
-        { label: "Shape", value: "3 rows x 4 columns" },
-        { label: "Sample", value: "full_csv_scan" },
-        { label: "Columns", value: "customer_id, age, monthly_charges, churn" },
+        { label: "数据集", value: "data/customer_churn.csv" },
+        { label: "版本", value: "csv-customer_churn-session-1" },
+        { label: "规模", value: "3 行 × 4 列" },
+        { label: "采样", value: "full_csv_scan" },
+        { label: "列", value: "customer_id, age, monthly_charges, churn" },
       ]),
     });
     expect(summaryCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Registry",
+          label: "打开登记表",
           payload: { path: "results/session-1/dataset_registry_entry.json" },
         }),
         expect.objectContaining({
           id: "generate_profile",
-          label: "Generate Profile",
+          label: "生成画像",
         }),
       ]),
     );
@@ -128,7 +128,7 @@ describe("cockpit component registry", () => {
         expect.objectContaining({ id: "open_artifact", payload: { path: "results/session-1/preprocessing_plan.json" } }),
         expect.objectContaining({
           id: "approve_preprocessing_plan",
-          label: "Approve & Execute",
+          label: "批准并执行",
           payload: expect.objectContaining({
             preprocessingPlanPath: "results/session-1/preprocessing_plan.json",
           }),
@@ -162,7 +162,7 @@ describe("cockpit component registry", () => {
         }),
         expect.objectContaining({
           id: "revise_preprocessing_plan",
-          label: "Revise Plan",
+          label: "修订计划",
           payload: {
             approvalId: "session-1-preprocessing-plan",
             preprocessingPlanPath: "results/session-1/preprocessing_plan.json",
@@ -259,7 +259,7 @@ describe("cockpit component registry", () => {
     const planCard = result.find((card) => card.id === "preprocessing-plan");
 
     expect(planCard).toMatchObject({
-      title: "Preprocessing plan needs revision",
+      title: "预处理计划需要修订",
       status: "attention",
     });
     expect(planCard?.actions.map((action) => action.id)).toEqual(["open_artifact", "generate_preprocessing_plan"]);
@@ -288,7 +288,7 @@ describe("cockpit component registry", () => {
     const planCard = result.find((card) => card.id === "preprocessing-plan");
 
     expect(planCard).toMatchObject({
-      title: "Transform execution failed",
+      title: "变换执行失败",
       status: "attention",
     });
     expect(planCard?.actions).toEqual(
@@ -296,13 +296,13 @@ describe("cockpit component registry", () => {
         expect.objectContaining({ id: "open_artifact" }),
         expect.objectContaining({
           id: "retry_transform",
-          label: "Retry Transform",
+          label: "重试变换",
           payload: expect.objectContaining({
             preprocessingPlanPath: "results/session-1/preprocessing_plan.json",
             stage: "transform",
           }),
         }),
-        expect.objectContaining({ id: "generate_preprocessing_plan", label: "Refresh Plan" }),
+        expect.objectContaining({ id: "generate_preprocessing_plan", label: "刷新计划" }),
       ]),
     );
     expect(planCard?.actions.map((action) => action.id)).not.toContain("approve_preprocessing_plan");
@@ -334,7 +334,7 @@ describe("cockpit component registry", () => {
     const trainingCard = result.find((card) => card.id === "training-config");
 
     expect(trainingCard).toMatchObject({
-      title: "Training execution failed",
+      title: "训练执行失败",
       status: "attention",
     });
     expect(trainingCard?.actions).toEqual(
@@ -342,7 +342,7 @@ describe("cockpit component registry", () => {
         expect.objectContaining({ id: "open_training" }),
         expect.objectContaining({
           id: "retry_sklearn_training",
-          label: "Retry Training",
+          label: "重试训练",
           payload: { stage: "train" },
         }),
       ]),
@@ -408,15 +408,15 @@ describe("cockpit component registry", () => {
     });
     expect(inspector?.actions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "inspect_logs", label: "Inspect Logs", payload: { taskId: "session-1" } }),
+        expect.objectContaining({ id: "inspect_logs", label: "查看日志", payload: { taskId: "session-1" } }),
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Plan",
+          label: "打开计划",
           payload: { path: "results/session-1/preprocessing_plan.json" },
         }),
         expect.objectContaining({
           id: "abandon_task_state",
-          label: "Abandon State",
+          label: "放弃状态",
           payload: { taskId: "session-1", stage: "train" },
         }),
       ]),
@@ -530,9 +530,9 @@ describe("cockpit component registry", () => {
       status: "ready",
       artifactPath: "data/customer_churn.csv",
       facts: expect.arrayContaining([
-        { label: "Dataset", value: "data/customer_churn.csv" },
-        { label: "Target", value: "churn" },
-        { label: "Plan", value: "results/session-1/preprocessing_plan.json" },
+        { label: "数据集", value: "data/customer_churn.csv" },
+        { label: "目标列", value: "churn" },
+        { label: "计划", value: "results/session-1/preprocessing_plan.json" },
       ]),
     });
     expect(trainingCard?.actions).toEqual(
@@ -607,42 +607,42 @@ describe("cockpit component registry", () => {
       status: "ready",
       artifactPath: "results/session-1/metrics.json",
       facts: expect.arrayContaining([
-        { label: "Experiment", value: "exp-evaluate" },
-        { label: "Dataset", value: "data/customer_churn.csv" },
-        { label: "Target", value: "churn" },
-        { label: "Best model", value: "logistic_regression" },
+        { label: "实验", value: "exp-evaluate" },
+        { label: "数据集", value: "data/customer_churn.csv" },
+        { label: "目标列", value: "churn" },
+        { label: "最佳模型", value: "logistic_regression" },
       ]),
     });
     expect(comparisonCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Metrics",
+          label: "打开指标",
           payload: { path: "results/session-1/metrics.json" },
         }),
       ]),
     );
     expect(reportCard).toMatchObject({
       kind: "evaluation_report",
-      title: "Evaluation report ready",
+      title: "评估报告已就绪",
       artifactPath: "results/session-1/model_evaluation_report.md",
       facts: expect.arrayContaining([
-        { label: "Report", value: "results/session-1/model_evaluation_report.md" },
-        { label: "Metrics", value: "results/session-1/metrics.json" },
-        { label: "Model", value: "models/exp-evaluate.json" },
-        { label: "Samples", value: "results/session-1/prediction_samples.json" },
+        { label: "报告", value: "results/session-1/model_evaluation_report.md" },
+        { label: "指标", value: "results/session-1/metrics.json" },
+        { label: "模型", value: "models/exp-evaluate.json" },
+        { label: "样本", value: "results/session-1/prediction_samples.json" },
       ]),
     });
     expect(reportCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Report",
+          label: "打开报告",
           payload: { path: "results/session-1/model_evaluation_report.md" },
         }),
         expect.objectContaining({
           id: "regenerate_evaluation_report",
-          label: "Regenerate Report",
+          label: "重新生成报告",
           payload: { experimentId: "exp-evaluate" },
         }),
       ]),
@@ -700,20 +700,20 @@ describe("cockpit component registry", () => {
     expect(selectionCard).toMatchObject({
       kind: "experiment_run_selection",
       stage: "evaluate",
-      title: "Select experiment run",
+      title: "选择实验运行",
       status: "blocked",
       facts: expect.arrayContaining([
-        { label: "Missing", value: "experiment_id" },
-        { label: "Intent", value: "evaluate" },
-        { label: "Candidates", value: "2" },
-        { label: "Run 1", value: "candidate-b | data/b.csv | target target | sklearn" },
+        { label: "缺少", value: "experiment_id" },
+        { label: "意图", value: "evaluate" },
+        { label: "候选数", value: "2" },
+        { label: "运行 1", value: "candidate-b | data/b.csv | 目标列 target | sklearn" },
       ]),
     });
     expect(selectionCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "select_experiment_run",
-          label: "Use candidate-b",
+          label: "使用 candidate-b",
           payload: {
             experimentId: "candidate-b",
             intent: "evaluate",
@@ -779,15 +779,15 @@ describe("cockpit component registry", () => {
     expect(selectionCard).toMatchObject({
       kind: "dataset_selection",
       stage: "train",
-      title: "Select training dataset",
+      title: "选择训练数据集",
       status: "blocked",
       facts: expect.arrayContaining([
-        { label: "Missing", value: "dataset_path" },
-        { label: "Intent", value: "train" },
-        { label: "Candidates", value: "2" },
+        { label: "缺少", value: "dataset_path" },
+        { label: "意图", value: "train" },
+        { label: "候选数", value: "2" },
         {
-          label: "Dataset 1",
-          value: "data/customer_churn.csv | csv-customer_churn | 3 rows x 3 columns | targets churn, age, monthly_charges",
+          label: "数据集 1",
+          value: "data/customer_churn.csv | csv-customer_churn | 3 行 × 3 列 | 目标列候选 churn, age, monthly_charges",
         },
       ]),
     });
@@ -795,7 +795,7 @@ describe("cockpit component registry", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "select_training_dataset",
-          label: "Use data/customer_churn.csv",
+          label: "使用 data/customer_churn.csv",
           payload: {
             datasetPath: "data/customer_churn.csv",
             datasetVersionId: "csv-customer_churn",
@@ -890,47 +890,47 @@ describe("cockpit component registry", () => {
       status: "ready",
       artifactPath: "results/session-1/metrics.json",
       facts: expect.arrayContaining([
-        { label: "Experiment", value: "exp-diagnose" },
-        { label: "Dataset", value: "data/customer_churn.csv" },
-        { label: "Worst class", value: "yes" },
-        { label: "Main confusion", value: "yes -> no" },
-        { label: "Error rows", value: "5" },
-        { label: "Slices", value: "1" },
+        { label: "实验", value: "exp-diagnose" },
+        { label: "数据集", value: "data/customer_churn.csv" },
+        { label: "最差类别", value: "yes" },
+        { label: "主要混淆", value: "yes -> no" },
+        { label: "误差行数", value: "5" },
+        { label: "切片数", value: "1" },
       ]),
     });
     expect(errorCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Metrics",
+          label: "打开指标",
           payload: { path: "results/session-1/metrics.json" },
         }),
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Report",
+          label: "打开报告",
           payload: { path: "results/session-1/model_evaluation_report.md" },
         }),
       ]),
     );
     expect(samplesCard).toMatchObject({
       kind: "prediction_samples",
-      title: "Prediction samples",
+      title: "预测样本",
       artifactPath: "results/session-1/prediction_samples.json",
       description: "Inspect yes prediction samples, then review features or preprocessing for this class.",
       facts: expect.arrayContaining([
-        { label: "Samples", value: "results/session-1/prediction_samples.json" },
-        { label: "Target", value: "churn" },
-        { label: "Worst class", value: "yes" },
+        { label: "样本", value: "results/session-1/prediction_samples.json" },
+        { label: "目标列", value: "churn" },
+        { label: "最差类别", value: "yes" },
       ]),
     });
     expect(samplesCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Samples",
+          label: "打开样本",
           payload: { path: "results/session-1/prediction_samples.json" },
         }),
-        expect.objectContaining({ id: "open_training", label: "Open Diagnostics" }),
+        expect.objectContaining({ id: "open_training", label: "打开诊断" }),
       ]),
     );
   });
@@ -974,37 +974,37 @@ describe("cockpit component registry", () => {
 
     expect(exportCard).toMatchObject({
       kind: "export_bundle",
-      title: "Export bundle ready",
+      title: "导出包已就绪",
       status: "ready",
       artifactPath: "exports/export-intent/exp-export_handoff_bundle.zip",
     });
     expect(exportCard?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Experiment", value: "exp-export" },
-        { label: "Bundle", value: "exports/export-intent/exp-export_handoff_bundle.zip" },
-        { label: "Missing", value: "None" },
+        { label: "实验", value: "exp-export" },
+        { label: "导出包", value: "exports/export-intent/exp-export_handoff_bundle.zip" },
+        { label: "缺失项", value: "无" },
       ]),
     );
     expect(exportCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Bundle",
+          label: "打开导出包",
           payload: { path: "exports/export-intent/exp-export_handoff_bundle.zip" },
         }),
         expect.objectContaining({
           id: "export_run_bundle",
-          label: "Re-export Bundle",
+          label: "重新导出包",
           payload: { experimentId: "exp-export" },
         }),
       ]),
     );
     expect(checklistCard?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Metrics", value: "results/export-intent/metrics.json" },
-        { label: "Model", value: "models/exp-export.json" },
-        { label: "Samples", value: "results/export-intent/prediction_samples.json" },
-        { label: "Plan", value: "results/export-intent/preprocessing_plan.json" },
+        { label: "指标", value: "results/export-intent/metrics.json" },
+        { label: "模型", value: "models/exp-export.json" },
+        { label: "样本", value: "results/export-intent/prediction_samples.json" },
+        { label: "计划", value: "results/export-intent/preprocessing_plan.json" },
       ]),
     );
   });
@@ -1041,28 +1041,28 @@ describe("cockpit component registry", () => {
 
     expect(lessonCard).toMatchObject({
       kind: "lesson_review",
-      title: "Learned-rule review",
+      title: "习得规则审核",
       status: "ready",
       artifactPath: "results/learn-intent/missing.json",
     });
     expect(lessonCard?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Source session", value: "session-1" },
-        { label: "Events", value: "8" },
-        { label: "Candidates", value: "2" },
-        { label: "High confidence", value: "1" },
+        { label: "来源会话", value: "session-1" },
+        { label: "事件数", value: "8" },
+        { label: "候选数", value: "2" },
+        { label: "高置信数", value: "1" },
       ]),
     );
     expect(lessonCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "extract_lessons",
-          label: "Extract Lessons",
+          label: "提取经验",
           payload: { sourceSessionId: "session-1" },
         }),
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Evidence",
+          label: "打开证据",
           payload: { path: "results/learn-intent/missing.json" },
         }),
       ]),
@@ -1108,32 +1108,32 @@ describe("cockpit component registry", () => {
 
     expect(iterationCard).toMatchObject({
       kind: "iteration_proposal",
-      title: "Iteration proposal",
+      title: "迭代建议",
       status: "attention",
       artifactPath: "results/iterate-intent/metrics.json",
     });
     expect(iterationCard?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Experiment", value: "exp-iterate" },
-        { label: "Dataset", value: "data/customer_churn.csv" },
-        { label: "Worst class", value: "yes" },
-        { label: "Main confusion", value: "yes -> no" },
-        { label: "Next action", value: "Inspect prediction samples for the highest-error class." },
+        { label: "实验", value: "exp-iterate" },
+        { label: "数据集", value: "data/customer_churn.csv" },
+        { label: "最差类别", value: "yes" },
+        { label: "主要混淆", value: "yes -> no" },
+        { label: "下一步", value: "Inspect prediction samples for the highest-error class." },
       ]),
     );
     expect(iterationCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Metrics",
+          label: "打开指标",
           payload: { path: "results/iterate-intent/metrics.json" },
         }),
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Report",
+          label: "打开报告",
           payload: { path: "results/iterate-intent/model_evaluation_report.md" },
         }),
-        expect.objectContaining({ id: "open_training", label: "Open Training" }),
+        expect.objectContaining({ id: "open_training", label: "打开训练" }),
       ]),
     );
     expect(result.some((card) => card.id === "requested-iteration_proposal")).toBe(false);
@@ -1199,18 +1199,18 @@ describe("cockpit component registry", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "retry_evaluation_report",
-          label: "Retry Evaluation",
+          label: "重试评估",
           payload: { stage: "evaluate" },
         }),
         expect.objectContaining({ id: "inspect_logs", payload: { taskId: "eval-session" } }),
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Metrics",
+          label: "打开指标",
           payload: { path: "results/eval-session/missing_metrics.json" },
         }),
         expect.objectContaining({
           id: "abandon_task_state",
-          label: "Abandon State",
+          label: "放弃状态",
           payload: { taskId: "eval-session", stage: "evaluate" },
         }),
       ]),
@@ -1268,15 +1268,15 @@ describe("cockpit component registry", () => {
 
     expect(inspector?.actions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "retry_export_bundle", label: "Retry Export", payload: { stage: "export" } }),
+        expect.objectContaining({ id: "retry_export_bundle", label: "重试导出", payload: { stage: "export" } }),
         expect.objectContaining({
           id: "open_artifact",
-          label: "Open Report",
+          label: "打开报告",
           payload: { path: "results/export-session/model_evaluation_report.md" },
         }),
         expect.objectContaining({
           id: "abandon_task_state",
-          label: "Abandon State",
+          label: "放弃状态",
           payload: { taskId: "export-session", stage: "export" },
         }),
       ]),
@@ -1330,11 +1330,11 @@ describe("cockpit component registry", () => {
 
     expect(inspector?.actions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "retry_lesson_extraction", label: "Retry Learning", payload: { stage: "learn" } }),
+        expect.objectContaining({ id: "retry_lesson_extraction", label: "重试沉淀", payload: { stage: "learn" } }),
         expect.objectContaining({ id: "inspect_logs", payload: { taskId: "learn-session" } }),
         expect.objectContaining({
           id: "abandon_task_state",
-          label: "Abandon State",
+          label: "放弃状态",
           payload: { taskId: "learn-session", stage: "learn" },
         }),
       ]),
@@ -1350,6 +1350,6 @@ describe("cockpit component registry", () => {
     });
 
     const generateProfile = result[0].actions.find((action) => action.id === "generate_profile");
-    expect(generateProfile?.disabledReason).toContain("Open or create a project");
+    expect(generateProfile?.disabledReason).toContain("打开或创建项目");
   });
 });

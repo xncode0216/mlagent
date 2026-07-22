@@ -91,6 +91,24 @@ const toolStatusLabel: Record<ToolActivityStatus, string> = {
   success: "完成",
   error: "失败",
 };
+const stageKickerLabel: Record<string, string> = {
+  ingest: "接入",
+  profile: "画像",
+  clean: "清洗",
+  transform: "变换",
+  train: "训练",
+  evaluate: "评估",
+  diagnose: "诊断",
+  iterate: "迭代",
+  export: "导出",
+  learn: "沉淀",
+};
+const cockpitStatusLabel: Record<string, string> = {
+  ready: "就绪",
+  attention: "需关注",
+  blocked: "待处理",
+  complete: "已完成",
+};
 
 type ActionFeedback = {
   kind: "info" | "success" | "warning" | "error";
@@ -322,11 +340,11 @@ export function AgentWorkspace({
           await onAbandonTaskState?.(action.payload?.stage ?? "train");
           break;
       }
-      setActionFeedback({ kind: "success", message: `${action.label} completed.` });
+      setActionFeedback({ kind: "success", message: `${action.label} 已完成。` });
     } catch (error) {
       setActionFeedback({
         kind: "error",
-        message: error instanceof Error ? error.message : `${action.label} failed.`,
+        message: error instanceof Error ? error.message : `${action.label} 失败。`,
       });
     }
   }
@@ -336,10 +354,12 @@ export function AgentWorkspace({
       <article className={`cockpit-component-card ${card.status}`} data-cockpit-component={card.kind}>
         <div className="cockpit-component-header">
           <div>
-            <span className="section-kicker">{card.stage}</span>
+            <span className="section-kicker">{stageKickerLabel[card.stage] ?? card.stage}</span>
             <strong>{card.title}</strong>
           </div>
-          <span className={`cockpit-component-status ${card.status}`}>{card.status}</span>
+          <span className={`cockpit-component-status ${card.status}`}>
+            {cockpitStatusLabel[card.status] ?? card.status}
+          </span>
         </div>
         <p>{card.description}</p>
         <div className="cockpit-component-facts">
@@ -379,18 +399,18 @@ export function AgentWorkspace({
           <p>{copy.description}</p>
         </div>
         <div className="runtime-chips" aria-label="运行环境">
-          <span className="runtime-chip ready">Kernel: Python 3.11</span>
-          <span className="runtime-chip">Tools: 20</span>
+          <span className="runtime-chip ready">内核: Python 3.11</span>
+          <span className="runtime-chip">工具: 20</span>
           <span className="runtime-chip muted">GPU: 未启用</span>
         </div>
       </div>
 
       {lastError ? <div className="inline-alert">{lastError}</div> : null}
 
-      <section className="workflow-cockpit" aria-label="Agent workflow state">
+      <section className="workflow-cockpit" aria-label="Agent 工作流状态">
         <div className="workflow-cockpit-summary">
           <div>
-            <span className="section-kicker">Workflow</span>
+            <span className="section-kicker">工作流</span>
             <strong>{workflow.currentStage.label}</strong>
           </div>
           <div className="workflow-cockpit-summary-copy">
@@ -398,7 +418,7 @@ export function AgentWorkspace({
             {completionFeedback ? (
               <div
                 aria-atomic="true"
-                aria-label="Latest workflow completion"
+                aria-label="最新工作流完成"
                 aria-live="polite"
                 className="workflow-completion-feedback"
                 data-completion-kind={completionFeedback.kind}
@@ -417,11 +437,11 @@ export function AgentWorkspace({
                 </div>
                 {completionFeedback.artifactPath && onSelectFile ? (
                   <button
-                    aria-label={`Open completed artifact ${completionFeedback.title}`}
+                    aria-label={`打开已完成产物 ${completionFeedback.title}`}
                     onClick={() => onSelectFile(completionFeedback.artifactPath!)}
                     type="button"
                   >
-                    Open artifact
+                    打开产物
                     <ExternalLink aria-hidden="true" size={14} />
                   </button>
                 ) : null}
@@ -442,23 +462,23 @@ export function AgentWorkspace({
         </div>
         <div className="workflow-signal-grid">
           <div>
-            <span className="section-kicker">Approval</span>
-            <strong>{workflow.approval ? workflow.approval.title : "No pending approval"}</strong>
+            <span className="section-kicker">审批</span>
+            <strong>{workflow.approval ? workflow.approval.title : "无待审批"}</strong>
             {workflow.approval?.description ? <small>{workflow.approval.description}</small> : null}
           </div>
           <div>
-            <span className="section-kicker">Component</span>
-            <strong>{workflow.component ? workflow.component.title : "Inspector follows artifacts"}</strong>
+            <span className="section-kicker">组件</span>
+            <strong>{workflow.component ? workflow.component.title : "检查器跟随产物"}</strong>
             {workflow.component?.artifactPath ? <small>{workflow.component.artifactPath}</small> : null}
           </div>
           <div>
-            <span className="section-kicker">Artifact</span>
-            <strong>{workflow.latestArtifact ? workflow.latestArtifact.name : activeFile || "No active file"}</strong>
+            <span className="section-kicker">产物</span>
+            <strong>{workflow.latestArtifact ? workflow.latestArtifact.name : activeFile || "无活动文件"}</strong>
             <small>{workflow.latestArtifact?.path ?? activeFile}</small>
           </div>
         </div>
         {cockpitCards.length > 0 ? (
-          <div className="cockpit-component-grid" aria-label="Agent contextual tools">
+          <div className="cockpit-component-grid" aria-label="Agent 上下文工具">
             {cockpitCards.slice(0, 4).map((card) => (
               <CockpitCard card={card} key={card.id} />
             ))}

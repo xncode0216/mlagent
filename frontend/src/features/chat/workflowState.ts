@@ -43,33 +43,33 @@ export type WorkflowState = {
 };
 
 const STAGES: Array<{ id: WorkflowStageId; label: string }> = [
-  { id: "ingest", label: "Ingest" },
-  { id: "profile", label: "Profile" },
-  { id: "clean", label: "Clean" },
-  { id: "transform", label: "Transform" },
-  { id: "train", label: "Train" },
-  { id: "evaluate", label: "Evaluate" },
-  { id: "diagnose", label: "Diagnose" },
-  { id: "iterate", label: "Iterate" },
-  { id: "export", label: "Export" },
-  { id: "learn", label: "Learn" },
+  { id: "ingest", label: "接入" },
+  { id: "profile", label: "画像" },
+  { id: "clean", label: "清洗" },
+  { id: "transform", label: "变换" },
+  { id: "train", label: "训练" },
+  { id: "evaluate", label: "评估" },
+  { id: "diagnose", label: "诊断" },
+  { id: "iterate", label: "迭代" },
+  { id: "export", label: "导出" },
+  { id: "learn", label: "沉淀" },
 ];
 
 const COMPONENT_LABELS: Record<string, string> = {
-  dataset_summary: "Dataset summary",
-  data_quality: "Data quality review",
-  preprocessing_plan: "Preprocessing plan",
-  planned_dataset: "Planned dataset",
-  transformation_report: "Transformation report",
-  training_config: "Training configuration",
-  model_comparison: "Model comparison",
-  evaluation_report: "Evaluation report",
-  error_analysis: "Error analysis",
-  prediction_samples: "Prediction samples",
-  iteration_proposal: "Iteration proposal",
-  export_bundle: "Export bundle",
-  provenance_graph: "Provenance graph",
-  lesson_review: "Lesson review",
+  dataset_summary: "数据集摘要",
+  data_quality: "数据质量检查",
+  preprocessing_plan: "预处理计划",
+  planned_dataset: "变换后数据集",
+  transformation_report: "变换报告",
+  training_config: "训练配置",
+  model_comparison: "模型对比",
+  evaluation_report: "评估报告",
+  error_analysis: "误差分析",
+  prediction_samples: "预测样本",
+  iteration_proposal: "迭代建议",
+  export_bundle: "导出包",
+  provenance_graph: "溯源图谱",
+  lesson_review: "经验审核",
 };
 
 const STAGE_TOOL_PATTERNS: Array<[WorkflowStageId, RegExp]> = [
@@ -90,7 +90,7 @@ function createStages(): WorkflowStageState[] {
     id: stage.id,
     label: stage.label,
     status: "pending",
-    detail: "Waiting",
+    detail: "等待中",
   }));
 }
 
@@ -199,7 +199,7 @@ function markEarlierStagesReady(stages: WorkflowStageState[], stageId: WorkflowS
   const index = stageIndex(stageId);
   for (let i = 0; i < index; i += 1) {
     if (stages[i].status === "pending") {
-      stages[i] = { ...stages[i], status: "completed", detail: "Ready" };
+      stages[i] = { ...stages[i], status: "completed", detail: "就绪" };
     }
   }
 }
@@ -242,7 +242,7 @@ function currentStage(stages: WorkflowStageState[], defaultStage: WorkflowStageI
   if (lastCompletedIndex >= stages.length - 1) return stages[lastCompletedIndex];
   const nextStage = stages[lastCompletedIndex + 1] ?? findStage(stages, defaultStage);
   if (nextStage.status === "pending") {
-    setStage(stages, nextStage.id, "active", "Ready for next step");
+    setStage(stages, nextStage.id, "active", "准备就绪，待下一步");
     return findStage(stages, nextStage.id);
   }
   return nextStage;
@@ -260,25 +260,25 @@ function nextActionFor(
   },
   approval: WorkflowApprovalState | null,
 ) {
-  if (stage.status === "failed" && stage.retryable) return `Retry or resume the failed ${stage.label.toLowerCase()} step.`;
-  if (stage.status === "failed") return `Resolve the failed ${stage.label.toLowerCase()} step, then retry or resume.`;
-  if (approval) return `Review approval checkpoint: ${approval.title}.`;
+  if (stage.status === "failed" && stage.retryable) return `重试或恢复失败的「${stage.label}」步骤。`;
+  if (stage.status === "failed") return `先解决失败的「${stage.label}」步骤，再重试或恢复。`;
+  if (approval) return `请审核审批检查点：${approval.title}。`;
   if (flags.hasPreprocessingPlan && !flags.hasPlannedDataset) {
-    return "Review the preprocessing plan, approve it, and execute it to create a training-ready dataset.";
+    return "审核预处理计划、批准并执行，生成可用于训练的数据集。";
   }
   if (flags.hasPlannedDataset && !flags.hasTrainingArtifact) {
-    return "Use the planned dataset for training and compare candidate models.";
+    return "用变换后数据集进行训练并对比候选模型。";
   }
   if (flags.hasTrainingArtifact && !flags.hasEvaluationArtifact) {
-    return "Inspect metrics and generate the model evaluation report.";
+    return "检查指标并生成模型评估报告。";
   }
   if (flags.hasEvaluationArtifact && !flags.hasDiagnosticArtifact) {
-    return "Open diagnostics to inspect error slices and prediction samples.";
+    return "打开诊断，查看误差切片与预测样本。";
   }
   if (flags.hasDiagnosticArtifact && !flags.hasLesson) {
-    return "Extract or review lessons from the diagnostic evidence.";
+    return "从诊断证据中提取或审核经验。";
   }
-  return `Continue the ${stage.label.toLowerCase()} step from the active context.`;
+  return `从当前上下文继续「${stage.label}」步骤。`;
 }
 
 export function deriveWorkflowState(
@@ -306,7 +306,7 @@ export function deriveWorkflowState(
     if (event.type === "tool_call_started" || event.type === "tool_started") {
       const stage = event.type === "tool_started" && event.stage ? event.stage : inferStageFromText(event.tool, defaultStage);
       callStages.set(event.call_id, stage);
-      setStage(stages, stage, "active", `Running ${event.tool}`);
+      setStage(stages, stage, "active", `执行中：${event.tool}`);
       continue;
     }
 
@@ -317,12 +317,12 @@ export function deriveWorkflowState(
     }
 
     if (event.type === "stage_started") {
-      setStage(stages, event.stage, "active", event.label ?? `${stageLabel(event.stage)} started`);
+      setStage(stages, event.stage, "active", event.label ?? `${stageLabel(event.stage)} 开始`);
       continue;
     }
 
     if (event.type === "stage_completed") {
-      setStage(stages, event.stage, "completed", event.label ?? `${stageLabel(event.stage)} completed`);
+      setStage(stages, event.stage, "completed", event.label ?? `${stageLabel(event.stage)} 完成`);
       continue;
     }
 
@@ -349,8 +349,8 @@ export function deriveWorkflowState(
         event.stage,
         event.decision === "execute" || event.decision === "approve" ? "active" : "failed",
         event.decision === "execute" || event.decision === "approve"
-          ? "Approval granted"
-          : "Approval declined",
+          ? "审批已通过"
+          : "审批被拒绝",
       );
       continue;
     }
@@ -378,8 +378,8 @@ export function deriveWorkflowState(
         stage,
         missingContext.length > 0 ? "blocked" : "active",
         missingContext.length > 0
-          ? `Missing context: ${missingContext.join(", ")}`
-          : `Command: ${event.command.intent}`,
+          ? `缺少上下文：${missingContext.join(", ")}`
+          : `命令：${event.command.intent}`,
       );
       continue;
     }
@@ -399,7 +399,7 @@ export function deriveWorkflowState(
     }
 
     if (event.type === "task_resumed") {
-      setStage(stages, event.stage ?? defaultStage, "active", event.label ?? "Task resumed");
+      setStage(stages, event.stage ?? defaultStage, "active", event.label ?? "任务已恢复");
       continue;
     }
 
@@ -444,7 +444,7 @@ export function deriveWorkflowState(
 
     if (event.type === "lesson_extracted" || event.type === "rules_matched") {
       flags.hasLesson = true;
-      setStage(stages, "learn", event.type === "lesson_extracted" ? "completed" : "active", "Lesson evidence available");
+      setStage(stages, "learn", event.type === "lesson_extracted" ? "completed" : "active", "已有经验证据");
       continue;
     }
 
@@ -458,16 +458,16 @@ export function deriveWorkflowState(
   }
 
   if (!events.length) {
-    setStage(stages, defaultStage, "active", activeFile ? `Active file: ${activeFile}` : "Ready for a task");
+    setStage(stages, defaultStage, "active", activeFile ? `当前文件：${activeFile}` : "等待任务");
   }
 
   if (flags.hasPreprocessingPlan && !flags.hasPlannedDataset && !approvalFinalized && findStage(stages, "transform").status !== "failed") {
-    setStage(stages, "transform", "blocked", "Preprocessing plan ready for approval");
+    setStage(stages, "transform", "blocked", "预处理计划待审批");
     approval ??= {
       id: "preprocessing-plan-review",
       stage: "transform",
-      title: "Review and execute preprocessing plan",
-      description: "The generated plan should be approved before transforming the dataset.",
+      title: "审核并执行预处理计划",
+      description: "变换数据集前，需先批准生成的预处理计划。",
       artifactPath: latestArtifact?.component === "preprocessing_plan" ? latestArtifact.path : undefined,
     };
   }
@@ -475,17 +475,17 @@ export function deriveWorkflowState(
   if (flags.hasPlannedDataset && !flags.hasTrainingArtifact) {
     approval = approval?.stage === "transform" ? null : approval;
     if (findStage(stages, "train").status !== "failed") {
-      setStage(stages, "train", "active", "Planned dataset is ready for training");
+      setStage(stages, "train", "active", "变换后数据集已就绪，可开始训练");
     }
   }
   if (flags.hasTrainingArtifact && !flags.hasEvaluationArtifact) {
-    setStage(stages, "evaluate", "active", "Training artifacts are ready for evaluation");
+    setStage(stages, "evaluate", "active", "训练产物已就绪，可开始评估");
   }
   if (flags.hasEvaluationArtifact && !flags.hasDiagnosticArtifact) {
-    setStage(stages, "diagnose", "active", "Evaluation report is ready for diagnostics");
+    setStage(stages, "diagnose", "active", "评估报告已就绪，可开始诊断");
   }
   if (flags.hasDiagnosticArtifact && !flags.hasLesson) {
-    setStage(stages, "learn", "active", "Diagnostics are ready for lesson review");
+    setStage(stages, "learn", "active", "诊断已就绪，可沉淀经验");
   }
 
   const selectedStage = currentStage(stages, defaultStage);

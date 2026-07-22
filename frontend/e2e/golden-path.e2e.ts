@@ -76,12 +76,12 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
       .toHaveClass(/active/);
 
     const dataQualityCard = page.locator('[data-cockpit-component="data_quality"]');
-    await dataQualityCard.getByRole("button", { name: "Generate Profile" }).click();
-    const completionStatus = page.getByRole("status", { name: "Latest workflow completion" });
-    await expect(completionStatus).toContainText("Artifact created");
+    await dataQualityCard.getByRole("button", { name: "生成画像" }).click();
+    const completionStatus = page.getByRole("status", { name: "最新工作流完成" });
+    await expect(completionStatus).toContainText("产物已创建");
     const generatedProfilePath = await completionStatus.locator("code").innerText();
     expect(generatedProfilePath).toMatch(/^results\/.+\/data_quality_profile\.json$/);
-    await completionStatus.getByRole("button", { name: /^Open completed artifact/ }).click();
+    await completionStatus.getByRole("button", { name: /^打开已完成产物/ }).click();
     await expect(page.locator(".status-bar")).toContainText(generatedProfilePath);
     await expect(page.locator(".data-quality-profile")).toContainText("churn");
     if (process.env.E2E_COMPLETION_SCREENSHOT_PATH) {
