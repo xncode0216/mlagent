@@ -12,6 +12,7 @@ import {
   type TrainingResult,
 } from "../../lib/api";
 import type { RightPanelTabId } from "../../app/appDeepLink";
+import { useProjectFileContentQuery } from "../files/useProjectFileContentQuery";
 
 // Lazy so Recharts loads only when a histogram artifact is opened, keeping it
 // out of the initial bundle.
@@ -607,24 +608,59 @@ function JsonTable({
 
 function ArtifactPreview({
   artifact,
+  busy,
   content,
   error,
   onExecutePreprocessingPlan,
+  onRetry,
 }: {
   artifact?: Artifact;
+  busy: boolean;
   content: string | null;
   error: string | null;
   onExecutePreprocessingPlan?: () => Promise<void>;
+  onRetry: () => void;
 }) {
   if (!artifact) return null;
-  if (error) return <div className="empty-state">{error}</div>;
-  if (!content) return <div className="empty-state">正在读取产物内容...</div>;
 
+  let preview = null;
   try {
-    return <JsonTable onExecutePreprocessingPlan={onExecutePreprocessingPlan} value={JSON.parse(content)} />;
+    preview = content === null ? null : (
+      <JsonTable onExecutePreprocessingPlan={onExecutePreprocessingPlan} value={JSON.parse(content)} />
+    );
   } catch {
-    return <pre className="json-preview">{content}</pre>;
+    preview = content === null ? null : <pre className="json-preview">{content}</pre>;
   }
+
+  return (
+    <section aria-busy={busy} aria-label="产物预览" className="artifact-preview">
+      {error ? (
+        <div className="inspector-async-state error" role="alert">
+          <span>{error}</span>
+          <button aria-label="重试产物内容" onClick={onRetry} type="button">
+            <RefreshCw aria-hidden="true" size={13} />
+            <span>重试</span>
+          </button>
+        </div>
+      ) : null}
+      {busy && content === null ? (
+        <div className="inspector-async-state loading" role="status">
+          <span>正在读取产物内容…</span>
+          <div aria-hidden="true" className="inspector-skeleton">
+            <span className="inspector-skeleton-row" />
+            <span className="inspector-skeleton-row" />
+            <span className="inspector-skeleton-row" />
+          </div>
+        </div>
+      ) : null}
+      {busy && content !== null ? (
+        <div className="inspector-async-state refreshing" role="status">
+          正在刷新产物内容…
+        </div>
+      ) : null}
+      {preview}
+    </section>
+  );
 }
 
 function formatFileSize(size?: number) {
@@ -1874,9 +1910,15 @@ export function RightPanel({
   const suggestedTargetColumn = useUiStore((state) => state.suggestedTargetColumn);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(() => (rightPanelTab ? tabById[rightPanelTab] : "图表"));
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
-  const [artifactContent, setArtifactContent] = useState<string | null>(null);
-  const [artifactError, setArtifactError] = useState<string | null>(null);
   const [panelFeedback, setPanelFeedback] = useState<PanelActionFeedback | null>(null);
+  const artifactContentQuery = useProjectFileContentQuery(projectId, selectedArtifact?.path, selectedArtifact?.id);
+  const artifactContent = artifactContentQuery.data?.content ?? null;
+  const artifactError =
+    artifactContentQuery.error instanceof Error
+      ? artifactContentQuery.error.message
+      : artifactContentQuery.error
+        ? "产物读取失败"
+        : null;
   const artifacts = useMemo(() => artifactEvents(events), [events]);
   const chartArtifacts = artifacts.filter((artifact) => artifact.type === "chart");
   const dataArtifacts = artifacts.filter((artifact) => artifact.type === "dataframe");
@@ -1919,30 +1961,6 @@ export function RightPanel({
       setSelectedArtifact(activeArtifacts[0]);
     }
   }, [activeArtifacts, activeTab, selectedArtifact]);
-
-  useEffect(() => {
-    if (!projectId || !selectedArtifact) {
-      setArtifactContent(null);
-      return;
-    }
-
-    let cancelled = false;
-    setArtifactContent(null);
-    setArtifactError(null);
-    readProjectFileContent(projectId, selectedArtifact.path)
-      .then((result) => {
-        if (!cancelled) setArtifactContent(result.content);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setArtifactError(error instanceof Error ? error.message : "产物读取失败");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, selectedArtifact]);
 
   function exportCurrentPanel() {
     const payload = {
@@ -1989,7 +2007,13 @@ export function RightPanel({
         <>
           <ArtifactList artifacts={chartArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
           {selectedArtifact ? (
-            <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+            <ArtifactPreview
+              artifact={selectedArtifact}
+              busy={artifactContentQuery.isFetching}
+              content={artifactContent}
+              error={artifactError}
+              onRetry={() => void artifactContentQuery.refetch()}
+            />
           ) : (
             <ChartsEmptyState
               onCleanDataset={onCleanDataset}
@@ -2005,7 +2029,13 @@ export function RightPanel({
         <>
           <ArtifactList artifacts={codeArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
           {selectedArtifact ? (
-            <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+            <ArtifactPreview
+              artifact={selectedArtifact}
+              busy={artifactContentQuery.isFetching}
+              content={artifactContent}
+              error={artifactError}
+              onRetry={() => void artifactContentQuery.refetch()}
+            />
           ) : (
             <ActiveFilePreview activeFile={activeFile} mode="code" projectId={projectId} />
           )}
@@ -2017,9 +2047,11 @@ export function RightPanel({
           {selectedArtifact ? (
             <ArtifactPreview
               artifact={selectedArtifact}
+              busy={artifactContentQuery.isFetching}
               content={artifactContent}
               error={artifactError}
               onExecutePreprocessingPlan={onExecutePreprocessingPlan}
+              onRetry={() => void artifactContentQuery.refetch()}
             />
           ) : (
             <ActiveFilePreview

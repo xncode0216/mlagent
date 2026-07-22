@@ -1011,3 +1011,13 @@
 - **视觉与动效约束**：新增平面 Catppuccin 骨架，颜色/间距/圆角/动画全部来自 token；仅循环 opacity 状态动画，无渐变、位移动效或布局抖动，并继承全局 `prefers-reduced-motion` 回退。空工作区截图人工复核确认三段引导、禁用态和 `Project: None / Session: None` 状态一致。
 - **门禁**：生产 demo-data 直接扫描为 0 命中；frontend `npm.cmd test` 23 文件 / 132 tests、`npm.cmd run lint`、`npm.cmd run build` 全绿（index 460.66KB、CSS gzip 10.91KB）；Playwright 设计系统 + 真实 API 数据画像→训练 golden path `2 passed`。一次 Chrome 启动在页面执行前自行退出，随后完整重跑通过，判定为瞬时浏览器进程问题而非产品回归。
 - **动态计划调整**：P1-7 在补齐跨启动/Store/File Explorer 的原验收范围后重新标记完成。P2-2 保持进行中，下一切片优先把同一 async-state 契约扩展到 Artifact Preview、Evolution 图谱和其他高延迟查询面板，再处理阶段/产物完成反馈；不继续给 File Explorer 添加装饰。
+
+## 2026-07-22 P2-2 动效与加载态（切片 3：Artifact Preview 查询状态）
+
+- **真实链路审计**：右侧选中产物内容仍由 `RightPanel` 内部 `useEffect` 命令式读取；每次切换先清空内容，错误只显示普通空态，无法局部重试，也不参与 React Query 缓存/失效，因此不存在后台刷新或失败时保留旧预览的语义。ActiveFilePreview 与 prediction samples 另有独立读取链，本片只处理选中产物，保持垂直切片可验证。
+- **TDD 红→绿**：新增 `RightPanel.test.tsx` 3 项真实组件测试，分别要求命名预览区域 + `aria-busy` + 三行骨架、读取错误 `role=alert` + 局部重试、查询失效后刷新失败仍保留上次内容。修正一次 mock 队列隔离后，稳定观察 `3 failed` 均命中功能缺口；实现后聚焦 `3/3`、全量 `24 files / 135 tests`。
+- **Query 迁移**：新增 `useProjectFileContentQuery`，query key 使用 project/path/artifact version，避免同一路径在短期重新生成时被 30 秒 `staleTime` 误判为旧产物；RightPanel 删除 `artifactContent`/`artifactError` 命令式 state/effect，直接派生 query data/error/isFetching/refetch。前缀失效仍可刷新同一路径的所有版本。
+- **可访问状态与内容保真**：Artifact Preview 现在是 `aria-label="产物预览"` 的 region；首次读取显示平面 Catppuccin 骨架，缓存内容刷新时显示紧凑状态，错误就地提供“重试产物内容”。React Query 在 refetch error 时保留成功 data，因此 JSON/文本预览不被刷新失败清空。
+- **样式与开发流程**：骨架只动画 opacity，使用 motion/status token 并继承 reduced-motion；无渐变或装饰循环。完整门禁首次发现 `CI=1` Playwright 失败重试生成的 `playwright-report/trace` 会被 `eslint .` 扫描，导致 3951 条第三方压缩资产误报；目录已在 gitignore 中，本次同步加入 ESLint ignore，使“E2E 后再 lint”也稳定。
+- **门禁**：frontend Vitest `24 files / 135 tests`、设计契约 15/15、ESLint、TypeScript + Vite build 全绿（index 461.64KB、CSS gzip 11.09KB）；Playwright 设计系统 + 真实 API 数据画像→训练 golden path `2 passed`。
+- **动态计划调整**：P2-2 保持进行中。下一片先统一 Evolution 图谱的 `aria-busy`/刷新/重试语义，再迁 ActiveFilePreview 和 model/auth 等读取链；阶段/产物完成反馈仍排在基础异步状态之后。

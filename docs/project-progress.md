@@ -24,12 +24,12 @@
 - 前端深链与测试：保留覆盖广泛的 `smoke:deep-links`；新增标准 Playwright golden path，以真实 FastAPI + Vite 验证数据画像、预处理执行、baseline 训练和实验详情，并接入 GitHub Actions。
 - P2 视觉与动效基础：P2-1 已完成并补齐跨源审计；P2-2 motion foundation 首片已完成。当前 99 个调色板/语义/尺寸/层级/动效自定义属性中 94 个已引用、0 个未定义；生产 CSS/TS/TSX 中除 `tokens.css` 外无裸色、数值 RGB、渐变或 React `<style>`，且无 `transition: all`。四处过渡只使用 token 化 opacity/transform，图谱持续装饰动画为 0，全局 reduced-motion 回退已由浏览器运行时验证。
 - P1-7 数据真实性：删除 File Explorer 假文件树、启动时自动建演示项目/上传示例 CSV 及虚构默认选择；生产源码契约持续禁止退役 demo 标识、路径和自动建项。
-- P2-2 加载态切片：项目、会话、文件三类查询分别支持首次加载骨架、后台刷新、空态、错误、重试、`aria-busy` 和失败时保留真实旧数据；无项目时禁用文件变更操作。
+- P2-2 加载态切片：项目、会话、文件与 Artifact Preview 已接入真实异步语义。选中产物内容由版本化 React Query 缓存托管，支持首次加载骨架、后台刷新、错误、局部重试、`aria-busy` 和刷新失败时保留真实旧内容；无项目时禁用文件变更操作。
 
 ## 最近验证
 
 - 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `23 passed files / 132 tests`。
+- 前端测试：`npm.cmd test`，结果 `24 passed files / 135 tests`。
 - 前端 lint：`npm.cmd run lint`，通过。
 - 前端构建：`npm.cmd run build`，通过。
 - Playwright E2E：设计系统运行时主题覆盖、Evolution 图谱渲染 + 真实 API golden path 共 `2 passed`；隔离空工作区 1440×900 截图确认无假项目/文件且操作正确禁用；此前 golden path `--repeat-each=3` 亦为 3/3，通过失败时保留 screenshot/video/trace。
@@ -38,7 +38,7 @@
 
 ## 下一步优先级
 
-1. P2-2 加载态：motion foundation 与 File Explorer 真实异步状态已完成；下一片把统一的 loading/refresh/empty/error/retry/`aria-busy` 契约扩展到 Artifact Preview、Evolution 图谱及其他高延迟面板，再补克制的阶段/产物完成反馈。
+1. P2-2 加载态：motion foundation、File Explorer 与 Artifact Preview 已完成；下一片把统一契约扩展到 Evolution 图谱，再迁 ActiveFilePreview 与 model/auth 等高延迟面板，最后补克制的阶段/产物完成反馈。
 2. P2-3 响应式策略：解决 1440×900 仍可见的 workflow 阶段逐字换行，并完成窄屏降级或明确桌面最小宽度与友好提示。
 3. P2-4/P2-5 信息设计与命令系统：隐藏裸 UUID、完善空状态、兑现命令面板与斜杠命令。
 4. P2-6/P2-7 图谱与可访问性：升级知识图谱交互并补 focus、对比度、自动 a11y 闸门。
