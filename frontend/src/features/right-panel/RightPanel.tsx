@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Database, Download, FileText, Play, RefreshCw, Table2, XCircle } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
@@ -7,12 +8,15 @@ import {
   updateProjectFileContent,
   type ExperimentRun,
   type GPUStatus,
-  type ProjectFileContent,
   type TrainingMetric,
   type TrainingResult,
 } from "../../lib/api";
 import type { RightPanelTabId } from "../../app/appDeepLink";
-import { useProjectFileContentQuery } from "../files/useProjectFileContentQuery";
+import {
+  projectFileContentQueryKey,
+  useProjectFileContentQuery,
+} from "../files/useProjectFileContentQuery";
+import { filesQueryKeyRoot } from "../files/useProjectFilesQuery";
 
 // Lazy so Recharts loads only when a histogram artifact is opened, keeping it
 // out of the initial bundle.
@@ -742,6 +746,12 @@ function CsvFilePreview({ content }: { content: string }) {
   );
 }
 
+function activeFileReadError(error: unknown) {
+  if (!error) return null;
+  const message = error instanceof Error ? error.message : "文件读取失败";
+  return message.includes("415") ? "当前文件是二进制内容，暂不支持直接预览。" : message;
+}
+
 function ActiveFilePreview({
   activeFile,
   mode,
@@ -753,74 +763,151 @@ function ActiveFilePreview({
   onExecutePreprocessingPlan?: () => Promise<void>;
   projectId?: string;
 }) {
-  const [fileContent, setFileContent] = useState<ProjectFileContent | null>(null);
-  const [draftContent, setDraftContent] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const fileContentQuery = useProjectFileContentQuery(projectId, activeFile);
+  const fileContent = fileContentQuery.data ?? null;
+  const readError = activeFileReadError(fileContentQuery.error);
+  const isBinary = readError === "当前文件是二进制内容，暂不支持直接预览。";
+  const fileKey = projectId && activeFile ? `${projectId}:${activeFile}` : "";
+  const [draft, setDraft] = useState<{ fileKey: string; content: string } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const draftContent = draft?.fileKey === fileKey ? draft.content : fileContent?.content ?? "";
 
   useEffect(() => {
-    if (!projectId || !activeFile) {
-      setFileContent(null);
-      return;
-    }
-
-    let cancelled = false;
-    setFileContent(null);
-    setError(null);
-    readProjectFileContent(projectId, activeFile)
-      .then((result) => {
-        if (!cancelled) {
-          setFileContent(result);
-          setDraftContent(result.content);
-          setSaveState("idle");
-        }
-      })
-      .catch((nextError) => {
-        if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : "文件读取失败");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeFile, projectId]);
+    setDraft(null);
+    setSaveError(null);
+    setSaveState("idle");
+  }, [fileKey]);
 
   async function saveFile() {
     if (!projectId || !fileContent) return;
     setSaveState("saving");
-    setError(null);
+    setSaveError(null);
     try {
       const result = await updateProjectFileContent(projectId, fileContent.path, draftContent);
-      setFileContent(result);
-      setDraftContent(result.content);
+      queryClient.setQueryData(projectFileContentQueryKey(projectId, fileContent.path), result);
+      setDraft(null);
       setSaveState("saved");
+      void queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(projectId) });
     } catch (nextError) {
       setSaveState("error");
-      setError(nextError instanceof Error ? nextError.message : "文件保存失败");
+      setSaveError(nextError instanceof Error ? nextError.message : "文件保存失败");
     }
   }
 
-  if (!projectId) return <div className="empty-state">请选择项目后查看文件内容。</div>;
-  if (!activeFile) return <div className="empty-state">请选择一个文件。</div>;
-  if (error) return <div className="empty-state">{error.includes("415") ? "当前文件是二进制内容，暂不支持直接预览。" : error}</div>;
-  if (!fileContent) return <div className="empty-state">正在读取 {activeFile}...</div>;
+  const previewClassName = `active-file-preview ${mode === "data" ? "data-workspace" : "code-workspace"}`;
+
+  if (!projectId) {
+    return (
+      <section aria-busy="false" aria-label="活动文件预览" className={previewClassName}>
+        <div className="empty-state compact-empty">请选择项目后查看文件内容。</div>
+      </section>
+    );
+  }
+  if (!activeFile) {
+    return (
+      <section aria-busy="false" aria-label="活动文件预览" className={previewClassName}>
+        <div className="empty-state compact-empty">请选择一个文件。</div>
+      </section>
+    );
+  }
+  if (fileContentQuery.isFetching && !fileContent) {
+    return (
+      <section aria-busy="true" aria-label="活动文件预览" className={previewClassName}>
+        <div className="active-file-loading" role="status">
+          <span>正在读取文件内容…</span>
+          <div aria-hidden="true" className="inspector-skeleton">
+            <span className="inspector-skeleton-row" />
+            <span className="inspector-skeleton-row" />
+            <span className="inspector-skeleton-row" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+  if (readError && !fileContent) {
+    return (
+      <section aria-busy={fileContentQuery.isFetching} aria-label="活动文件预览" className={previewClassName}>
+        <div className="inspector-async-state error" role="alert">
+          <span>{readError}</span>
+          {isBinary ? (
+            <a
+              aria-label="下载二进制文件"
+              download
+              href={projectFileDownloadUrl(projectId, activeFile)}
+            >
+              <Download aria-hidden="true" size={14} />
+              下载文件
+            </a>
+          ) : (
+            <button
+              aria-label="重试文件内容"
+              disabled={fileContentQuery.isFetching}
+              onClick={() => void fileContentQuery.refetch()}
+              type="button"
+            >
+              <RefreshCw aria-hidden="true" size={14} />
+              重试
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+  if (!fileContent) return null;
 
   const isCsv = activeFile.toLowerCase().endsWith(".csv") || fileContent.mime_type === "text/csv";
   const isJson = activeFile.toLowerCase().endsWith(".json") || fileContent.mime_type === "application/json";
+  const hasUnsavedDraft = draftContent !== fileContent.content;
 
   return (
-    <div className={mode === "data" ? "data-workspace" : "code-workspace"}>
+    <section aria-busy={fileContentQuery.isFetching} aria-label="活动文件预览" className={previewClassName}>
       <div className="dataset-strip">
-        <span>当前文件</span>
-        <strong title={fileContent.path}>{fileContent.path}</strong>
+        <div className="active-file-identity">
+          <span>当前文件</span>
+          <strong title={fileContent.path}>{fileContent.path}</strong>
+        </div>
+        <button
+          aria-label="刷新文件内容"
+          className="active-file-refresh"
+          disabled={fileContentQuery.isFetching}
+          onClick={() => void fileContentQuery.refetch()}
+          title="刷新文件内容"
+          type="button"
+        >
+          <RefreshCw aria-hidden="true" size={14} />
+        </button>
       </div>
       <div className="file-meta-row">
         <span>{fileContent.mime_type}</span>
         <span>{formatFileSize(fileContent.size)}</span>
-        {mode === "code" && draftContent !== fileContent.content ? <span>未保存</span> : null}
+        {fileContentQuery.isFetching ? <span role="status">正在刷新文件内容…</span> : null}
+        {mode === "code" && hasUnsavedDraft ? <span>未保存</span> : null}
         {mode === "code" && saveState === "saved" ? <span>已保存</span> : null}
       </div>
+      {readError ? (
+        <div className="inspector-async-state error" role="alert">
+          <span>{readError}</span>
+          <button
+            aria-label="重试文件内容"
+            disabled={fileContentQuery.isFetching}
+            onClick={() => void fileContentQuery.refetch()}
+            type="button"
+          >
+            <RefreshCw aria-hidden="true" size={14} />
+            重试
+          </button>
+        </div>
+      ) : null}
+      {saveError ? (
+        <div className="inspector-async-state error" role="alert">
+          <span>{saveError}</span>
+          <button disabled={saveState === "saving"} onClick={() => void saveFile()} type="button">
+            重试保存
+          </button>
+        </div>
+      ) : null}
       {mode === "data" && isCsv ? <CsvFilePreview content={fileContent.content} /> : null}
       {mode === "data" && isJson ? (
         (() => {
@@ -841,18 +928,23 @@ function ActiveFilePreview({
             spellCheck={false}
             value={draftContent}
             onChange={(event) => {
-              setDraftContent(event.target.value);
+              setDraft({ fileKey, content: event.target.value });
               setSaveState("idle");
+              setSaveError(null);
             }}
           />
           <div className="editor-actions">
-            <button disabled={saveState === "saving" || draftContent === fileContent.content} onClick={() => void saveFile()}>
+            <button
+              disabled={saveState === "saving" || !hasUnsavedDraft}
+              onClick={() => void saveFile()}
+              type="button"
+            >
               {saveState === "saving" ? "保存中..." : "保存文件"}
             </button>
           </div>
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }
 

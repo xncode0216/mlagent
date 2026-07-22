@@ -1031,3 +1031,13 @@
 - **视觉与响应式**：状态条保持扁平分隔，新增控件最小高度 44px 并有 `:focus-visible`；骨架只使用 Catppuccin token 和 opacity 状态动画，继承 reduced-motion。容器窄于 740px 时骨架与图谱详情按单列降级，窄屏错误提示自动重排。1440×900 真实三栏截图确认图谱工具栏、节点计数、刷新操作和详情降级无溢出。
 - **门禁**：frontend Vitest `26 files / 141 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿；Playwright 设计系统/Evolution + 真实 API 数据画像→训练 golden path `2 passed`。
 - **动态计划调整**：P2-2 保持进行中。图谱的基础异步闭环已完成，不扩充装饰交互；下一片按顺序迁移 `ActiveFilePreview`，随后处理 model/auth 查询面和克制的阶段/产物完成反馈。
+
+## 2026-07-22 P2-2 动效与加载态（切片 5：ActiveFilePreview 查询与编辑状态）
+
+- **真实链路审计**：活动文件预览仍由 `RightPanel` 内部清空式 `useEffect` 读取，首次加载没有稳定骨架，读取失败不能局部重试，读取与保存错误混在同一状态；刷新会丢失可见内容，保存只更新本地 state，React Query 内容缓存与文件树的大小/修改时间元数据都不会同步。编辑态还要求后台刷新不能覆盖用户未保存草稿，因此不能直接把 query data 绑定到 textarea。
+- **TDD 红→绿**：在真实 `RightPanel` 组件测试中新增 5 项，覆盖命名区域 + `aria-busy` + 三行骨架、读取失败重试恢复、后台刷新失败时保留缓存内容与未保存草稿、保存后的精确内容缓存写入 + 文件树失效，以及 415 二进制文件的下载动作。先观察 5 项预期失败，实现后聚焦 `8/8`、全量 `26 files / 146 tests`。
+- **Query 与草稿边界**：抽出 current-version `projectFileContentQueryKey`/root helper，ActiveFilePreview 复用 `useProjectFileContentQuery` 托管服务端状态；本地草稿按 project/path 身份保存，只在文件身份改变时重置。后台刷新继续展示缓存内容和本地草稿，失败就地报告，不再清空编辑器或覆盖用户输入。
+- **保存与缓存闭环**：保存成功后把响应写入精确的 current-version 内容缓存，重置草稿并失效项目文件树根查询，使 Explorer 的大小和修改时间与内容一起更新。保存错误独立显示并支持重试，不再与读取错误互相覆盖。
+- **可访问状态与二进制动作**：预览成为 `aria-label="活动文件预览"` 的 region，覆盖无项目、无活动文件、首次骨架、后台刷新、读取/保存错误与重试；刷新、保存、重试和下载控件均具备 44px 目标与 `:focus-visible`。415 内容不再提供无意义读取重试，而是展示真实“下载二进制文件”链接。新增样式继续只使用 Catppuccin token 与既有 opacity skeleton，无渐变或装饰动画。
+- **门禁与浏览器复核**：frontend Vitest `26 files / 146 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿；Playwright 设计系统 + 真实 API golden path `2 passed`。golden path 在真实转换 CSV 上触发 ActiveFilePreview 刷新并确认表格持续可见；1440×900 截图确认路径、刷新控件和横向表格可用。截图中 workflow 阶段逐字换行仍是既有 P2-3 响应式问题，本片不扩张范围。
+- **动态计划调整**：P2-2 保持进行中。下一片按计划处理 model/auth 查询面的真实 loading/error/retry 语义，完成基础异步闭环后再添加克制的阶段/产物完成反馈。

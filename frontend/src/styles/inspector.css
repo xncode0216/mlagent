@@ -477,7 +477,13 @@
   color: var(--color-on-accent);
   cursor: pointer;
   font-size: 12px;
+  min-height: 44px;
   padding: var(--space-2) var(--space-3);
+}
+
+.editor-actions button:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-accent);
+  outline: none;
 }
 
 .editor-actions button:disabled {
@@ -631,6 +637,59 @@
   display: flex;
   gap: var(--space-2);
   justify-content: space-between;
+}
+
+.active-file-preview {
+  min-width: 0;
+}
+
+.active-file-loading {
+  align-content: center;
+  color: var(--color-text-muted);
+  display: grid;
+  font-size: 12px;
+  gap: var(--space-4);
+  min-height: 220px;
+}
+
+.active-file-identity {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.active-file-identity strong {
+  text-align: left;
+}
+
+.active-file-refresh {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 44px;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.active-file-refresh:hover {
+  background: var(--color-border);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.active-file-refresh:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-accent);
+  outline: none;
+}
+
+.active-file-refresh:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .dataset-strip span {
@@ -1262,7 +1321,8 @@
   padding: var(--space-2);
 }
 
-.inspector-async-state button {
+.inspector-async-state button,
+.inspector-async-state a {
   align-items: center;
   background: transparent;
   border: 1px solid var(--color-border);
@@ -1273,11 +1333,20 @@
   font: inherit;
   gap: var(--space-1);
   justify-self: start;
-  padding: var(--space-1) var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  text-decoration: none;
 }
 
-.inspector-async-state button:hover {
+.inspector-async-state button:hover,
+.inspector-async-state a:hover {
   border-color: var(--color-border-strong);
+}
+
+.inspector-async-state button:focus-visible,
+.inspector-async-state a:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-accent);
+  outline: none;
 }
 
 .inspector-skeleton {

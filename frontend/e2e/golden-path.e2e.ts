@@ -93,6 +93,19 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
       "support_tickets",
       "churn",
     ]);
+    const activeFilePreview = page.getByRole("region", { name: "活动文件预览" });
+    await expect(activeFilePreview).toHaveAttribute("aria-busy", "false");
+    await activeFilePreview.getByRole("button", { name: "刷新文件内容" }).click();
+    await expect(activeFilePreview).toHaveAttribute("aria-busy", "false");
+    await expect(activeFilePreview.locator(".data-preview th")).toContainText([
+      "age",
+      "monthly_spend",
+      "support_tickets",
+      "churn",
+    ]);
+    if (process.env.E2E_ACTIVE_FILE_SCREENSHOT_PATH) {
+      await page.screenshot({ path: process.env.E2E_ACTIVE_FILE_SCREENSHOT_PATH, fullPage: true });
+    }
 
     await page.goto(
       `/?mode=machine-learning&activity=experiments&rightTab=training&projectId=${project.id}` +

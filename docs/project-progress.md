@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-项目已完成生产就绪整改的 P0/P1，进入 P2 产品质感与可访问性阶段。P1-7 的 File Explorer 修正已完成：启动不再自动创建演示项目或上传示例 CSV，空工作区只呈现真实状态；P2-2 已交付动效基础，以及 File Explorer、Artifact Preview、Evolution 图谱三个真实异步状态切片。下一步继续处理 ActiveFilePreview 等高延迟面板。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
+项目已完成生产就绪整改的 P0/P1，进入 P2 产品质感与可访问性阶段。P1-7 的 File Explorer 修正已完成：启动不再自动创建演示项目或上传示例 CSV，空工作区只呈现真实状态；P2-2 已交付动效基础，以及 File Explorer、Artifact Preview、Evolution 图谱和 ActiveFilePreview 四个真实异步状态切片。下一步继续处理 model/auth 等高延迟查询面。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
 
 ## 已完成
 
@@ -24,21 +24,21 @@
 - 前端深链与测试：保留覆盖广泛的 `smoke:deep-links`；新增标准 Playwright golden path，以真实 FastAPI + Vite 验证数据画像、预处理执行、baseline 训练和实验详情，并接入 GitHub Actions。
 - P2 视觉与动效基础：P2-1 已完成并补齐跨源审计；P2-2 motion foundation 首片已完成。当前 99 个调色板/语义/尺寸/层级/动效自定义属性中 94 个已引用、0 个未定义；生产 CSS/TS/TSX 中除 `tokens.css` 外无裸色、数值 RGB、渐变或 React `<style>`，且无 `transition: all`。四处过渡只使用 token 化 opacity/transform，图谱持续装饰动画为 0，全局 reduced-motion 回退已由浏览器运行时验证。
 - P1-7 数据真实性：删除 File Explorer 假文件树、启动时自动建演示项目/上传示例 CSV 及虚构默认选择；生产源码契约持续禁止退役 demo 标识、路径和自动建项。
-- P2-2 加载态切片：项目、会话、文件、Artifact Preview 与 Evolution 图谱已接入真实异步语义。选中产物内容由版本化 React Query 缓存托管；图谱使用稳定查询键，并在经验审核/训练变更后显式失效。两者都支持首次加载骨架、后台刷新、错误、局部重试、`aria-busy` 和刷新失败时保留真实旧内容；无项目时显示明确引导并禁用不安全操作。
+- P2-2 加载态切片：项目、会话、文件、Artifact Preview、Evolution 图谱与 ActiveFilePreview 已接入真实异步语义。选中产物内容由版本化 React Query 缓存托管；图谱使用稳定查询键，并在经验审核/训练变更后显式失效；活动文件复用 current-version 查询键，后台刷新保留缓存内容与未保存草稿，保存后同步写入内容缓存并失效文件树元数据，二进制文件提供真实下载动作。各区域支持首次加载骨架、后台刷新、错误、局部重试和 `aria-busy`；无项目时显示明确引导并禁用不安全操作。
 
 ## 最近验证
 
 - 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `26 passed files / 141 tests`。
+- 前端测试：`npm.cmd test`，结果 `26 passed files / 146 tests`。
 - 前端 lint：`npm.cmd run lint`，通过。
 - 前端构建：`npm.cmd run build`，通过。
-- Playwright E2E：设计系统运行时主题覆盖、Evolution 图谱渲染 + 真实 API golden path 共 `2 passed`；隔离空工作区 1440×900 截图确认无假项目/文件且操作正确禁用；此前 golden path `--repeat-each=3` 亦为 3/3，通过失败时保留 screenshot/video/trace。
+- Playwright E2E：设计系统运行时主题覆盖、Evolution 图谱渲染 + 真实 API golden path 共 `2 passed`；golden path 现会刷新真实 CSV 的 ActiveFilePreview，并确认刷新期间数据表不被清空；1440×900 截图复核活动文件路径、刷新控件和表格布局。此前 golden path `--repeat-each=3` 亦为 3/3，通过失败时保留 screenshot/video/trace。
 - GitHub：`feat/p0-backend-hardening` 已推送并建立草稿 PR #2；backend/frontend/Playwright 三个 CI 闸门全部通过。
 - 后端健康检查：`http://127.0.0.1:8000/health` 返回 `{"status":"ok","service":"mlagent-api"}`。
 
 ## 下一步优先级
 
-1. P2-2 加载态：motion foundation、File Explorer、Artifact Preview 与 Evolution 图谱已完成；下一片迁移 ActiveFilePreview，再处理 model/auth 等高延迟面板，最后补克制的阶段/产物完成反馈。
+1. P2-2 加载态：motion foundation、File Explorer、Artifact Preview、Evolution 图谱与 ActiveFilePreview 已完成；下一片处理 model/auth 等高延迟查询面，最后补克制的阶段/产物完成反馈。
 2. P2-3 响应式策略：解决 1440×900 仍可见的 workflow 阶段逐字换行，并完成窄屏降级或明确桌面最小宽度与友好提示。
 3. P2-4/P2-5 信息设计与命令系统：隐藏裸 UUID、完善空状态、兑现命令面板与斜杠命令。
 4. P2-6/P2-7 图谱与可访问性：升级知识图谱交互并补 focus、对比度、自动 a11y 闸门。
