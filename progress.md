@@ -1021,3 +1021,13 @@
 - **样式与开发流程**：骨架只动画 opacity，使用 motion/status token 并继承 reduced-motion；无渐变或装饰循环。完整门禁首次发现 `CI=1` Playwright 失败重试生成的 `playwright-report/trace` 会被 `eslint .` 扫描，导致 3951 条第三方压缩资产误报；目录已在 gitignore 中，本次同步加入 ESLint ignore，使“E2E 后再 lint”也稳定。
 - **门禁**：frontend Vitest `24 files / 135 tests`、设计契约 15/15、ESLint、TypeScript + Vite build 全绿（index 461.64KB、CSS gzip 11.09KB）；Playwright 设计系统 + 真实 API 数据画像→训练 golden path `2 passed`。
 - **动态计划调整**：P2-2 保持进行中。下一片先统一 Evolution 图谱的 `aria-busy`/刷新/重试语义，再迁 ActiveFilePreview 和 model/auth 等读取链；阶段/产物完成反馈仍排在基础异步状态之后。
+
+## 2026-07-22 P2-2 动效与加载态（切片 4：Evolution 图谱查询状态）
+
+- **真实链路审计**：知识图谱虽然已有加载/错误/空态文案，但仍由 `EvolutionWorkspace` 内部 `useEffect` + 四组本地 state 命令式管理；每次失败会清空最后一次成功图谱，课程数组变化靠隐式 effect 依赖触发重载，规则审核与训练动作没有稳定图谱查询键可失效。无项目时查询被禁用，图谱区域则完全空白。
+- **TDD 红→绿**：新增 `EvolutionWorkspace.test.tsx` 与 `useEvolutionQueries.test.ts`，先观察 region/`aria-busy`、局部 alert/retry、刷新控制、统一 query key 全部按预期失败；实现后覆盖无项目空态、有项目无证据空态、首次骨架、首次失败重试、后台刷新失败保留旧图，以及 lessons/injection-log/graph 三类缓存同步失效，共 `6/6` 聚焦测试通过。
+- **Query 与数据闭环**：新增 `knowledgeGraphQueryKey`、`useKnowledgeGraphQuery` 和 `invalidateEvolutionKnowledgeQueries`。图谱只在 tab 激活时请求，稳定缓存支持无闪烁刷新；经验提取/重试/采纳/拒绝/冲突与训练结果都会显式失效图谱，替代课程数组引用变化这一隐式耦合。选中节点改为保存 ID 并从最新查询数据派生，刷新后不会持有旧对象。
+- **可访问状态与内容保真**：图谱成为 `aria-label="自进化知识图谱"` 的 region；无项目时指向左侧 Explorer，有项目但证据不足时保留三步引导，首次读取显示拓扑骨架。成功后显示节点/关系计数与真实刷新按钮；后台请求期间保留节点并报告“正在更新”，失败就地显示 `role=alert` 和重试，不再清空可用图谱。
+- **视觉与响应式**：状态条保持扁平分隔，新增控件最小高度 44px 并有 `:focus-visible`；骨架只使用 Catppuccin token 和 opacity 状态动画，继承 reduced-motion。容器窄于 740px 时骨架与图谱详情按单列降级，窄屏错误提示自动重排。1440×900 真实三栏截图确认图谱工具栏、节点计数、刷新操作和详情降级无溢出。
+- **门禁**：frontend Vitest `26 files / 141 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿；Playwright 设计系统/Evolution + 真实 API 数据画像→训练 golden path `2 passed`。
+- **动态计划调整**：P2-2 保持进行中。图谱的基础异步闭环已完成，不扩充装饰交互；下一片按顺序迁移 `ActiveFilePreview`，随后处理 model/auth 查询面和克制的阶段/产物完成反馈。

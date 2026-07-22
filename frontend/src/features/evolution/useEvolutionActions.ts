@@ -12,7 +12,7 @@ import {
   type AgentSession,
   type Project,
 } from "../../lib/api";
-import { injectionLogsQueryKey, lessonsQueryKey } from "./useEvolutionQueries";
+import { invalidateEvolutionKnowledgeQueries } from "./useEvolutionQueries";
 import { sessionTaskStatesQueryKey } from "../sessions/useSessionQueries";
 
 interface EvolutionActionsParams {
@@ -42,12 +42,9 @@ export function useEvolutionActions({
   const setActiveMode = useUiStore((s) => s.setActiveMode);
   const setActiveActivity = useUiStore((s) => s.setActiveActivity);
 
-  // 局部辅助：使进化域列表（lessons / injectionLogs）缓存失效。
+  // 局部辅助：同步刷新课程、注入日志与由它们派生的知识图谱。
   function invalidateEvolutionLists(projectId: string) {
-    return Promise.all([
-      queryClient.invalidateQueries({ queryKey: lessonsQueryKey(projectId) }),
-      queryClient.invalidateQueries({ queryKey: injectionLogsQueryKey(projectId) }),
-    ]);
+    return invalidateEvolutionKnowledgeQueries(queryClient, projectId);
   }
 
   // 局部辅助：使任务态缓存失效，触发重取。

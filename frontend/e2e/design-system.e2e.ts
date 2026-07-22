@@ -36,9 +36,11 @@ test("设计系统加载领域样式并支持 ML 品牌强调色覆盖", async (
   );
 
   await page.getByRole("tab", { name: "自进化知识图谱 & 高级洞察" }).click();
-  await expect(page.locator(".graph-view-wrapper")).toBeVisible();
+  const graphRegion = page.getByRole("region", { name: "自进化知识图谱" });
+  await expect(graphRegion).toBeVisible();
+  await expect(graphRegion).toHaveAttribute("aria-busy", "false");
   await expect(
-    page.locator(".graph-container, .graph-empty-state, .graph-error-state").first(),
+    graphRegion.locator(".graph-container, .graph-empty-state, .graph-error-state").first(),
   ).toBeVisible();
   await expect(page.locator(".evolution-workspace style")).toHaveCount(0);
 

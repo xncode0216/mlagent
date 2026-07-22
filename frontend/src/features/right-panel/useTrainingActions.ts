@@ -22,7 +22,7 @@ import {
 import { gpuStatusQueryKey } from "./useGpuStatusQuery";
 import { trainingRunsQueryKey } from "./useTrainingRunsQuery";
 import { filesQueryKeyRoot } from "../files/useProjectFilesQuery";
-import { injectionLogsQueryKey, lessonsQueryKey } from "../evolution/useEvolutionQueries";
+import { invalidateEvolutionKnowledgeQueries } from "../evolution/useEvolutionQueries";
 import { sessionTaskStatesQueryKey } from "../sessions/useSessionQueries";
 
 /** 训练引擎类型：baseline（轻量基线）或 sklearn（完整 ML 搜索）。 */
@@ -133,12 +133,9 @@ export function useTrainingActions({
     return queryClient.invalidateQueries({ queryKey: sessionTaskStatesQueryKey(sessionId) });
   }
 
-  // 局部辅助：使进化域列表（lessons / injectionLogs）缓存失效。
+  // 局部辅助：训练会改变演进证据，因此同步刷新课程、注入日志与知识图谱。
   function invalidateEvolutionLists(projectId: string) {
-    return Promise.all([
-      queryClient.invalidateQueries({ queryKey: lessonsQueryKey(projectId) }),
-      queryClient.invalidateQueries({ queryKey: injectionLogsQueryKey(projectId) }),
-    ]);
+    return invalidateEvolutionKnowledgeQueries(queryClient, projectId);
   }
 
   // 局部辅助：评估报告完成后统一更新缓存、跳转面板、追加 localEvents。

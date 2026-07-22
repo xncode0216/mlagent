@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 
 import type { EvolutionTabId } from "../../app/appDeepLink";
-import { getKnowledgeGraph } from "../../lib/api";
 import type {
   EvolutionInjectionLog,
   EvolutionProtocol,
@@ -24,11 +23,11 @@ import type {
   LessonStatus,
   KnowledgeGraphNode,
   AdvancedInsight,
-  KnowledgeGraphResult,
 } from "../../lib/api";
 import type { TaskStateInspection } from "../chat/taskStateInspector";
 import { buildGraphEvidenceItems } from "./graphEvidence";
 import { summarizeLessonStatuses } from "./evolutionStats";
+import { useKnowledgeGraphQuery } from "./useEvolutionQueries";
 
 type EvolutionWorkspaceProps = {
   projectId: string;
@@ -109,12 +108,16 @@ export function EvolutionWorkspace({
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(lessons[0]?.id ?? null);
 
   // Graph state
-  const [graphData, setGraphData] = useState<KnowledgeGraphResult | null>(null);
-  const [loadingGraph, setLoadingGraph] = useState(false);
-  const [graphError, setGraphError] = useState<string | null>(null);
-  const [graphReloadToken, setGraphReloadToken] = useState(0);
+  const graphQuery = useKnowledgeGraphQuery(projectId, activeTab === "graph");
+  const graphData = graphQuery.data ?? null;
+  const graphError =
+    graphQuery.error instanceof Error
+      ? graphQuery.error.message
+      : graphQuery.error
+        ? "知识图谱加载失败"
+        : null;
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [selectedGraphNode, setSelectedGraphNode] = useState<KnowledgeGraphNode | null>(null);
+  const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
   const [extractingLessons, setExtractingLessons] = useState(false);
   const [retryingLearning, setRetryingLearning] = useState(false);
   const [learningFeedback, setLearningFeedback] = useState<string | null>(null);
@@ -167,6 +170,10 @@ export function EvolutionWorkspace({
   }
 
   const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? visibleLessons[0] ?? null;
+  const selectedGraphNode = useMemo(
+    () => graphData?.nodes.find((node) => node.id === selectedGraphNodeId) ?? graphData?.nodes[0] ?? null,
+    [graphData, selectedGraphNodeId],
+  );
   const selectedGraphEvidenceItems = useMemo(
     () => (selectedGraphNode ? buildGraphEvidenceItems(selectedGraphNode) : []),
     [selectedGraphNode],
@@ -182,33 +189,6 @@ export function EvolutionWorkspace({
       setActiveTab(initialTab);
     }
   }, [initialTab]);
-
-  // Load knowledge graph data when graph tab is selected
-  useEffect(() => {
-    if (activeTab !== "graph" || !projectId) return;
-
-    setLoadingGraph(true);
-    setGraphError(null);
-    getKnowledgeGraph(projectId)
-      .then((data) => {
-        setGraphData(data);
-        // Default select the first node if any
-        if (data.nodes.length > 0) {
-          setSelectedGraphNode(data.nodes[0]);
-        } else {
-          setSelectedGraphNode(null);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load knowledge graph", err);
-        setGraphError(err instanceof Error ? err.message : "知识图谱加载失败");
-        setGraphData(null);
-        setSelectedGraphNode(null);
-      })
-      .finally(() => {
-        setLoadingGraph(false);
-      });
-  }, [activeTab, projectId, lessons, graphReloadToken]);
 
   // Compute Layout Node Positions: Feature Columns on Left (X=120), Experiments in Middle (X=400), Rules on Right (X=680)
   const computedNodes = useMemo(() => {
@@ -309,7 +289,7 @@ export function EvolutionWorkspace({
   };
 
   const activateGraphNode = (node: KnowledgeGraphNode) => {
-    setSelectedGraphNode(node);
+    setSelectedGraphNodeId(node.id);
   };
 
   const handleGraphNodeKeyDown = (event: KeyboardEvent<SVGGElement>, node: KnowledgeGraphNode) => {
@@ -333,7 +313,7 @@ export function EvolutionWorkspace({
     if (insight.type === "surprise_connection" && lessonId) {
       const ruleNode = computedNodes.find((n) => stringProperty(n.properties, "lesson_id") === lessonId);
       if (ruleNode) {
-        setSelectedGraphNode(ruleNode);
+        setSelectedGraphNodeId(ruleNode.id);
         setHoveredNodeId(ruleNode.id);
         // Clean hover highlights after 2.5 seconds
         setTimeout(() => setHoveredNodeId(null), 2500);
@@ -341,7 +321,7 @@ export function EvolutionWorkspace({
     } else if (insight.type === "knowledge_gap" && column) {
       const colNode = computedNodes.find((n) => n.label === column);
       if (colNode) {
-        setSelectedGraphNode(colNode);
+        setSelectedGraphNodeId(colNode.id);
         setHoveredNodeId(colNode.id);
         setTimeout(() => setHoveredNodeId(null), 2500);
       }
@@ -602,17 +582,80 @@ export function EvolutionWorkspace({
         </>
       ) : (
         /* Knowledge Graph Tab View */
-        <div className="graph-view-wrapper">
-          {loadingGraph ? (
-            <div className="empty-state graph-loading-state">
-              <div className="loading-spinner">正在加载数据拓扑与高级洞察...</div>
+        <section
+          aria-busy={graphQuery.isFetching}
+          aria-label="自进化知识图谱"
+          className="graph-view-wrapper"
+        >
+          {graphData ? (
+            <div className="graph-query-toolbar">
+              <span aria-live="polite">
+                {graphQuery.isFetching
+                  ? "正在更新知识图谱…"
+                  : `${graphData.nodes.length} 个节点 · ${graphData.edges.length} 条关系`}
+              </span>
+              <button
+                aria-label="刷新知识图谱"
+                disabled={graphQuery.isFetching}
+                onClick={() => void graphQuery.refetch()}
+                type="button"
+              >
+                <RefreshCw aria-hidden="true" size={14} />
+                刷新
+              </button>
             </div>
-          ) : graphError ? (
-            <div className="empty-state graph-error-state">
+          ) : null}
+
+          {graphData && graphError ? (
+            <div className="graph-refresh-error" role="alert">
+              <AlertTriangle aria-hidden="true" size={16} />
+              <div>
+                <strong>知识图谱刷新失败</strong>
+                <span>{graphError}</span>
+              </div>
+              <button
+                aria-label="重试知识图谱"
+                disabled={graphQuery.isFetching}
+                onClick={() => void graphQuery.refetch()}
+                type="button"
+              >
+                重试
+              </button>
+            </div>
+          ) : null}
+
+          {!projectId ? (
+            <div className="graph-empty-state">
+              <div>
+                <h3>先创建或选择项目</h3>
+                <p>知识图谱只展示当前项目的真实数据列、模型实验和经验规则。请先在左侧 Explorer 建立项目上下文。</p>
+              </div>
+            </div>
+          ) : graphQuery.isFetching && !graphData ? (
+            <div className="graph-loading-state" role="status">
+              <div className="graph-loading-copy">
+                <Network aria-hidden="true" size={18} />
+                <strong>正在读取知识图谱…</strong>
+                <span>正在汇总数据列、模型实验与已审核经验。</span>
+              </div>
+              <div aria-hidden="true" className="graph-skeleton">
+                <span className="graph-skeleton-node column" />
+                <span className="graph-skeleton-node experiment" />
+                <span className="graph-skeleton-node rule" />
+              </div>
+            </div>
+          ) : graphError && !graphData ? (
+            <div className="empty-state graph-error-state" role="alert">
               <strong>知识图谱加载失败</strong>
               <span>{graphError}</span>
-              <button className="graph-retry-button" onClick={() => setGraphReloadToken((value) => value + 1)} type="button">
-                重试加载
+              <button
+                aria-label="重试知识图谱"
+                className="graph-retry-button"
+                onClick={() => void graphQuery.refetch()}
+                type="button"
+              >
+                <RefreshCw aria-hidden="true" size={14} />
+                重试
               </button>
             </div>
           ) : !graphData || graphData.nodes.length === 0 ? (
@@ -1022,7 +1065,7 @@ export function EvolutionWorkspace({
               </section>
             </>
           )}
-        </div>
+        </section>
       )}
     </main>
   );

@@ -494,11 +494,87 @@
   font-weight: 600;
   box-shadow: 0 4px 12px rgb(var(--rgb-ml) / 0.35);
 }
+.graph-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.graph-query-toolbar {
+  align-items: center;
+  border-bottom: 1px solid rgb(var(--rgb-text-subtle) / 0.16);
+  display: flex;
+  justify-content: space-between;
+  min-height: 44px;
+}
+.graph-query-toolbar > span {
+  color: var(--color-text-subtle);
+  font-size: 12px;
+}
+.graph-query-toolbar button,
+.graph-refresh-error button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+}
+.graph-query-toolbar button:hover,
+.graph-refresh-error button:hover {
+  background: var(--color-border);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+.graph-query-toolbar button:focus-visible,
+.graph-refresh-error button:focus-visible,
+.graph-retry-button:focus-visible,
+.graph-node-action:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-accent);
+  outline: none;
+}
+.graph-query-toolbar button:disabled,
+.graph-refresh-error button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+.graph-refresh-error {
+  align-items: center;
+  background: rgb(var(--rgb-danger) / 0.06);
+  border: 1px solid rgb(var(--rgb-danger) / 0.28);
+  border-radius: var(--radius-control);
+  color: var(--color-danger);
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: var(--space-2) var(--space-3);
+}
+.graph-refresh-error > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.graph-refresh-error strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.graph-refresh-error span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .graph-container {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
   gap: var(--space-5);
-  margin-top: var(--space-4);
+  margin-top: 0;
   background: var(--color-bg-surface);
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-panel);
@@ -650,6 +726,7 @@ button.insight-card {
 }
 .graph-retry-button,
 .graph-node-action {
+  align-items: center;
   align-self: flex-start;
   border: 1px solid rgb(var(--rgb-ml) / 0.45);
   background: rgb(var(--rgb-ml) / 0.12);
@@ -657,8 +734,12 @@ button.insight-card {
   border-radius: var(--radius-control);
   padding: var(--space-2) var(--space-3);
   cursor: pointer;
+  display: inline-flex;
   font-size: 12px;
   font-weight: 600;
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 44px;
 }
 .graph-retry-button:hover,
 .graph-node-action:hover {
@@ -761,9 +842,78 @@ button.insight-card {
 
 .graph-loading-state {
   align-items: center;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
   display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
   justify-content: center;
   min-height: 400px;
+  padding: var(--space-8);
+}
+
+.graph-loading-copy {
+  align-items: center;
+  color: var(--color-text-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.graph-loading-copy strong {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.graph-loading-copy span {
+  font-size: 12px;
+}
+
+.graph-skeleton {
+  align-items: center;
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 680px;
+  width: 100%;
+}
+
+.graph-skeleton-node {
+  animation: graph-skeleton-loading var(--duration-status-cycle) var(--ease-in-out) infinite;
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-strong);
+  display: block;
+  height: 52px;
+  opacity: 0.45;
+}
+
+.graph-skeleton-node.column {
+  border-radius: var(--radius-control);
+}
+
+.graph-skeleton-node.experiment {
+  border-radius: var(--radius-round);
+  height: 68px;
+  justify-self: center;
+  width: 68px;
+}
+
+.graph-skeleton-node.rule {
+  border-radius: var(--radius-panel);
+}
+
+@keyframes graph-skeleton-loading {
+  0%,
+  100% {
+    opacity: 0.38;
+  }
+
+  50% {
+    opacity: 0.72;
+  }
 }
 
 .graph-error-state {
