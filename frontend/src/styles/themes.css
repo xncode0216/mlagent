@@ -12,7 +12,7 @@
   --color-text-secondary: var(--palette-subtext-1);
   --color-text-subtle: var(--palette-subtext-0);
   --color-text-dim: var(--palette-overlay-1);
-  --color-text-muted: var(--palette-overlay-0);
+  --color-text-muted: var(--palette-overlay-1);
   --color-text-strong: var(--palette-bright-text);
   --color-accent: var(--palette-blue);
   --color-success: var(--palette-green);
