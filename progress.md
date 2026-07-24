@@ -1120,3 +1120,14 @@
 - **真实缺陷与防回归**：首次浏览器截图发现 toolbar/DOM/canvas 都存在但画布透明。像素与 Cytoscape registry 探针确认 React StrictMode 二次挂载后的新 core 有 0 elements；初始化 effect 现在从最新 graph ref 自行恢复拓扑、选择和 highlight。组件测试以 StrictMode 覆盖二次挂载，golden path 进一步读取真实 canvas alpha，直接拒绝“canvas 存在但没画节点”的假阳性。
 - **门禁与视觉证据**：映射/Canvas/Evolution 聚焦 `14/14`；完整 Vitest `32 files / 184 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿。真实 FastAPI + Vite Playwright `6 passed`，新增路径覆盖训练 → 图谱非透明像素 → 定位实验 → 放大/fit → 回到 focused baseline。1440×900 截图 `E:\ml_agent\.codex-runs\p2-6-knowledge-graph.png` 确认两个非空语义分组、节点/关系与紧凑工具栏可读。
 - **动态计划**：P2-6 的成熟图库、布局、缩放和平移、聚类、键盘访问、深链保留、bundle 隔离与浏览器证据均已闭环，正式关闭。下一主线按 backlog 进入 P2-7 Accessibility audit，先建立 axe 自动化与当前基线，再修复 focus 管理、WCAG AA 对比度和剩余可访问名称/语义问题。
+
+## 2026-07-24 P2-7 可访问性审计（focus 管理统一 + WCAG A/AA 闸门，P2-7 完成）
+
+- **承接已入库闸门**：`9224739` 已建立自动化 a11y 闸门——`accessibility.e2e.ts` 用 `@axe-core/playwright` 对分析工作区、命令面板、模型/账户对话框、机器学习实验详情、Evolution 图谱 6 个关键状态做 WCAG 2 A/AA 扫描并要求 0 违规，同时补上全局 `:focus-visible` 基线并把 muted 文本对比度提升到审计阈值。但该 commit 尚未写入进度文档，本条一并收口。
+- **真实链路审计**：三个 `role="dialog"` 中只有命令面板（P2-5）具备完整焦点管理；顶栏模型服务与账户两个 popover 虽有 Escape 和点击外部关闭，却在打开时不移入焦点、无 Tab 陷阱、关闭后不把焦点还给触发按钮，键盘/读屏用户会在对话框外迷失。命令面板自身的 trap 逻辑也是内联重复实现。
+- **TDD 红→绿**：先新增 `useDialogFocus.test.tsx`（7 项：容器聚焦、指定初始焦点、失活恢复、Tab/Shift+Tab 循环、容器起点 Shift+Tab、非 Tab 键放行）与模型/账户 popover 各 2 项组件焦点测试；稳定观察红（焦点未移入、hook 模块缺失），实现后聚焦相关文件 `30/30`。
+- **抽取共享 hook**：新增 `lib/useDialogFocus.ts`，统一“记住触发元素→移入焦点（可指定初始元素或容器）→Tab 循环陷入→失活恢复”，刻意放行非 Tab 键以便各 dialog 保留自有 Escape/关闭逻辑。命令面板、模型、账户三个对话框改用同一 hook，删除命令面板内联的 focus effect 与 trap 函数；两个 popover 的 dialog 容器补 `tabIndex=-1` + `ref` + `onKeyDown`。
+- **真实浏览器验证**：`accessibility.e2e.ts` 新增键盘焦点用例——Ctrl+K 后焦点落在搜索框、Escape 关闭；模型/账户 popover 打开后焦点在对话框、Tab 不逃逸到工作台、Escape 关闭并把焦点还给触发按钮。
+- **环境修复**：本机（DELL）此前从未建立 `backend/.venv`，导致 Playwright webServer 无法拉起后端、E2E 长期只能靠 CI。本次用系统 Python 3.11 新建 `backend/.venv` 并安装运行时+dev 依赖（纯 wheel，无编译），`app.main` 正常导入 15 路由，E2E 现可本地执行。
+- **门禁**：Vitest `33 files / 195 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿（主包 481.37KB / gzip 137.72KB）；真实 FastAPI + Vite Playwright `accessibility.e2e.ts` `2 passed`——axe 6 状态 0 违规 + 键盘焦点移入/陷入/恢复断言。
+- **动态计划**：P2-7 四项验收（a11y 自动化闸门、`:focus-visible`、WCAG AA 对比度、focus 管理）全部闭环，正式关闭。下一主线按 backlog 进入 P2-8 Bundle performance，先审计当前 `dist` 分包与懒加载现状，建立可量化预算，再做工作区级路由拆分。

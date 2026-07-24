@@ -1,10 +1,10 @@
 # MLAgent 项目进度同步
 
-更新时间：2026-07-22
+更新时间：2026-07-24
 
 ## 当前阶段
 
-项目已完成生产就绪整改的 P0/P1，并按顺序关闭 P2-1 至 P2-6：设计令牌、真实加载/动效、响应式降级、信息设计、命令面板/Slash Commands，以及 Cytoscape 知识图谱升级。当前进入 P2-7 Accessibility audit，下一步先建立自动 a11y 基线，再处理 focus 管理、WCAG AA 对比度和剩余语义问题。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
+项目已完成生产就绪整改的 P0/P1，并按顺序关闭 P2-1 至 P2-7：设计令牌、真实加载/动效、响应式降级、信息设计、命令面板/Slash Commands、Cytoscape 知识图谱升级，以及可访问性审计。当前进入 P2-8 Bundle performance，下一步在现有 Markdown/图表/图谱懒加载基础上做工作区级路由拆分与可量化打包预算。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
 
 ## 已完成
 
@@ -26,23 +26,23 @@
 - P1-7 数据真实性：删除 File Explorer 假文件树、启动时自动建演示项目/上传示例 CSV 及虚构默认选择；生产源码契约持续禁止退役 demo 标识、路径和自动建项。
 - P2-2 加载态切片：项目、会话、文件、Artifact Preview、Evolution 图谱、ActiveFilePreview 与 model/auth 顶栏服务状态已接入真实异步语义。选中产物内容由版本化 React Query 缓存托管；图谱使用稳定查询键，并在经验审核/训练变更后显式失效；活动文件复用 current-version 查询键，后台刷新保留缓存内容与未保存草稿，保存后同步写入内容缓存并失效文件树元数据。模型/账户弹层保留最后成功 provider/身份并就地重试，登出失败不丢身份、成功先提交匿名缓存再验证。各区域支持首次加载、后台刷新、错误、局部恢复和 `aria-busy`；无项目时显示明确引导并禁用不安全操作。
 - P2-2 完成反馈：从结构化 `stage_completed`、`step_completed`、`artifact_created` 事件派生最近一次真实完成状态；后续普通进度不会清除它，新的完成事件会替换旧状态。Workflow 摘要通过 `aria-live="polite"` 播报阶段或产物完成，产物提供真实打开动作；不对文件/训练等服务端规范写入预先宣告成功，只在服务端成功后提交缓存，并保留明确 pending/error 状态。
+- P2-7 可访问性审计：`accessibility.e2e.ts` 用 `@axe-core/playwright` 对分析工作区、命令面板、模型/账户对话框、ML 实验详情、Evolution 图谱 6 个关键状态做 WCAG 2 A/AA 零容忍扫描；全局 `:focus-visible` 基线与 muted 文本对比度已达审计阈值；抽取共享 `useDialogFocus` hook，统一命令面板与模型/账户 popover 的焦点移入、Tab 陷阱与关闭后焦点恢复，E2E 追加真实浏览器键盘焦点断言。
 
 ## 最近验证
 
 - 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `32 passed files / 184 tests`（设计契约 15/15）。
+- 前端测试：`npm.cmd test`，结果 `33 passed files / 195 tests`（设计契约 15/15）。
 - 前端 lint：`npm.cmd run lint`，通过。
 - 前端构建：`npm.cmd run build`，通过。
-- Playwright E2E：真实 FastAPI + Vite 共 `6 passed`，覆盖设计系统、数据画像→预处理→训练 golden path、命令面板发送、Cytoscape 非透明像素、节点定位/缩放/fit/实验深链，以及桌面/移动响应式与长路径。1440×900 图谱截图确认非空语义分组、节点关系与紧凑工具栏可读。
+- Playwright E2E：本次 `accessibility.e2e.ts` `2 passed`——axe 对 6 个关键状态 0 违规，并断言命令面板/模型/账户对话框的键盘焦点移入·陷入·恢复；设计系统、数据画像→预处理→训练 golden path、命令面板发送、Cytoscape 图谱与响应式/长路径的 `6 passed` 在 P2-6 验证保持通过。本机已补建 `backend/.venv`（此前缺失），Playwright webServer 现可本地拉起后端执行 E2E。
 - GitHub：`feat/p0-backend-hardening` 已推送并建立草稿 PR #2；backend/frontend/Playwright 三个 CI 闸门全部通过。
 - 后端健康检查：`http://127.0.0.1:8000/health` 返回 `{"status":"ok","service":"mlagent-api"}`。
 
 ## 下一步优先级
 
-1. P2-7 可访问性审计：建立自动 a11y 闸门，补齐 focus 管理、WCAG AA 对比度和剩余可访问名称/语义。
-2. P2-8 Bundle performance：在现有 Markdown、图表和图谱懒加载基础上继续做工作区级拆包与可量化预算。
-3. 继续扩展真实数据/ML 工具、上下文 inspector/provenance，以及原始数据→训练→诊断→导出→learned rule 的完整浏览器/API golden path。
-4. Docker Kernel 部署验证、Redis 多实例验证及 GitHub Actions Node 运行时升级。
+1. P2-8 Bundle performance：在现有 Markdown、图表和图谱懒加载基础上继续做工作区级拆包与可量化预算。
+2. 继续扩展真实数据/ML 工具、上下文 inspector/provenance，以及原始数据→训练→诊断→导出→learned rule 的完整浏览器/API golden path。
+3. Docker Kernel 部署验证、Redis 多实例验证及 GitHub Actions Node 运行时升级。
 
 ## 当前注意事项
 
