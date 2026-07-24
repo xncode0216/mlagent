@@ -1078,3 +1078,45 @@
 - **门禁**：Vitest `28 files / 160 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿（主包 469.59KB、CSS gzip 12.09KB）；Playwright 四条 E2E（design-system / golden-path / 阶段条 / 顶栏）`4 passed`。
 - **浏览器复核**：390/360 顶栏图标化后完整落在视口内、无横向溢出；服务入口压缩后 mode-tabs 重获空间显示活动标签（可滚动）。过程中一次 `_probe.tmp.mjs` 因 PowerShell 工作目录回退到项目根、`Remove-Item` 静默失败而残留，被 `eslint .` 扫出 `no-undef`；用绝对路径删除后 lint 恢复干净——后续自管命令统一显式 `Set-Location frontend`。
 - **动态计划调整**：P2-3 仍进行中，已完成阶段布局 + 顶栏溢出两个子切片。剩余：文件路径逐字换行（<900px 时 file-sidebar 隐藏，需在 900–1180px 窄侧栏区间核查）与显式移动降级/守卫收口；不把 P2-4 信息设计混入。
+
+## 2026-07-22 工作台中文化（切片 2：全局导航与服务状态）
+
+- **承接在途改动**：基于 `6e268c4` 已完成的中心 Agent cockpit 中文化，继续统一顶栏主模式、活动栏地标、工作区状态、底部状态栏、模型服务与账户服务的可见文案和可访问名称；代码标识、provider 名称、环境变量、文件名与数据值保持原文。
+- **状态语义保持**：模型/认证的 loading、offline、background-refresh、retry、sign-in/sign-out 文案同步中文化，不改变 React Query 缓存、失败时保留旧状态、登出 mutation 与本地重试行为。
+- **测试契约闭环**：接手时 11 个组件测试因 UI 已翻译而断言仍为英文失败；同步 `AuthMenu`、`ModelStatusIndicator`、纯 view model、AppShell smoke 与两条 Playwright 可访问名称后，聚焦 `29/29`、完整 Vitest `28 files / 160 tests` 全绿。
+
+## 2026-07-22 P2-3 响应式重构（切片 3：长路径与移动降级收口，P2-3 完成）
+
+- **TDD 红→绿**：新增真实 API 响应式用例，创建长项目名与长 CSV 文件名，在 1180px/901px 检查文件侧栏。红态确认 `.project-meta code` 仍为 `white-space: normal`，路径在 260px 栏内多行断裂；改为 block + `min-width: 0` + 单行 ellipsis 后通过，完整值继续由既有 `title` 和 DOM 文本提供。
+- **移动端关闭审计**：新增 900/768/480/360 四档浏览器断言；900px 以下按既有断点隐藏文件侧栏与右检查器，但保留 48px 活动栏、可编辑 Agent 主工作区、顶栏与状态栏，中心区域恰好占满剩余宽度，页面无横向溢出。因此选择真实的优雅降级，不增加阻断式“请使用宽屏”守卫。
+- **视觉复核**：901×800 真实截图确认长项目路径和长文件行稳定单行省略，文件操作仍可达，中心工作流在最窄三栏布局下保持可用；设计继续沿用 Catppuccin token、纯 CSS 与 Linear 式紧凑列表，无新依赖。
+- **完整门禁**：Vitest `28 files / 160 tests`、ESLint、TypeScript + Vite build 全绿；真实 FastAPI + Vite Playwright 共 `6 passed`（design-system、golden path、阶段条、顶栏、移动主工作区、长路径）。P2-3 完成，下一主线进入 P2-4 信息设计（友好名称、路径渐进披露与复制动作）。
+
+## 2026-07-22 P2-4 信息设计（友好名称、渐进披露与可操作空状态，P2-4 完成）
+
+- **真实问题审计**：中心 cockpit 将 UUID、数据集路径和 `results/...` 产物路径直接塞进 `<code>`，候选实验/数据集按钮也展示原始 ID 或全路径；右侧训练检查器的实验和预测样本筛选无结果时只有英文 `No ... match`，无法就地恢复。其他项目/文件/图谱/日志空态多数已有真实引导，因此本项聚焦原 evidence 的 canonical 值泛滥与最后几个裸筛选空态。
+- **纯逻辑 + 可复用展示层**：新增 `informationDisplay.ts`，统一识别 Windows/POSIX 路径、ID 与普通值，派生友好文件名、折叠的父级上下文和紧凑 ID；新增 `InformationValue.tsx`，默认只显示友好摘要，通过原生 `details/summary` 展开规范值，并以 Clipboard API + 安全回退复制完整内容。复制成功/失败通过 `aria-live` 明确反馈，summary 与复制按钮均为 44px，使用 lucide-react、Catppuccin token 和既有 reduced-motion 契约。
+- **中心工作流接线**：所有 cockpit card facts、工作流完成反馈、当前组件与最新产物都改用统一披露控件；动态产物仍可用规范路径打开。候选运行按钮改为“文件名 · 模型”，候选数据集按钮使用文件名，原始 experiment/dataset version id 与完整路径拆成可披露事实，动作 payload 继续保留规范值，因此可读性提升而审计/继续执行语义不丢失。
+- **空状态恢复闭环**：右侧训练历史在筛选无匹配时说明原因并提供“重置实验筛选”；预测样本无匹配时提供“重置样本筛选”，两者都恢复为全部数据。空预测样本、空 CSV、未选项目/文件、无训练记录统一补具体下一步，不增加插画卡片或装饰性 UI。组件测试覆盖两个重置闭环，真实 golden path 也验证 GPU-only 无匹配 → 重置 → focused baseline 行恢复。
+- **TDD 与浏览器证据**：路径/ID 纯函数、组件披露/复制、候选文案和空态恢复聚焦 `41/41`；完整 Vitest `29 files / 167 tests`、ESLint、TypeScript + Vite build 全绿（主包 473.00KB，CSS gzip 12.44KB）。真实 FastAPI + Vite Playwright 全部 `6 passed`，随后扩展后的 golden path 再次 `1 passed`；浏览器还验证复制到剪贴板的值严格等于动态规范路径。1440×900 截图确认友好文件名、父级上下文、展开/复制反馈和四栏布局均可读。
+- **动态计划**：P2-4 原始三项验收（友好名称与复制、空态指导、长路径渐进披露）均有直接证据，正式关闭。下一主线按 backlog 顺序进入 P2-5 Command Palette（⌘/Ctrl+K）+ slash commands，先审计现有 quick actions、composer 键盘契约与 command payload，再实现一个可测试的中心工作台垂直切片。
+
+## 2026-07-22 P2-5 命令面板与 Slash Commands（P2-5 完成）
+
+- **真实链路审计**：composer placeholder 已提示输入 `/` 查看命令，但生产代码没有 slash 解析、建议列表或命令面板；分析/机器学习各有三套硬编码 quick label + prompt，和后端自然语言 intent 依赖松散，无法搜索、键盘触达或统一演进。P2-5 因此以“一个命令来源、两种发现入口、同一 WebSocket 执行链”为验收边界。
+- **统一命令模型**：新增 `agentCommands.ts`，定义 profile/clean/transform/train/gpu/evaluate/diagnose/iterate/export/learn/continue 共 11 个 typed command；每项包含稳定 slash、中文名称、说明、类别、关键词和上下文 prompt builder。数据集优先解析 training handoff 路径再回退 active file；评估/诊断/迭代/导出优先带 focused experiment；训练携带 target/preprocessing plan。原 quick actions 改为 registry ID 引用，删除重复 prompt，保证按钮、palette、slash 共享语义。
+- **命令面板交互**：composer 新增可见 44px `Ctrl K` 入口，全局 Ctrl/Cmd+K 打开 `aria-modal` dialog；支持即时中文/英文/关键词过滤、Arrow 上下循环、Enter 插入、Escape/遮罩关闭、Tab 焦点约束与关闭后焦点恢复。列表使用 lucide 语义图标、左侧选中条和文字状态，搜索无结果时给出可操作查询建议；所有控件 ≥44px 且有 `:focus-visible`。
+- **Slash 执行链**：输入 `/` 在 composer 上方打开同一 registry 的紧凑建议列表，Arrow/Enter 选择；完整 `/command` 直接展开为带当前项目/文件/实验上下文的自然语言 prompt，并复用既有 `submit → sendMessage → WebSocket`，不另造后端旁路。`/diagnose 用户补充` 会保留参数；未知命令不发送、不清空输入，就地提示按 Ctrl+K 查看可用命令。
+- **视觉与产品约束**：面板沿用 Linear 式紧凑行与 Cursor 式细边框/无阴影结构，纯 CSS、Catppuccin token、Inter + JetBrains Mono、lucide-react；没有第三方 UI、渐变、嵌套卡片或装饰动画。1440×900 截图确认单结果过滤、slash 标签、键盘提示和暗色遮罩层级清晰，底层工作台上下文仍可辨认。
+- **TDD 与门禁**：纯 registry + AgentWorkspace 聚焦 `13/13`，覆盖查询、上下文 prompt、参数、quick parity、Ctrl/Cmd+K、无结果、palette→composer→send、inline 建议、未知命令与 Escape 焦点恢复。完整 Vitest `30 files / 175 tests`、设计契约 15/15、ESLint、TypeScript + Vite build 全绿；初始 JS 484.93KB / gzip 138.83KB，仍低于 500KB 警戒线。真实 FastAPI + Vite Playwright `6 passed`，golden path 证明 Ctrl+K → 过滤“错误诊断” → 插入 `/diagnose` → 通过真实 WebSocket 发送。
+- **动态计划**：P2-5 原 evidence 与 fix 已全部由生产代码、组件测试和浏览器路径覆盖，正式关闭。下一主线按 backlog 进入 P2-6 知识图谱可视化升级，先评估现有手写 SVG 的布局/缩放/聚类缺口与 bundle 成本，再决定成熟图库并保留既有 provenance 深链行为。
+
+## 2026-07-22 P2-6 知识图谱可视化升级（P2-6 完成）
+
+- **技术选型与边界**：对现有手写 SVG 做链路审计后，确认固定三列坐标只能排列 column/experiment/rule，缺少真实缩放、平移、拖拽、聚类与复杂拓扑布局。采用官方持续维护、MIT、内置布局/compound node/zoom/pan/event 能力的 Cytoscape.js 3.34.0，并 exact pin；保留既有 React Query 加载/刷新/失败保留旧图、节点详情、provenance 文件/实验深链、规则详情和高级洞察定位行为。
+- **语义聚类与数据防护**：新增纯映射层，把数据特征、模型实验、自进化规则变成 compound cluster，真实节点归入对应 parent；过滤任一端点不存在的悬空边，不让异常后端关系渲染成不可解释连线；无真实节点的空 cluster 不进入布局，避免孤立分组拉低 fit 缩放。Cytoscape 使用无动画 COSE 布局，支持节点拖拽、空白平移、滚轮缩放与邻域 hover 强调。
+- **操作与可访问性**：画布上方提供 44px 缩小、放大、适应视口按钮和实时百分比；原生分组 select “定位图谱节点”让键盘用户访问全部 canvas 节点，选择同步右侧详情。Canvas 暴露节点/关系摘要，帮助文字解释鼠标与键盘路径；insight 点击使用短时静态强调并自动 fit，不引入装饰循环或 reduced-motion 冲突。全部颜色由实时解析的 Catppuccin token 驱动，主题/品牌属性变化会更新 renderer style。
+- **懒加载与性能**：`EvolutionWorkspace` 通过 `React.lazy` + `Suspense` 按需加载图谱；初始 JS 从 P2-5 的 484.93KB / gzip 138.83KB 降为 480.53KB / gzip 137.47KB，Cytoscape 独立为 453.14KB / gzip 145.78KB chunk，未把图库成本加入默认工作台。CSS 93.62KB / gzip 13.12KB。
+- **真实缺陷与防回归**：首次浏览器截图发现 toolbar/DOM/canvas 都存在但画布透明。像素与 Cytoscape registry 探针确认 React StrictMode 二次挂载后的新 core 有 0 elements；初始化 effect 现在从最新 graph ref 自行恢复拓扑、选择和 highlight。组件测试以 StrictMode 覆盖二次挂载，golden path 进一步读取真实 canvas alpha，直接拒绝“canvas 存在但没画节点”的假阳性。
+- **门禁与视觉证据**：映射/Canvas/Evolution 聚焦 `14/14`；完整 Vitest `32 files / 184 tests`（设计契约 15/15）、ESLint、TypeScript + Vite build 全绿。真实 FastAPI + Vite Playwright `6 passed`，新增路径覆盖训练 → 图谱非透明像素 → 定位实验 → 放大/fit → 回到 focused baseline。1440×900 截图 `E:\ml_agent\.codex-runs\p2-6-knowledge-graph.png` 确认两个非空语义分组、节点/关系与紧凑工具栏可读。
+- **动态计划**：P2-6 的成熟图库、布局、缩放和平移、聚类、键盘访问、深链保留、bundle 隔离与浏览器证据均已闭环，正式关闭。下一主线按 backlog 进入 P2-7 Accessibility audit，先建立 axe 自动化与当前基线，再修复 focus 管理、WCAG AA 对比度和剩余可访问名称/语义问题。

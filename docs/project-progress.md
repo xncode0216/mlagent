@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-项目已完成生产就绪整改的 P0/P1，进入 P2 产品质感与可访问性阶段。P1-7 的 File Explorer 修正已完成：启动不再自动创建演示项目或上传示例 CSV，空工作区只呈现真实状态；P2-2 的动效基础、主要异步查询面和阶段/产物完成反馈已经按完整验收边界关闭。当前按顺序进入 P2-3 响应式策略，优先解决 workflow 阶段逐字换行，并完成窄屏降级或明确桌面最小宽度。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
+项目已完成生产就绪整改的 P0/P1，并按顺序关闭 P2-1 至 P2-6：设计令牌、真实加载/动效、响应式降级、信息设计、命令面板/Slash Commands，以及 Cytoscape 知识图谱升级。当前进入 P2-7 Accessibility audit，下一步先建立自动 a11y 基线，再处理 focus 管理、WCAG AA 对比度和剩余语义问题。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
 
 ## 已完成
 
@@ -18,7 +18,7 @@
 - 数据质量画像：`/analysis/profile` 生成列级质量表、目标列候选、缺失/唯一值/质量标记，并在前端右侧数据面板渲染。
 - 机器学习：baseline/sklearn 训练、训练记录、模型与指标产物、数据分析到 ML 的 handoff、`use_gpu` 参数链路。
 - 自进化知识：候选经验抽取、经验状态迁移、采纳/拒绝/冲突、规则索引、命中规则注入、注入日志、协议展示。
-- 知识图谱：后端 `/evolution/graph` API，前端图谱/高级洞察 tab；React Query 托管加载/刷新，支持无项目与无证据空态、首次骨架、失败重试、刷新失败保留旧图、节点键盘访问和规则节点跳转经验详情。
+- 知识图谱：后端 `/evolution/graph` API，前端图谱/高级洞察 tab；React Query 托管加载/刷新，支持无项目与无证据空态、首次骨架、失败重试和刷新失败保留旧图。P2-6 已用懒加载 Cytoscape + COSE 替换手写 SVG，支持 compound 语义聚类、缩放/平移/节点拖拽、邻域强调、44px 视口控制、键盘节点定位、规则/文件/实验 provenance 深链和 insight 节点定位。
 - GPU 调度基础：GPU scheduler 服务、状态 API、队列结构和测试。
 - 前端稳定性：自进化状态统计抽为可测试函数，修复冲突/拒绝统计反转问题，图谱属性由 `any` 收紧为 `unknown` 并做类型防护。
 - 前端深链与测试：保留覆盖广泛的 `smoke:deep-links`；新增标准 Playwright golden path，以真实 FastAPI + Vite 验证数据画像、预处理执行、baseline 训练和实验详情，并接入 GitHub Actions。
@@ -30,19 +30,19 @@
 ## 最近验证
 
 - 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `28 passed files / 160 tests`。
+- 前端测试：`npm.cmd test`，结果 `32 passed files / 184 tests`（设计契约 15/15）。
 - 前端 lint：`npm.cmd run lint`，通过。
 - 前端构建：`npm.cmd run build`，通过。
-- Playwright E2E：设计系统运行时主题覆盖、reduced-motion、model/auth 真实服务刷新、Evolution 图谱渲染 + 真实 API golden path 共 `2 passed`；golden path 从真实数据集触发画像，验证完成状态与产物打开，再继续预处理和训练。1440×900 截图复核完成反馈不遮挡工作台、44px 打开操作和右侧真实画像可用；截图中的 workflow 阶段逐字换行已转入 P2-3。
+- Playwright E2E：真实 FastAPI + Vite 共 `6 passed`，覆盖设计系统、数据画像→预处理→训练 golden path、命令面板发送、Cytoscape 非透明像素、节点定位/缩放/fit/实验深链，以及桌面/移动响应式与长路径。1440×900 图谱截图确认非空语义分组、节点关系与紧凑工具栏可读。
 - GitHub：`feat/p0-backend-hardening` 已推送并建立草稿 PR #2；backend/frontend/Playwright 三个 CI 闸门全部通过。
 - 后端健康检查：`http://127.0.0.1:8000/health` 返回 `{"status":"ok","service":"mlagent-api"}`。
 
 ## 下一步优先级
 
-1. P2-3 响应式策略：解决 1440×900 仍可见的 workflow 阶段逐字换行，并完成窄屏降级或明确桌面最小宽度与友好提示。
-2. P2-4/P2-5 信息设计与命令系统：隐藏裸 UUID、完善空状态、兑现命令面板与斜杠命令。
-3. P2-6/P2-7 图谱与可访问性：升级知识图谱交互并补 focus、对比度、自动 a11y 闸门。
-4. 继续扩展真实数据/ML 工具、Docker Kernel 部署验证、Redis 多实例验证及 GitHub Actions Node 运行时升级。
+1. P2-7 可访问性审计：建立自动 a11y 闸门，补齐 focus 管理、WCAG AA 对比度和剩余可访问名称/语义。
+2. P2-8 Bundle performance：在现有 Markdown、图表和图谱懒加载基础上继续做工作区级拆包与可量化预算。
+3. 继续扩展真实数据/ML 工具、上下文 inspector/provenance，以及原始数据→训练→诊断→导出→learned rule 的完整浏览器/API golden path。
+4. Docker Kernel 部署验证、Redis 多实例验证及 GitHub Actions Node 运行时升级。
 
 ## 当前注意事项
 
