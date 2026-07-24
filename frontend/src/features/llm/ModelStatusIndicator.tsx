@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Cpu, RefreshCw } from "lucide-react";
 
 import { getLlmStatus, type LlmStatus } from "../../lib/api";
+import { useDialogFocus } from "../../lib/useDialogFocus";
 import { buildProviderRows, describeLlmStatus } from "./llmStatus";
 import { useLlmStatusQuery } from "./useLlmStatusQuery";
 
@@ -19,6 +20,7 @@ type Props = {
 export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const { dialogRef, onKeyDown } = useDialogFocus<HTMLDivElement>(open);
   const statusQuery = useLlmStatusQuery(loadStatus);
 
   useEffect(() => {
@@ -69,7 +71,10 @@ export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
           aria-busy={statusQuery.isFetching}
           aria-label="模型服务状态"
           className="model-status-popover"
+          onKeyDown={onKeyDown}
+          ref={dialogRef}
           role="dialog"
+          tabIndex={-1}
         >
           <header className="model-status-popover-head">
             <span>模型服务</span>

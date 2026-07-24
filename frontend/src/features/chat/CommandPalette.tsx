@@ -12,8 +12,9 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useDialogFocus } from "../../lib/useDialogFocus";
 import {
   availableAgentCommands,
   filterAgentCommands,
@@ -77,18 +78,14 @@ export function CommandPalette({
 }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  const dialogRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const { dialogRef, onKeyDown: trapTab } = useDialogFocus<HTMLElement>(true, {
+    initialFocus: searchRef,
+  });
   const commands = useMemo(
     () => filterAgentCommands(availableAgentCommands(mode), query),
     [mode, query],
   );
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    searchRef.current?.focus();
-    return () => previouslyFocused?.focus();
-  }, []);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -97,23 +94,6 @@ export function CommandPalette({
   function moveSelection(delta: number) {
     if (commands.length === 0) return;
     setActiveIndex((current) => (current + delta + commands.length) % commands.length);
-  }
-
-  function trapTab(event: KeyboardEvent<HTMLElement>) {
-    if (event.key !== "Tab" || !dialogRef.current) return;
-    const focusable = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>('input, button:not([disabled]), [tabindex]:not([tabindex="-1"])'),
-    );
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable.at(-1)!;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
   }
 
   return (

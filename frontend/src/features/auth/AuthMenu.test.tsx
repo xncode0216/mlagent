@@ -177,3 +177,29 @@ describe("AuthMenu", () => {
     expect(loadSession).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("AuthMenu focus management", () => {
+  it("moves keyboard focus into the popover when it opens", async () => {
+    renderMenu({ loadSession: async () => makeSession({ authenticated: false }) });
+    await screen.findByText("登录");
+    const trigger = screen.getByRole("button", { name: /账户：/ });
+    trigger.focus();
+
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "账户" });
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+  });
+
+  it("restores focus to the trigger when Escape closes the popover", async () => {
+    renderMenu({ loadSession: async () => makeSession({ authenticated: false }) });
+    await screen.findByText("登录");
+    const trigger = screen.getByRole("button", { name: /账户：/ });
+    trigger.focus();
+    fireEvent.click(trigger);
+    await screen.findByRole("dialog", { name: "账户" });
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+});

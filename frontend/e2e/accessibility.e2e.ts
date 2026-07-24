@@ -120,3 +120,56 @@ test("关键工作区和对话框满足自动化 WCAG A/AA 检查", async ({ pag
     await api.dispose();
   }
 });
+
+test("关键对话框支持键盘焦点移入、陷入与恢复", async ({ page, playwright }) => {
+  const api = await playwright.request.newContext();
+
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const project = await postJson<Project>(api, "/api/projects", {
+      name: `playwright_focus_${Date.now()}`,
+    });
+    await postJson(api, `/api/projects/${project.id}/files/create`, {
+      content: DATASET_CSV,
+      path: DATASET_PATH,
+      type: "file",
+    });
+
+    await page.goto(
+      `/?mode=analysis&activity=data&rightTab=data&projectId=${project.id}` +
+        `&file=${encodeURIComponent(DATASET_PATH)}`,
+    );
+    await expect(page.locator(".data-preview")).toBeVisible();
+
+    // Command palette: Ctrl+K moves focus into the search box; Escape closes it.
+    await page.keyboard.press("Control+K");
+    const palette = page.getByRole("dialog", { name: "Agent 命令面板" });
+    await expect(palette).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: "搜索 Agent 命令" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+
+    // Model popover: opening focuses the dialog, Tab keeps focus inside, Escape
+    // restores focus to the trigger that opened it.
+    const modelTrigger = page.getByRole("button", { name: /^模型服务：/ });
+    await modelTrigger.click();
+    const modelDialog = page.getByRole("dialog", { name: "模型服务状态" });
+    await expect(modelDialog).toBeFocused();
+    await page.keyboard.press("Tab");
+    expect(await modelDialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(modelDialog).toBeHidden();
+    await expect(modelTrigger).toBeFocused();
+
+    // Account popover: same focus-in and focus-restore contract.
+    const accountTrigger = page.getByRole("button", { name: /^账户：/ });
+    await accountTrigger.click();
+    const accountDialog = page.getByRole("dialog", { name: "账户" });
+    await expect(accountDialog).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(accountDialog).toBeHidden();
+    await expect(accountTrigger).toBeFocused();
+  } finally {
+    await api.dispose();
+  }
+});

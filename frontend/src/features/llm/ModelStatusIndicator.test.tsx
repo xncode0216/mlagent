@@ -97,3 +97,27 @@ describe("ModelStatusIndicator query states", () => {
     expect(within(dialog).getByText("使用中")).toBeTruthy();
   });
 });
+
+describe("ModelStatusIndicator focus management", () => {
+  it("moves keyboard focus into the popover when it opens", async () => {
+    renderIndicator(() => Promise.resolve(llmStatus()));
+    const trigger = screen.getByRole("button", { name: /模型服务：/ });
+    trigger.focus();
+
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "模型服务状态" });
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+  });
+
+  it("restores focus to the trigger when Escape closes the popover", async () => {
+    renderIndicator(() => Promise.resolve(llmStatus()));
+    const trigger = screen.getByRole("button", { name: /模型服务：/ });
+    trigger.focus();
+    fireEvent.click(trigger);
+    await screen.findByRole("dialog", { name: "模型服务状态" });
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+});

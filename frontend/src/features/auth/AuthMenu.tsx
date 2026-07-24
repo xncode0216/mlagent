@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, LogIn, LogOut, RefreshCw, UserRound } from "lucide-react";
 
 import { authLoginUrl, getAuthSession, logout, type AuthSession } from "../../lib/api";
+import { useDialogFocus } from "../../lib/useDialogFocus";
 import { describeAuthSession } from "./authSession";
 import { authSessionQueryKey, useAuthSessionQuery } from "./useAuthSessionQuery";
 
@@ -24,6 +25,7 @@ type Props = {
 export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSignIn }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const { dialogRef, onKeyDown } = useDialogFocus<HTMLDivElement>(open);
   const queryClient = useQueryClient();
   const sessionQuery = useAuthSessionQuery(loadSession);
   const signOutMutation = useMutation({
@@ -103,7 +105,10 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
           aria-busy={sessionQuery.isFetching || signOutMutation.isPending}
           aria-label="账户"
           className="auth-menu-popover"
+          onKeyDown={onKeyDown}
+          ref={dialogRef}
           role="dialog"
+          tabIndex={-1}
         >
           <header className="auth-menu-popover-head">
             <span>账户</span>
