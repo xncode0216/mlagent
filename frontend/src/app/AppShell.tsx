@@ -97,9 +97,9 @@ function parentFolders(path: string) {
 
 function modeLabel(mode: MainMode) {
   return {
-    analysis: "Data Analysis",
-    "machine-learning": "Machine Learning",
-    evolution: "Evolution Knowledge",
+    analysis: "数据分析",
+    "machine-learning": "机器学习",
+    evolution: "自进化知识",
   }[mode];
 }
 
@@ -281,7 +281,7 @@ export function AppShell() {
   async function handleAbandonTaskState(stage: WorkflowStageId) {
     const sessionId = activeSession?.id;
     if (!sessionId) {
-      throw new Error("No active session is available for abandoning saved task state.");
+      throw new Error("没有可用于放弃已保存任务状态的活动会话。");
     }
     await abandonTaskState(sessionId, stage);
     await invalidateSessionTaskStates(sessionId);
@@ -303,7 +303,7 @@ export function AppShell() {
     async function loadProject(current: Project) {
       if (!cancelled) {
         await activateProject(current);
-        setWorkspaceStatus("Project files synced");
+        setWorkspaceStatus("项目文件已同步");
       }
     }
 
@@ -329,14 +329,14 @@ export function AppShell() {
             setActiveFile("");
             setTrainingDatasetPath("");
             setExpandedFolders([]);
-            setWorkspaceStatus("No project selected. Create or open a project to begin.");
+            setWorkspaceStatus("未选择项目。创建或打开一个项目以开始。");
           }
           return;
         }
         await loadProject(current);
       } catch {
         if (!cancelled) {
-          setWorkspaceStatus("Backend is unavailable; showing static workbench shell");
+          setWorkspaceStatus("后端不可用；显示静态工作台外壳");
         }
       }
     }
@@ -487,55 +487,55 @@ export function AppShell() {
   async function switchProject(projectId: string) {
     const nextProject = projects.find((item) => item.id === projectId);
     if (!nextProject) return;
-    setWorkspaceStatus("Switching project...");
+    setWorkspaceStatus("正在切换项目…");
     await activateProject(nextProject);
-    setWorkspaceStatus("Project files synced");
+    setWorkspaceStatus("项目文件已同步");
   }
 
   async function handleCreateProject(name: string) {
     const trimmedName = name.trim();
     if (!trimmedName) return;
-    setWorkspaceStatus("Creating project...");
+    setWorkspaceStatus("正在创建项目…");
     const created = await createProject(trimmedName);
     const nextProjects = await listProjects();
     queryClient.setQueryData(projectsQueryKey(), nextProjects);
     await activateProject(created);
-    setWorkspaceStatus("Project files synced");
+    setWorkspaceStatus("项目文件已同步");
   }
 
   async function handleOpenLocalProject(path: string) {
     const trimmedPath = path.trim();
     if (!trimmedPath) return;
-    setWorkspaceStatus("Opening local project...");
+    setWorkspaceStatus("正在打开本地项目…");
     const opened = await openLocalProject(trimmedPath);
     const nextProjects = await listProjects();
     queryClient.setQueryData(projectsQueryKey(), nextProjects);
     await activateProject(opened);
-    setWorkspaceStatus("Local project opened");
+    setWorkspaceStatus("本地项目已打开");
   }
 
   return (
     <div className="app-shell">
       <header className="top-nav">
         <div className="brand">MLAgent</div>
-        <nav className="mode-tabs" aria-label="Main modes">
+        <nav className="mode-tabs" aria-label="主模式">
           <button className={activeMode === "analysis" ? "active" : ""} onClick={() => setActiveMode("analysis")}>
-            Data Analysis
+            数据分析
           </button>
           <button
             className={activeMode === "machine-learning" ? "active" : ""}
             onClick={() => setActiveMode("machine-learning")}
           >
-            Machine Learning
+            机器学习
           </button>
           <button className={activeMode === "evolution" ? "active" : ""} onClick={() => setActiveMode("evolution")}>
-            Evolution Knowledge
+            自进化知识
           </button>
         </nav>
         <ModelStatusIndicator />
         <AuthMenu />
       </header>
-      <aside className="activity-bar" aria-label="Workspace navigation">
+      <aside className="activity-bar" aria-label="工作区导航">
         {activityPanels
           .filter((item) => item.group === "primary")
           .map((item) => (
@@ -710,12 +710,12 @@ export function AppShell() {
         onRefreshGpuStatus={handleRefreshGpuStatus}
       />
       <footer className="status-bar">
-        <span>{connected ? "WebSocket Connected" : "WebSocket Disconnected"}</span>
-        <span>Project: {project?.name ?? "None"}</span>
-        <span>Session: {activeSession?.title ?? "None"}</span>
-        <span>Active file: {activeFile}</span>
-        <span>Artifacts: {artifactCount}</span>
-        <span>GPU: {gpuStatus?.status ?? "unknown"}</span>
+        <span>{connected ? "WebSocket 已连接" : "WebSocket 已断开"}</span>
+        <span>项目：{project?.name ?? "无"}</span>
+        <span>会话：{activeSession?.title ?? "无"}</span>
+        <span>当前文件：{activeFile}</span>
+        <span>产物：{artifactCount}</span>
+        <span>GPU：{gpuStatus?.status ?? "未知"}</span>
       </footer>
     </div>
   );

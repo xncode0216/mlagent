@@ -45,14 +45,14 @@ export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
       : null;
   const view = describeLlmStatus({ status, loading: statusQuery.isPending, error });
   const rows = buildProviderRows(status);
-  const triggerDetail = error && status ? `${view.detail}. Refresh failed: ${error}` : view.detail;
+  const triggerDetail = error && status ? `${view.detail}。刷新失败：${error}` : view.detail;
 
   return (
     <div className="model-status" ref={containerRef}>
       <button
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label={`Model service: ${triggerDetail}`}
+        aria-label={`模型服务：${triggerDetail}`}
         className="model-status-trigger"
         data-tone={view.tone}
         onClick={() => setOpen((value) => !value)}
@@ -67,14 +67,14 @@ export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
       {open ? (
         <div
           aria-busy={statusQuery.isFetching}
-          aria-label="Model service status"
+          aria-label="模型服务状态"
           className="model-status-popover"
           role="dialog"
         >
           <header className="model-status-popover-head">
-            <span>Model service</span>
+            <span>模型服务</span>
             <button
-              aria-label="Refresh model status"
+              aria-label="刷新模型状态"
               className="model-status-refresh"
               disabled={statusQuery.isFetching}
               onClick={() => void statusQuery.refetch()}
@@ -85,7 +85,7 @@ export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
           </header>
           {statusQuery.isFetching ? (
             <p className="service-query-state progress" role="status">
-              {status ? "Refreshing model status…" : "Checking model service…"}
+              {status ? "正在刷新模型状态…" : "正在检查模型服务…"}
             </p>
           ) : null}
           <p className="model-status-detail" data-tone={view.tone}>
@@ -95,13 +95,13 @@ export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
             <div className="service-query-state error" role="alert">
               <span>{error}</span>
               <button
-                aria-label="Retry model status"
+                aria-label="重试模型状态"
                 disabled={statusQuery.isFetching}
                 onClick={() => void statusQuery.refetch()}
                 type="button"
               >
                 <RefreshCw aria-hidden="true" size={14} />
-                Retry status
+                重试
               </button>
             </div>
           ) : null}
@@ -116,7 +116,7 @@ export function ModelStatusIndicator({ loadStatus = getLlmStatus }: Props) {
             </ul>
           ) : null}
           <p className="model-status-hint">
-            Configured on the backend via <code>MLAGENT_LLM_PROVIDER</code>.
+            由后端通过 <code>MLAGENT_LLM_PROVIDER</code> 配置。
           </p>
         </div>
       ) : null}

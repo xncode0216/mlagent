@@ -15,7 +15,7 @@ import type { TrainingResult } from "../lib/api";
 const initialDeepLink = readAppDeepLink();
 const initialPreferences = readAppPreferences();
 
-const INITIAL_WORKSPACE_STATUS = "Connecting to backend project service...";
+const INITIAL_WORKSPACE_STATUS = "正在连接后端项目服务…";
 
 interface UiState {
   // 主模式 / 左侧活动栏：导航选择态（深链初始化）。

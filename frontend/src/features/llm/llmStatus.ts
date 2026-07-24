@@ -29,17 +29,17 @@ type DescribeInput = {
  */
 export function describeLlmStatus({ status, loading, error }: DescribeInput): LlmStatusView {
   if (loading && !status) {
-    return { tone: "loading", label: "LLM…", detail: "Checking model service…" };
+    return { tone: "loading", label: "LLM…", detail: "正在检查模型服务…" };
   }
   if (error && !status) {
     return {
       tone: "error",
-      label: "LLM offline",
-      detail: `Could not reach the model service: ${error}`,
+      label: "LLM 离线",
+      detail: `无法连接模型服务：${error}`,
     };
   }
   if (!status) {
-    return { tone: "loading", label: "LLM…", detail: "Checking model service…" };
+    return { tone: "loading", label: "LLM…", detail: "正在检查模型服务…" };
   }
   let current: LlmStatusView;
   if (status.configured) {
@@ -49,8 +49,8 @@ export function describeLlmStatus({ status, loading, error }: DescribeInput): Ll
   } else {
     current = {
       tone: "offline",
-      label: "No LLM",
-      detail: "No model configured. Set MLAGENT_LLM_PROVIDER (and credentials) on the backend.",
+      label: "无 LLM",
+      detail: "未配置模型。请在后端设置 MLAGENT_LLM_PROVIDER（及凭据）。",
     };
   }
   if (!error) return current;
@@ -78,14 +78,14 @@ export function buildProviderRows(status: LlmStatus | null): LlmProviderRow[] {
   if (!status) return [];
   return status.providers.map((provider) => {
     let state: LlmProviderRow["state"] = "available";
-    let stateLabel = "Available";
+    let stateLabel = "可用";
     if (provider.active) {
       if (status.configured) {
         state = "configured";
-        stateLabel = "Active";
+        stateLabel = "使用中";
       } else {
         state = "active-unconfigured";
-        stateLabel = "Needs credentials";
+        stateLabel = "需要凭据";
       }
     }
     return { id: provider.id, label: provider.label, active: provider.active, state, stateLabel };

@@ -63,10 +63,10 @@ describe("AppShell 冒烟", () => {
     // 品牌与主模式导航是静态地标，任何渲染路径都应存在。
     expect(screen.getByText("MLAgent")).toBeTruthy();
 
-    const nav = screen.getByRole("navigation", { name: "Main modes" });
-    expect(within(nav).getByRole("button", { name: "Data Analysis" })).toBeTruthy();
-    expect(within(nav).getByRole("button", { name: "Machine Learning" })).toBeTruthy();
-    expect(within(nav).getByRole("button", { name: "Evolution Knowledge" })).toBeTruthy();
+    const nav = screen.getByRole("navigation", { name: "主模式" });
+    expect(within(nav).getByRole("button", { name: "数据分析" })).toBeTruthy();
+    expect(within(nav).getByRole("button", { name: "机器学习" })).toBeTruthy();
+    expect(within(nav).getByRole("button", { name: "自进化知识" })).toBeTruthy();
   });
 
   it("没有项目时保持空工作台而不自动创建或上传演示数据", async () => {

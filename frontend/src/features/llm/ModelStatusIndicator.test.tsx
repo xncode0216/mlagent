@@ -48,10 +48,10 @@ describe("ModelStatusIndicator query states", () => {
     const firstRead = deferred<LlmStatus>();
     renderIndicator(() => firstRead.promise);
 
-    fireEvent.click(screen.getByRole("button", { name: /Model service:/ }));
-    const dialog = screen.getByRole("dialog", { name: "Model service status" });
+    fireEvent.click(screen.getByRole("button", { name: /模型服务：/ }));
+    const dialog = screen.getByRole("dialog", { name: "模型服务状态" });
     expect(dialog.getAttribute("aria-busy")).toBe("true");
-    expect(within(dialog).getByRole("status").textContent).toContain("Checking model service");
+    expect(within(dialog).getByRole("status").textContent).toContain("正在检查模型服务");
   });
 
   it("recovers from an initial error through a local retry", async () => {
@@ -62,13 +62,13 @@ describe("ModelStatusIndicator query states", () => {
     renderIndicator(loadStatus);
 
     await waitFor(() => expect(screen.getByRole("button", { name: /status API unavailable/ })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: /Model service:/ }));
+    fireEvent.click(screen.getByRole("button", { name: /模型服务：/ }));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("status API unavailable");
-    fireEvent.click(within(alert).getByRole("button", { name: "Retry model status" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "重试模型状态" }));
 
     await waitFor(() =>
-      expect(within(screen.getByRole("dialog", { name: "Model service status" })).getByText("Local vLLM · qwen2.5")).toBeTruthy(),
+      expect(within(screen.getByRole("dialog", { name: "模型服务状态" })).getByText("Local vLLM · qwen2.5")).toBeTruthy(),
     );
     expect(loadStatus).toHaveBeenCalledTimes(2);
   });
@@ -82,18 +82,18 @@ describe("ModelStatusIndicator query states", () => {
     renderIndicator(loadStatus);
 
     await screen.findByText("Local vLLM");
-    fireEvent.click(screen.getByRole("button", { name: /Model service:/ }));
-    const dialog = screen.getByRole("dialog", { name: "Model service status" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Refresh model status" }));
+    fireEvent.click(screen.getByRole("button", { name: /模型服务：/ }));
+    const dialog = screen.getByRole("dialog", { name: "模型服务状态" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "刷新模型状态" }));
 
     await waitFor(() => expect(dialog.getAttribute("aria-busy")).toBe("true"));
-    expect(within(dialog).getByText("Refreshing model status…")).toBeTruthy();
-    expect(within(dialog).getByText("Active")).toBeTruthy();
+    expect(within(dialog).getByText("正在刷新模型状态…")).toBeTruthy();
+    expect(within(dialog).getByText("使用中")).toBeTruthy();
 
     refresh.reject(new Error("model refresh failed"));
     const alert = await within(dialog).findByRole("alert");
     expect(alert.textContent).toContain("model refresh failed");
     expect(within(dialog).getByText("Local vLLM · qwen2.5")).toBeTruthy();
-    expect(within(dialog).getByText("Active")).toBeTruthy();
+    expect(within(dialog).getByText("使用中")).toBeTruthy();
   });
 });

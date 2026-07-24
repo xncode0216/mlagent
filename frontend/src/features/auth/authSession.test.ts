@@ -28,7 +28,7 @@ describe("describeAuthSession", () => {
     });
     expect(view.tone).toBe("error");
     expect(view.label).toBe("alice");
-    expect(view.detail).toContain("Signed in as alice");
+    expect(view.detail).toContain("已登录为 alice");
     expect(view.action).toBe("sign-out");
   });
 
@@ -43,7 +43,7 @@ describe("describeAuthSession", () => {
     });
     expect(view.tone).toBe("development");
     expect(view.label).toBe("dev-user");
-    expect(view.detail).toContain("authentication is disabled");
+    expect(view.detail).toContain("认证已禁用");
     expect(view.action).toBe("none");
   });
 
@@ -59,7 +59,7 @@ describe("describeAuthSession", () => {
   it("offers sign in when OIDC is active but the user is anonymous", () => {
     const view = describeAuthSession({ session: session({ authenticated: false }) });
     expect(view.tone).toBe("anonymous");
-    expect(view.label).toBe("Sign in");
+    expect(view.label).toBe("登录");
     expect(view.action).toBe("sign-in");
   });
 });

@@ -49,8 +49,8 @@ describe("AuthMenu", () => {
     renderMenu({ loadSession, signOut });
 
     await screen.findByText("alice");
-    fireEvent.click(screen.getByRole("button", { name: /Account:/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: /账户：/ }));
+    fireEvent.click(screen.getByRole("button", { name: "登出" }));
 
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
     // Initial mount fetch + a re-fetch after logout keeps the indicator honest.
@@ -66,10 +66,10 @@ describe("AuthMenu", () => {
     renderMenu({ loadSession, signOut });
 
     await screen.findByText("alice");
-    fireEvent.click(screen.getByRole("button", { name: /Account:/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: /账户：/ }));
+    fireEvent.click(screen.getByRole("button", { name: "登出" }));
 
-    await screen.findByText("Sign in");
+    await screen.findByText("登录");
     expect(screen.getByRole("button", { name: /session verification failed/ })).toBeTruthy();
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(loadSession).toHaveBeenCalledTimes(2);
@@ -81,9 +81,9 @@ describe("AuthMenu", () => {
 
     renderMenu({ loadSession, onSignIn });
 
-    await screen.findByText("Sign in");
-    fireEvent.click(screen.getByRole("button", { name: /Account:/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await screen.findByText("登录");
+    fireEvent.click(screen.getByRole("button", { name: /账户：/ }));
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
 
     expect(onSignIn).toHaveBeenCalledTimes(1);
   });
@@ -96,20 +96,20 @@ describe("AuthMenu", () => {
     renderMenu({ loadSession });
 
     await screen.findByText("dev-user");
-    fireEvent.click(screen.getByRole("button", { name: /Account:/ }));
+    fireEvent.click(screen.getByRole("button", { name: /账户：/ }));
 
-    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "登出" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "登录" })).toBeNull();
   });
 
   it("marks the account popover busy during the first session request", () => {
     const firstRead = deferred<AuthSession>();
     renderMenu({ loadSession: () => firstRead.promise });
 
-    fireEvent.click(screen.getByRole("button", { name: /Account:/ }));
-    const dialog = screen.getByRole("dialog", { name: "Account" });
+    fireEvent.click(screen.getByRole("button", { name: /账户：/ }));
+    const dialog = screen.getByRole("dialog", { name: "账户" });
     expect(dialog.getAttribute("aria-busy")).toBe("true");
-    expect(within(dialog).getByRole("status").textContent).toContain("Checking sign-in status");
+    expect(within(dialog).getByRole("status").textContent).toContain("正在检查登录状态");
   });
 
   it("recovers from an initial session error through a local retry", async () => {
@@ -120,9 +120,9 @@ describe("AuthMenu", () => {
     renderMenu({ loadSession });
 
     await waitFor(() => expect(screen.getByRole("button", { name: /session API unavailable/ })).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: /Account:/ }));
+    fireEvent.click(screen.getByRole("button", { name: /账户：/ }));
     const alert = await screen.findByRole("alert");
-    fireEvent.click(within(alert).getByRole("button", { name: "Retry account status" }));
+    fireEvent.click(within(alert).getByRole("button", { name: "重试账户状态" }));
 
     await screen.findByText("alice");
     expect(loadSession).toHaveBeenCalledTimes(2);
@@ -137,19 +137,19 @@ describe("AuthMenu", () => {
     renderMenu({ loadSession });
 
     await screen.findByText("alice");
-    fireEvent.click(screen.getByRole("button", { name: /Account:/ }));
-    const dialog = screen.getByRole("dialog", { name: "Account" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Refresh account status" }));
+    fireEvent.click(screen.getByRole("button", { name: /账户：/ }));
+    const dialog = screen.getByRole("dialog", { name: "账户" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "刷新账户状态" }));
 
     await waitFor(() => expect(dialog.getAttribute("aria-busy")).toBe("true"));
-    expect(within(dialog).getByText("Refreshing account status…")).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(within(dialog).getByText("正在刷新账户状态…")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "登出" })).toBeTruthy();
 
     refresh.reject(new Error("account refresh failed"));
     const alert = await within(dialog).findByRole("alert");
     expect(alert.textContent).toContain("account refresh failed");
-    expect(within(dialog).getByText("Signed in as alice.")).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(within(dialog).getByText("已登录为 alice。")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "登出" })).toBeTruthy();
   });
 
   it("keeps the authenticated session actionable when sign-out fails", async () => {
@@ -164,15 +164,15 @@ describe("AuthMenu", () => {
     renderMenu({ loadSession, signOut });
 
     await screen.findByText("alice");
-    fireEvent.click(screen.getByRole("button", { name: /Account:/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: /账户：/ }));
+    fireEvent.click(screen.getByRole("button", { name: "登出" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("sign-out request failed");
-    expect(screen.getByText("Signed in as alice.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Retry sign out" }));
+    expect(screen.getByText("已登录为 alice。")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "重试登出" }));
 
-    await screen.findByText("Sign in");
+    await screen.findByText("登录");
     expect(signOut).toHaveBeenCalledTimes(2);
     expect(loadSession).toHaveBeenCalledTimes(2);
   });

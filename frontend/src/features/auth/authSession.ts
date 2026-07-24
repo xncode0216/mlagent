@@ -34,18 +34,18 @@ type DescribeInput = {
  */
 export function describeAuthSession({ session, loading, error }: DescribeInput): AuthMenuView {
   if (loading && !session) {
-    return { tone: "loading", label: "Account…", detail: "Checking sign-in status…", action: "none" };
+    return { tone: "loading", label: "账户…", detail: "正在检查登录状态…", action: "none" };
   }
   if (error && !session) {
     return {
       tone: "error",
-      label: "Account offline",
-      detail: `Could not reach the authentication service: ${error}`,
+      label: "账户离线",
+      detail: `无法连接认证服务：${error}`,
       action: "none",
     };
   }
   if (!session) {
-    return { tone: "loading", label: "Account…", detail: "Checking sign-in status…", action: "none" };
+    return { tone: "loading", label: "账户…", detail: "正在检查登录状态…", action: "none" };
   }
   let current: AuthMenuView;
   if (session.auth_mode === "development") {
@@ -53,14 +53,14 @@ export function describeAuthSession({ session, loading, error }: DescribeInput):
     current = {
       tone: "development",
       label: who,
-      detail: `Development mode — authentication is disabled. Acting as ${who}.`,
+      detail: `开发模式——认证已禁用。当前身份：${who}。`,
       action: "none",
     };
   } else if (session.authenticated) {
-    const who = session.user_id || "Signed in";
-    current = { tone: "authenticated", label: who, detail: `Signed in as ${who}.`, action: "sign-out" };
+    const who = session.user_id || "已登录";
+    current = { tone: "authenticated", label: who, detail: `已登录为 ${who}。`, action: "sign-out" };
   } else {
-    current = { tone: "anonymous", label: "Sign in", detail: "You are not signed in.", action: "sign-in" };
+    current = { tone: "anonymous", label: "登录", detail: "你尚未登录。", action: "sign-in" };
   }
   if (!error) return current;
   return {

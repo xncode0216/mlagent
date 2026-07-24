@@ -31,7 +31,7 @@ describe("describeLlmStatus", () => {
   it("shows an error tone with detail when the request failed", () => {
     const view = describeLlmStatus({ status: null, error: "Failed to fetch" });
     expect(view.tone).toBe("error");
-    expect(view.label).toBe("LLM offline");
+    expect(view.label).toBe("LLM 离线");
     expect(view.detail).toContain("Failed to fetch");
   });
 
@@ -65,7 +65,7 @@ describe("describeLlmStatus", () => {
   it("shows an offline tone when the backend has no usable LLM", () => {
     const view = describeLlmStatus({ status: status({ configured: false }) });
     expect(view.tone).toBe("offline");
-    expect(view.label).toBe("No LLM");
+    expect(view.label).toBe("无 LLM");
     expect(view.detail).toContain("MLAGENT_LLM_PROVIDER");
   });
 });
@@ -81,7 +81,7 @@ describe("buildProviderRows", () => {
     );
     const vllm = rows.find((r) => r.id === "vllm");
     expect(vllm?.state).toBe("configured");
-    expect(vllm?.stateLabel).toBe("Active");
+    expect(vllm?.stateLabel).toBe("使用中");
     expect(rows.filter((r) => r.state === "available")).toHaveLength(3);
   });
 
@@ -91,6 +91,6 @@ describe("buildProviderRows", () => {
     );
     const anthropic = rows.find((r) => r.id === "anthropic");
     expect(anthropic?.state).toBe("active-unconfigured");
-    expect(anthropic?.stateLabel).toBe("Needs credentials");
+    expect(anthropic?.stateLabel).toBe("需要凭据");
   });
 });

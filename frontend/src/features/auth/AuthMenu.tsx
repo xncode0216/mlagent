@@ -78,7 +78,7 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
       : null;
   const view = describeAuthSession({ session, loading: sessionQuery.isPending, error: sessionError });
   const triggerDetail = sessionError && session
-    ? `${view.detail} Refresh failed: ${sessionError}`
+    ? `${view.detail} 刷新失败：${sessionError}`
     : view.detail;
 
   return (
@@ -86,7 +86,7 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
       <button
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label={`Account: ${triggerDetail}`}
+        aria-label={`账户：${triggerDetail}`}
         className="auth-menu-trigger"
         data-tone={view.tone}
         onClick={() => setOpen((value) => !value)}
@@ -101,14 +101,14 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
       {open ? (
         <div
           aria-busy={sessionQuery.isFetching || signOutMutation.isPending}
-          aria-label="Account"
+          aria-label="账户"
           className="auth-menu-popover"
           role="dialog"
         >
           <header className="auth-menu-popover-head">
-            <span>Account</span>
+            <span>账户</span>
             <button
-              aria-label="Refresh account status"
+              aria-label="刷新账户状态"
               className="auth-menu-refresh"
               disabled={sessionQuery.isFetching || signOutMutation.isPending}
               onClick={() => void sessionQuery.refetch()}
@@ -119,7 +119,7 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
           </header>
           {sessionQuery.isFetching ? (
             <p className="service-query-state progress" role="status">
-              {session ? "Refreshing account status…" : "Checking sign-in status…"}
+              {session ? "正在刷新账户状态…" : "正在检查登录状态…"}
             </p>
           ) : null}
           <p className="auth-menu-detail" data-tone={view.tone}>
@@ -129,13 +129,13 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
             <div className="service-query-state error" role="alert">
               <span>{sessionError}</span>
               <button
-                aria-label="Retry account status"
+                aria-label="重试账户状态"
                 disabled={sessionQuery.isFetching}
                 onClick={() => void sessionQuery.refetch()}
                 type="button"
               >
                 <RefreshCw aria-hidden="true" size={14} />
-                Retry status
+                重试
               </button>
             </div>
           ) : null}
@@ -143,20 +143,20 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
             <div className="service-query-state error" role="alert">
               <span>{signOutError}</span>
               <button
-                aria-label="Retry sign out"
+                aria-label="重试登出"
                 disabled={signOutMutation.isPending}
                 onClick={handleSignOut}
                 type="button"
               >
                 <LogOut aria-hidden="true" size={14} />
-                Retry sign out
+                重试登出
               </button>
             </div>
           ) : null}
           {view.action === "sign-in" ? (
             <button className="auth-menu-action" onClick={handleSignIn} type="button">
               <LogIn size={14} />
-              Sign in
+              登录
             </button>
           ) : null}
           {view.action === "sign-out" ? (
@@ -168,7 +168,7 @@ export function AuthMenu({ loadSession = getAuthSession, signOut = logout, onSig
                 type="button"
               >
                 <LogOut aria-hidden="true" size={14} />
-                {signOutMutation.isPending ? "Signing out…" : "Sign out"}
+                {signOutMutation.isPending ? "正在登出…" : "登出"}
               </button>
             )
           ) : null}
