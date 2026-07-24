@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -28,6 +28,8 @@ import type { TaskStateInspection } from "../chat/taskStateInspector";
 import { buildGraphEvidenceItems } from "./graphEvidence";
 import { summarizeLessonStatuses } from "./evolutionStats";
 import { useKnowledgeGraphQuery } from "./useEvolutionQueries";
+
+const KnowledgeGraphCanvas = lazy(() => import("./KnowledgeGraphCanvas"));
 
 type EvolutionWorkspaceProps = {
   projectId: string;
@@ -116,7 +118,7 @@ export function EvolutionWorkspace({
       : graphQuery.error
         ? "知识图谱加载失败"
         : null;
-  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [highlightedGraphNodeId, setHighlightedGraphNodeId] = useState<string | null>(null);
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
   const [extractingLessons, setExtractingLessons] = useState(false);
   const [retryingLearning, setRetryingLearning] = useState(false);
@@ -190,112 +192,15 @@ export function EvolutionWorkspace({
     }
   }, [initialTab]);
 
-  // Compute Layout Node Positions: Feature Columns on Left (X=120), Experiments in Middle (X=400), Rules on Right (X=680)
-  const computedNodes = useMemo(() => {
-    if (!graphData) return [];
-    const { nodes } = graphData;
-
-    const cols = nodes.filter((n) => n.type === "column");
-    const exps = nodes.filter((n) => n.type === "experiment");
-    const rules = nodes.filter((n) => n.type === "rule");
-
-    const H = 480;
-    const layoutNodes: Array<KnowledgeGraphNode & { x: number; y: number }> = [];
-
-    // Layout Columns on Left
-    cols.forEach((node, index) => {
-      const count = cols.length;
-      const x = 140;
-      const y = count === 1 ? H / 2 : 40 + (index / (count - 1)) * (H - 80);
-      layoutNodes.push({ ...node, x, y });
-    });
-
-    // Layout Experiments in Middle
-    exps.forEach((node, index) => {
-      const count = exps.length;
-      const x = 400;
-      const y = count === 1 ? H / 2 : 60 + (index / (count - 1)) * (H - 120);
-      layoutNodes.push({ ...node, x, y });
-    });
-
-    // Layout Rules on Right
-    rules.forEach((node, index) => {
-      const count = rules.length;
-      const x = 660;
-      const y = count === 1 ? H / 2 : 50 + (index / (count - 1)) * (H - 100);
-      layoutNodes.push({ ...node, x, y });
-    });
-
-    return layoutNodes;
-  }, [graphData]);
-
-  // Compute Edge coordinates based on node coordinate matching
-  const computedEdges = useMemo(() => {
-    if (!graphData || computedNodes.length === 0) return [];
-    const { edges } = graphData;
-
-    return edges
-      .map((edge) => {
-        const sourceNode = computedNodes.find((n) => n.id === edge.source);
-        const targetNode = computedNodes.find((n) => n.id === edge.target);
-        if (!sourceNode || !targetNode) return null;
-        return {
-          ...edge,
-          x1: sourceNode.x,
-          y1: sourceNode.y,
-          x2: targetNode.x,
-          y2: targetNode.y,
-        };
-      })
-      .filter((e): e is NonNullable<typeof e> => e !== null);
-  }, [graphData, computedNodes]);
-
-  // Highlight Logic on Hover
-  const neighborNodeIds = useMemo(() => {
-    if (!hoveredNodeId || !graphData) return new Set<string>();
-    const neighbors = new Set<string>([hoveredNodeId]);
-    graphData.edges.forEach((edge) => {
-      if (edge.source === hoveredNodeId) {
-        neighbors.add(edge.target);
-      }
-      if (edge.target === hoveredNodeId) {
-        neighbors.add(edge.source);
-      }
-    });
-    return neighbors;
-  }, [hoveredNodeId, graphData]);
-
-  const drawBezierPath = (x1: number, y1: number, x2: number, y2: number) => {
-    const cx1 = x1 + 100;
-    const cy1 = y1;
-    const cx2 = x2 - 100;
-    const cy2 = y2;
-    return `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
-  };
-
-  const getEdgeColor = (type: string) => {
-    switch (type) {
-      case "produces":
-        return "var(--color-danger)";
-      case "uses":
-        return "var(--color-sky)";
-      case "triggers":
-        return "var(--color-warning)";
-      case "supports":
-        return "var(--color-success)";
-      default:
-        return "var(--color-graph-muted)";
-    }
-  };
+  useEffect(() => {
+    if (!highlightedGraphNodeId) return;
+    const timeout = window.setTimeout(() => setHighlightedGraphNodeId(null), 2500);
+    return () => window.clearTimeout(timeout);
+  }, [highlightedGraphNodeId]);
 
   const activateGraphNode = (node: KnowledgeGraphNode) => {
     setSelectedGraphNodeId(node.id);
-  };
-
-  const handleGraphNodeKeyDown = (event: KeyboardEvent<SVGGElement>, node: KnowledgeGraphNode) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    activateGraphNode(node);
+    setHighlightedGraphNodeId(null);
   };
 
   const focusLessonFromGraphNode = (node: KnowledgeGraphNode) => {
@@ -311,19 +216,16 @@ export function EvolutionWorkspace({
     const lessonId = stringProperty(insight.meta, "lesson_id");
     const column = stringProperty(insight.meta, "column");
     if (insight.type === "surprise_connection" && lessonId) {
-      const ruleNode = computedNodes.find((n) => stringProperty(n.properties, "lesson_id") === lessonId);
+      const ruleNode = graphData.nodes.find((node) => stringProperty(node.properties, "lesson_id") === lessonId);
       if (ruleNode) {
         setSelectedGraphNodeId(ruleNode.id);
-        setHoveredNodeId(ruleNode.id);
-        // Clean hover highlights after 2.5 seconds
-        setTimeout(() => setHoveredNodeId(null), 2500);
+        setHighlightedGraphNodeId(ruleNode.id);
       }
     } else if (insight.type === "knowledge_gap" && column) {
-      const colNode = computedNodes.find((n) => n.label === column);
+      const colNode = graphData.nodes.find((node) => node.label === column);
       if (colNode) {
         setSelectedGraphNodeId(colNode.id);
-        setHoveredNodeId(colNode.id);
-        setTimeout(() => setHoveredNodeId(null), 2500);
+        setHighlightedGraphNodeId(colNode.id);
       }
     }
   };
@@ -688,207 +590,21 @@ export function EvolutionWorkspace({
           ) : (
             <>
               <div className="graph-container">
-                {/* SVG Graph Canvas */}
-                <div className="svg-canvas">
-                  <svg
-                    width="100%"
-                    height="100%"
-                    viewBox="0 0 800 480"
-                    onMouseLeave={() => setHoveredNodeId(null)}
-                  >
-                    {/* Background indicators */}
-                    <text x="140" y="25" fill="var(--color-graph-muted)" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">数据特征 (COLUMNS)</text>
-                    <text x="400" y="25" fill="var(--color-graph-muted)" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">模型实验 (EXPERIMENTS)</text>
-                    <text x="660" y="25" fill="var(--color-graph-muted)" fontSize="11" textAnchor="middle" fontWeight="600" letterSpacing="1">自进化规则 (RULES)</text>
-
-                    {/* Defs for Glow effects */}
-                    <defs>
-                      <filter id="glow-col" x="-20%" y="-20%" width="140%" height="140%">
-                        <feGaussianBlur stdDeviation="4" result="blur" />
-                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                      </filter>
-                    </defs>
-
-                    {/* Render Edges first */}
-                    {computedEdges.map((edge) => {
-                      const isHovered = hoveredNodeId !== null;
-                      const isEdgeHighlighted = hoveredNodeId === edge.source || hoveredNodeId === edge.target;
-
-                      const strokeColor = getEdgeColor(edge.type);
-                      const strokeWidth = isEdgeHighlighted ? 3 : 1.5;
-                      const opacity = isHovered ? (isEdgeHighlighted ? 0.95 : 0.08) : 0.35;
-
-                      // Is rule in active/high_confidence state? Make it flow!
-                      const isFlowing = edge.type === "supports" || edge.type === "triggers";
-
-                      return (
-                        <g key={edge.id}>
-                          {/* Outer glow background line on hover */}
-                          {isEdgeHighlighted && (
-                            <path
-                              d={drawBezierPath(edge.x1, edge.y1, edge.x2, edge.y2)}
-                              fill="none"
-                              stroke={strokeColor}
-                              strokeWidth={6}
-                              opacity={0.35}
-                              className="edge-line"
-                            />
-                          )}
-                          <path
-                            d={drawBezierPath(edge.x1, edge.y1, edge.x2, edge.y2)}
-                            fill="none"
-                            stroke={strokeColor}
-                            strokeWidth={strokeWidth}
-                            opacity={opacity}
-                            className={`edge-line ${isFlowing && isEdgeHighlighted ? "flowing-edge" : ""}`}
-                          />
-                        </g>
-                      );
-                    })}
-
-                    {/* Render Nodes */}
-                    {computedNodes.map((node) => {
-                      const isHovered = hoveredNodeId !== null;
-                      const isSelected = selectedGraphNode?.id === node.id;
-                      const isHighlighted = !isHovered || neighborNodeIds.has(node.id);
-                      const opacity = isHighlighted ? 1 : 0.2;
-
-                      // Colors based on types
-                      let strokeColor = "var(--color-graph-muted)";
-
-                      if (node.type === "column") {
-                        strokeColor = "var(--color-sky)";
-                      } else if (node.type === "experiment") {
-                        strokeColor = "var(--color-ml)";
-                      } else if (node.type === "rule") {
-                        strokeColor = "var(--color-warning)";
-                      }
-
-                      if (node.type === "column") {
-                        return (
-                          <g
-                            aria-label={`数据特征列 ${node.label}`}
-                            key={node.id}
-                            transform={`translate(${node.x}, ${node.y})`}
-                            onMouseEnter={() => setHoveredNodeId(node.id)}
-                            onClick={() => activateGraphNode(node)}
-                            onKeyDown={(event) => handleGraphNodeKeyDown(event, node)}
-                            opacity={opacity}
-                            role="button"
-                            className="graph-node"
-                            tabIndex={0}
-                          >
-                            <rect
-                              x="-65"
-                              y="-15"
-                              width="130"
-                              height="30"
-                              rx="6"
-                              fill="var(--color-bg-overlay)"
-                              stroke={isSelected ? "var(--color-pink)" : strokeColor}
-                              strokeWidth={isSelected ? 2.5 : 1.5}
-                              className={`node-rect ${isSelected ? "node-active-highlight" : ""}`}
-                              style={{ color: strokeColor }}
-                            />
-                            <text
-                              textAnchor="middle"
-                              y="4"
-                              fill="var(--color-text)"
-                              fontSize="11.5"
-                              fontWeight="500"
-                              pointerEvents="none"
-                            >
-                              {node.label}
-                            </text>
-                          </g>
-                        );
-                      } else if (node.type === "experiment") {
-                        return (
-                          <g
-                            aria-label={`模型训练实验 ${node.label}`}
-                            key={node.id}
-                            transform={`translate(${node.x}, ${node.y})`}
-                            onMouseEnter={() => setHoveredNodeId(node.id)}
-                            onClick={() => activateGraphNode(node)}
-                            onKeyDown={(event) => handleGraphNodeKeyDown(event, node)}
-                            opacity={opacity}
-                            role="button"
-                            className="graph-node"
-                            tabIndex={0}
-                          >
-                            <circle
-                              r="24"
-                              fill="var(--color-bg-overlay)"
-                              stroke={isSelected ? "var(--color-pink)" : strokeColor}
-                              strokeWidth={isSelected ? 2.5 : 1.5}
-                              className={`node-rect ${isSelected ? "node-active-highlight" : ""}`}
-                              style={{ color: strokeColor }}
-                            />
-                            <circle
-                              r="20"
-                              fill="none"
-                              stroke={strokeColor}
-                              strokeWidth="1"
-                              strokeDasharray="4, 2"
-                              opacity="0.5"
-                              pointerEvents="none"
-                            />
-                            <text
-                              textAnchor="middle"
-                              y="4"
-                              fill="var(--color-text)"
-                              fontSize="9.5"
-                              fontWeight="600"
-                              pointerEvents="none"
-                            >
-                              EXP
-                            </text>
-                          </g>
-                        );
-                      } else {
-                        // Rule Nodes
-                        return (
-                          <g
-                            aria-label={`自进化经验 ${node.label}`}
-                            key={node.id}
-                            transform={`translate(${node.x}, ${node.y})`}
-                            onMouseEnter={() => setHoveredNodeId(node.id)}
-                            onClick={() => activateGraphNode(node)}
-                            onKeyDown={(event) => handleGraphNodeKeyDown(event, node)}
-                            opacity={opacity}
-                            role="button"
-                            className="graph-node"
-                            tabIndex={0}
-                          >
-                            <rect
-                              x="-75"
-                              y="-18"
-                              width="150"
-                              height="36"
-                              rx="8"
-                              fill="var(--color-bg-overlay)"
-                              stroke={isSelected ? "var(--color-pink)" : strokeColor}
-                              strokeWidth={isSelected ? 2.5 : 1.5}
-                              className={`node-rect ${isSelected ? "node-active-highlight" : ""}`}
-                              style={{ color: strokeColor }}
-                            />
-                            <text
-                              textAnchor="middle"
-                              y="3"
-                              fill="var(--color-text)"
-                              fontSize="11"
-                              fontWeight="500"
-                              pointerEvents="none"
-                            >
-                              {node.label.length > 10 ? node.label.substring(0, 9) + "..." : node.label}
-                            </text>
-                          </g>
-                        );
-                      }
-                    })}
-                  </svg>
-                </div>
-
+                <Suspense
+                  fallback={
+                    <div className="graph-canvas-loading" role="status">
+                      <Network aria-hidden="true" size={22} />
+                      <span>正在加载交互式知识图谱…</span>
+                    </div>
+                  }
+                >
+                  <KnowledgeGraphCanvas
+                    graph={graphData}
+                    highlightedNodeId={highlightedGraphNodeId}
+                    onSelectNode={activateGraphNode}
+                    selectedNodeId={selectedGraphNode?.id ?? null}
+                  />
+                </Suspense>
                 {/* Graph sidebar drawer detail card */}
                 <div className="graph-detail-sidebar">
                   {selectedGraphNode ? (

@@ -15,6 +15,33 @@ vi.mock("../../lib/api", async (importOriginal) => {
   };
 });
 
+vi.mock("./KnowledgeGraphCanvas", () => ({
+  default: ({
+    graph,
+    onSelectNode,
+    selectedNodeId,
+  }: {
+    graph: import("../../lib/api").KnowledgeGraphResult;
+    onSelectNode: (node: import("../../lib/api").KnowledgeGraphNode) => void;
+    selectedNodeId: string | null;
+  }) => (
+    <select
+      aria-label="定位图谱节点"
+      onChange={(event) => {
+        const node = graph.nodes.find((candidate) => candidate.id === event.target.value);
+        if (node) onSelectNode(node);
+      }}
+      value={selectedNodeId ?? ""}
+    >
+      {graph.nodes.map((node) => (
+        <option key={node.id} value={node.id}>
+          {node.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
 const graph: KnowledgeGraphResult = {
   nodes: [
     {
@@ -26,6 +53,59 @@ const graph: KnowledgeGraphResult = {
   ],
   edges: [],
   insights: [],
+};
+
+const graphWithProvenance: KnowledgeGraphResult = {
+  nodes: [
+    {
+      id: "column-age",
+      label: "age",
+      type: "column",
+      properties: {
+        provenance: {
+          column: "age",
+          dataset_paths: ["data/customer_churn.csv"],
+          kind: "dataset_column",
+        },
+        type: "numeric",
+        missing_rate: 0,
+      },
+    },
+    {
+      id: "experiment-1",
+      label: "baseline",
+      type: "experiment",
+      properties: {
+        accuracy: 0.84,
+        engine: "sklearn",
+        provenance: {
+          dataset_path: "data/customer_churn.csv",
+          experiment_id: "run-1",
+          kind: "experiment_run",
+          metrics_path: "results/run-1.metrics.json",
+          model_path: "models/run-1.model.json",
+        },
+        target_column: "churn",
+      },
+    },
+  ],
+  edges: [
+    {
+      id: "edge-1",
+      source: "column-age",
+      target: "experiment-1",
+      label: "uses",
+      type: "uses",
+    },
+  ],
+  insights: [
+    {
+      type: "knowledge_gap",
+      title: "年龄字段缺少稳定规则",
+      description: "建议补充年龄字段的长期处理经验。",
+      meta: { column: "age" },
+    },
+  ],
 };
 
 const baseProps: ComponentProps<typeof EvolutionWorkspace> = {
@@ -94,7 +174,8 @@ describe("EvolutionWorkspace knowledge graph async states", () => {
     expect(within(alert).getByText("Graph API unavailable")).toBeTruthy();
     fireEvent.click(within(alert).getByRole("button", { name: "重试知识图谱" }));
 
-    expect(await screen.findByRole("button", { name: "数据特征列 age" })).toBeTruthy();
+    expect(await screen.findByRole("combobox", { name: "定位图谱节点" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "age" })).toBeTruthy();
     expect(getKnowledgeGraph).toHaveBeenCalledTimes(2);
   });
 
@@ -110,17 +191,38 @@ describe("EvolutionWorkspace knowledge graph async states", () => {
       );
     renderWorkspace();
 
-    expect(await screen.findByRole("button", { name: "数据特征列 age" })).toBeTruthy();
+    expect(await screen.findByRole("combobox", { name: "定位图谱节点" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "刷新知识图谱" }));
 
     const region = screen.getByRole("region", { name: "自进化知识图谱" });
     await waitFor(() => expect(region.getAttribute("aria-busy")).toBe("true"));
     expect(within(region).getByText("正在更新知识图谱…")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "数据特征列 age" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "定位图谱节点" })).toBeTruthy();
 
     rejectRefresh?.(new Error("Graph refresh failed"));
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(within(screen.getByRole("alert")).getByText("Graph refresh failed")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "数据特征列 age" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "定位图谱节点" })).toBeTruthy();
+  });
+
+  it("preserves graph-to-file, graph-to-experiment, and insight-to-node navigation", async () => {
+    const onSelectExperimentRun = vi.fn();
+    const onSelectProjectFile = vi.fn();
+    vi.mocked(getKnowledgeGraph).mockResolvedValue(graphWithProvenance);
+    renderWorkspace({ onSelectExperimentRun, onSelectProjectFile });
+
+    const locator = await screen.findByRole("combobox", { name: "定位图谱节点" });
+    fireEvent.change(locator, { target: { value: "experiment-1" } });
+
+    expect(await screen.findByText("SKLEARN")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "定位实验" }));
+    expect(onSelectExperimentRun).toHaveBeenCalledWith("run-1");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "定位文件" })[0]!);
+    expect(onSelectProjectFile).toHaveBeenCalledWith("data/customer_churn.csv");
+
+    fireEvent.click(screen.getByRole("button", { name: /年龄字段缺少稳定规则/ }));
+    await waitFor(() => expect((locator as HTMLSelectElement).value).toBe("column-age"));
+    expect(screen.getByText("数值型 (Numeric)")).toBeTruthy();
   });
 });

@@ -582,31 +582,114 @@
   min-height: 520px;
   min-width: 0;
 }
-.svg-canvas {
-  border-radius: var(--radius-panel);
-  background-color: var(--color-bg-raised);
+.knowledge-graph-canvas {
+  background: var(--color-bg-raised);
   border: 1px solid var(--color-border);
-  box-shadow: inset 0 2px 8px rgb(var(--rgb-shadow) / 0.5);
+  border-radius: var(--radius-panel);
+  display: grid;
+  grid-template-rows: auto minmax(420px, 1fr) auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.graph-canvas-toolbar {
+  align-items: center;
+  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: space-between;
+  padding: var(--space-2);
+}
+.graph-node-locator {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.graph-node-locator > span {
+  color: var(--color-text-subtle);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.graph-node-locator select {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 12px;
+  height: 44px;
+  max-width: 240px;
+  min-width: 160px;
+  padding: 0 var(--space-3);
+}
+.graph-node-locator option,
+.graph-node-locator optgroup {
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+}
+.graph-viewport-controls {
+  align-items: center;
+  display: flex;
+  gap: var(--space-1);
+}
+.graph-viewport-controls button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  padding: 0;
+  width: 44px;
+}
+.graph-viewport-controls button:hover {
+  background: var(--color-bg-overlay);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+.graph-node-locator select:focus-visible,
+.graph-viewport-controls button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.graph-viewport-controls output {
+  color: var(--color-text-subtle);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  min-width: 48px;
+  text-align: center;
+}
+.cytoscape-canvas {
+  background: var(--color-bg-raised);
   min-height: 420px;
   min-width: 0;
   position: relative;
 }
-.svg-canvas svg {
-  display: block;
-  min-width: 0;
+.graph-canvas-help {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
 }
-.node-rect {
-  cursor: pointer;
-}
-.node-rect:hover {
-  filter: drop-shadow(0 0 10px currentColor);
-}
-.flowing-edge {
-  stroke-dasharray: 6, 6;
-}
-.node-active-highlight {
-  filter: drop-shadow(0 0 6px currentColor);
-  stroke-width: 3;
+.graph-canvas-loading {
+  align-items: center;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  color: var(--color-text-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 420px;
 }
 .graph-detail-sidebar {
   background: var(--color-bg-raised);
