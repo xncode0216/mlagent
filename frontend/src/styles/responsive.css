@@ -172,8 +172,18 @@
     padding: var(--space-3);
   }
 
-  .svg-canvas {
+  .cytoscape-canvas,
+  .graph-canvas-loading {
     min-height: 360px;
-    overflow: auto;
+  }
+
+  .knowledge-graph-canvas {
+    grid-template-rows: auto minmax(360px, 1fr) auto;
+  }
+
+  .graph-node-locator,
+  .graph-node-locator select {
+    flex: 1 1 180px;
+    max-width: none;
   }
 }

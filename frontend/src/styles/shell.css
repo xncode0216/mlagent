@@ -808,9 +808,13 @@
 
 .project-meta code {
   color: var(--color-accent);
+  display: block;
   font-size: 10px;
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-section {

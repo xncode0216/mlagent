@@ -1,8 +1,17 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
+const API_BASE_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:8000";
 const STAGE_COUNT = 10;
 const READABLE_STAGE_WIDTH = 120;
 const SINGLE_LINE_LABEL_HEIGHT = 24;
+
+type Project = { id: string };
+
+async function postJson<T>(api: APIRequestContext, path: string, data: unknown): Promise<T> {
+  const response = await api.post(`${API_BASE_URL}${path}`, { data });
+  expect(response.ok(), `${path} returned ${response.status()}: ${await response.text()}`).toBeTruthy();
+  return response.json() as Promise<T>;
+}
 
 async function auditWorkflowStageStrip(page: Page, width: number, height: number): Promise<Locator> {
   await page.setViewportSize({ width, height });
@@ -88,5 +97,98 @@ test("顶栏在窄与移动视口下不产生页面横向溢出", async ({ page 
     expect(info.authRight, `account entry should stay within viewport ${width}`).toBeLessThanOrEqual(
       info.win,
     );
+  }
+});
+
+test("900px 以下保留可用主工作区并折叠次要面板", async ({ page }) => {
+  for (const width of [900, 768, 480, 360]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/?mode=analysis");
+
+    const activityBar = page.locator(".activity-bar");
+    const workspace = page.locator(".agent-workspace");
+    await expect(activityBar).toBeVisible();
+    await expect(workspace).toBeVisible();
+    await expect(page.locator(".file-sidebar")).toBeHidden();
+    await expect(page.locator(".right-panel")).toBeHidden();
+
+    const layout = await page.evaluate(() => {
+      const workspaceElement = document.querySelector(".agent-workspace") as HTMLElement | null;
+      const workspaceRect = workspaceElement?.getBoundingClientRect();
+      return {
+        documentClientWidth: document.documentElement.clientWidth,
+        documentScrollWidth: document.documentElement.scrollWidth,
+        workspaceLeft: Math.round(workspaceRect?.left ?? 0),
+        workspaceRight: Math.round(workspaceRect?.right ?? 0),
+        workspaceWidth: Math.round(workspaceRect?.width ?? 0),
+      };
+    });
+
+    expect(layout.workspaceLeft).toBe(48);
+    expect(layout.workspaceRight).toBeLessThanOrEqual(width);
+    expect(layout.workspaceWidth).toBeGreaterThanOrEqual(width - 49);
+    expect(layout.documentScrollWidth).toBeLessThanOrEqual(layout.documentClientWidth + 1);
+
+    // 主任务入口仍留在 DOM 与键盘路径中，移动布局不是只读占位页。
+    await expect(page.getByRole("textbox", { name: "Agent 输入" })).toBeAttached();
+  }
+});
+
+test("文件侧栏在 900–1180px 区间截断长路径且不逐字换行", async ({ page, playwright }) => {
+  const api = await playwright.request.newContext();
+  const longFileName = "customer_retention_features_with_a_very_long_descriptive_filename.csv";
+
+  try {
+    const project = await postJson<Project>(api, "/api/projects", {
+      name: `responsive_sidebar_project_with_a_long_name_${Date.now()}`,
+    });
+    await postJson(api, `/api/projects/${project.id}/files/create`, {
+      path: longFileName,
+      type: "file",
+      content: "feature,target\n1,0",
+    });
+
+    for (const width of [1180, 901]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/?mode=analysis&projectId=${project.id}&file=${encodeURIComponent(longFileName)}`);
+
+      const sidebar = page.locator(".file-sidebar");
+      const projectPath = sidebar.locator(".project-meta code");
+      const fileRow = sidebar.locator(`.file-row-main[title="${longFileName}"]`);
+      const fileLabel = fileRow.locator("span").last();
+
+      await expect(sidebar).toBeVisible();
+      await expect(projectPath).toBeVisible();
+      await expect(fileRow).toBeVisible();
+
+      const layout = await page.evaluate(() => {
+        const sidebarElement = document.querySelector(".file-sidebar") as HTMLElement | null;
+        const projectPathElement = document.querySelector(".project-meta code") as HTMLElement | null;
+        const fileLabelElement = document.querySelector(".file-row-main[title]")?.lastElementChild as HTMLElement | null;
+        return {
+          documentClientWidth: document.documentElement.clientWidth,
+          documentScrollWidth: document.documentElement.scrollWidth,
+          fileLabelWhiteSpace: fileLabelElement ? getComputedStyle(fileLabelElement).whiteSpace : "",
+          projectPathWhiteSpace: projectPathElement ? getComputedStyle(projectPathElement).whiteSpace : "",
+          sidebarClientWidth: sidebarElement?.clientWidth ?? 0,
+          sidebarScrollWidth: sidebarElement?.scrollWidth ?? 0,
+        };
+      });
+
+      expect(layout.projectPathWhiteSpace).toBe("nowrap");
+      expect(layout.fileLabelWhiteSpace).toBe("nowrap");
+      expect(layout.sidebarScrollWidth).toBeLessThanOrEqual(layout.sidebarClientWidth + 1);
+      expect(layout.documentScrollWidth).toBeLessThanOrEqual(layout.documentClientWidth + 1);
+
+      // 文本仍保留完整可访问值；视觉层仅做单行省略。
+      await expect(fileLabel).toHaveText(longFileName);
+      await expect(projectPath).toHaveAttribute("title");
+
+      if (width === 901 && process.env.E2E_RESPONSIVE_SIDEBAR_SCREENSHOT_PATH) {
+        await page.screenshot({ path: process.env.E2E_RESPONSIVE_SIDEBAR_SCREENSHOT_PATH, fullPage: true });
+      }
+    }
+  } finally {
+    await api.dispose();
   }
 });
