@@ -1,6 +1,7 @@
 import type { AgentComponentKind, AgentStreamEvent, WorkflowStageId } from "./types";
 import type { TaskStateInspection } from "./taskStateInspector";
 import type { WorkflowState } from "./workflowState";
+import { compactInformationIdentifier, friendlyPathName } from "./informationDisplay";
 
 export type CockpitActionId =
   | "generate_profile"
@@ -96,19 +97,24 @@ function stringValue(value: unknown) {
 }
 
 function runCandidateLabel(candidate: Record<string, unknown>) {
-  return stringValue(candidate.experiment_id) ?? "未知实验";
+  const datasetPath = stringValue(candidate.dataset_path);
+  const bestModelName = stringValue(candidate.best_model_name);
+  const experimentId = stringValue(candidate.experiment_id);
+  return [datasetPath ? friendlyPathName(datasetPath) : undefined, bestModelName]
+    .filter(Boolean)
+    .join(" · ") || (experimentId ? compactInformationIdentifier(experimentId) : "未知实验");
 }
 
 function runCandidateFacts(candidate: Record<string, unknown>) {
-  const experimentId = stringValue(candidate.experiment_id) ?? "-";
   const datasetPath = stringValue(candidate.dataset_path) ?? "-";
   const targetColumn = stringValue(candidate.target_column) ?? "-";
   const bestModelName = stringValue(candidate.best_model_name) ?? "-";
-  return `${experimentId} | ${datasetPath} | 目标列 ${targetColumn} | ${bestModelName}`;
+  return `${friendlyPathName(datasetPath)} | 目标列 ${targetColumn} | ${bestModelName}`;
 }
 
 function datasetCandidateLabel(candidate: Record<string, unknown>) {
-  return stringValue(candidate.dataset_path) ?? "未知数据集";
+  const path = stringValue(candidate.dataset_path);
+  return path ? friendlyPathName(path) : "未知数据集";
 }
 
 function datasetCandidateTarget(candidate: Record<string, unknown>) {
@@ -117,12 +123,10 @@ function datasetCandidateTarget(candidate: Record<string, unknown>) {
 }
 
 function datasetCandidateFacts(candidate: Record<string, unknown>) {
-  const datasetPath = stringValue(candidate.dataset_path) ?? "-";
-  const datasetVersionId = stringValue(candidate.dataset_version_id) ?? "-";
   const rowCount = stringValue(candidate.row_count) ?? "-";
   const columnCount = stringValue(candidate.column_count) ?? "-";
   const targetCandidates = stringValue(candidate.target_candidates) ?? "-";
-  return `${datasetPath} | ${datasetVersionId} | ${rowCount} 行 × ${columnCount} 列 | 目标列候选 ${targetCandidates}`;
+  return `${rowCount} 行 × ${columnCount} 列 | 目标列候选 ${targetCandidates}`;
 }
 
 function latestMissingRunCommand(events: AgentStreamEvent[]) {
@@ -419,13 +423,13 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
         { label: "缺少", value: "experiment_id" },
         { label: "意图", value: intent },
         { label: "候选数", value: String(missingRunCandidates.length) },
-        ...missingRunCandidates.slice(0, 3).map((candidate, index) => ({
-          label: `运行 ${index + 1}`,
-          value: runCandidateFacts(candidate),
-        })),
+        ...missingRunCandidates.slice(0, 3).flatMap((candidate, index) => [
+          { label: `运行 ${index + 1}`, value: runCandidateFacts(candidate) },
+          { label: `运行 ${index + 1} ID`, value: stringValue(candidate.experiment_id) ?? "-" },
+        ]),
       ],
       actions: missingRunCandidates.slice(0, 5).map((candidate, index) =>
-        action("select_experiment_run", `使用 ${runCandidateLabel(candidate)}`, {
+        action("select_experiment_run", `选择 ${runCandidateLabel(candidate)}`, {
           disabledReason: projectDisabled ?? (stringValue(candidate.experiment_id) ? undefined : "此运行缺少 id。"),
           payload: {
             experimentId: stringValue(candidate.experiment_id),
@@ -457,13 +461,14 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
         { label: "缺少", value: "dataset_path" },
         { label: "意图", value: intent },
         { label: "候选数", value: String(missingDatasetCandidates.length) },
-        ...missingDatasetCandidates.slice(0, 3).map((candidate, index) => ({
-          label: `数据集 ${index + 1}`,
-          value: datasetCandidateFacts(candidate),
-        })),
+        ...missingDatasetCandidates.slice(0, 3).flatMap((candidate, index) => [
+          { label: `数据集 ${index + 1}`, value: stringValue(candidate.dataset_path) ?? "-" },
+          { label: `版本 ${index + 1}`, value: stringValue(candidate.dataset_version_id) ?? "-" },
+          { label: `规模 ${index + 1}`, value: datasetCandidateFacts(candidate) },
+        ]),
       ],
       actions: missingDatasetCandidates.slice(0, 5).map((candidate, index) =>
-        action("select_training_dataset", `使用 ${datasetCandidateLabel(candidate)}`, {
+        action("select_training_dataset", `选择 ${datasetCandidateLabel(candidate)}`, {
           disabledReason:
             projectDisabled ?? (stringValue(candidate.dataset_path) ? undefined : "此数据集缺少路径。"),
           payload: {

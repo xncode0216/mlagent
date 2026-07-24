@@ -1,5 +1,14 @@
-import { Bot, CheckCircle2, ExternalLink, FileCheck2, SendHorizontal, Sparkles, UserRound } from "lucide-react";
-import { lazy, Suspense, useMemo, useRef, useState } from "react";
+import {
+  Bot,
+  CheckCircle2,
+  Command as CommandIcon,
+  ExternalLink,
+  FileCheck2,
+  SendHorizontal,
+  Sparkles,
+  UserRound,
+} from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentStreamEvent, WorkflowStageId } from "./types";
 import {
@@ -8,6 +17,15 @@ import {
   type CockpitComponentCard,
 } from "./componentRegistry";
 import { deriveWorkflowCompletionFeedback } from "./completionFeedback";
+import { InformationValue } from "./InformationValue";
+import { CommandPalette, SlashCommandSuggestions } from "./CommandPalette";
+import {
+  availableAgentCommands,
+  filterAgentCommands,
+  quickAgentCommands,
+  resolveSlashCommand,
+  type AgentCommandDefinition,
+} from "./agentCommands";
 import type { TaskStateInspection } from "./taskStateInspector";
 import { buildToolActivitySummaries, type ToolActivityStatus } from "./toolActivity";
 import { deriveWorkflowState } from "./workflowState";
@@ -66,23 +84,11 @@ const modeCopy = {
     title: "数据分析 Agent",
     description: "面向当前项目文件执行探索、清洗、统计分析和经验沉淀。",
     tools: ["load_data()", "profile_dataset()", "detect_missing()", "correlation_matrix()"],
-    primaryQuick: "示例分析",
-    secondaryQuick: "清洗与特征",
-    tertiaryQuick: "建模评估",
-    primaryPrompt: (file: string) => `分析 ${file} 的缺失值和相关性`,
-    secondaryPrompt: (file: string) => `为 ${file} 生成清洗方案和特征工程建议`,
-    tertiaryPrompt: (file: string) => `根据 ${file} 判断是否适合进入机器学习建模`,
   },
   "machine-learning": {
     title: "ML 训练 Agent",
     description: "基于清洗后的数据设计训练计划、选择模型、跟踪实验并导出模型产物。",
     tools: ["load_data()", "build_features()", "train_baseline()", "train_sklearn()"],
-    primaryQuick: "启动训练计划",
-    secondaryQuick: "申请 GPU",
-    tertiaryQuick: "对比实验",
-    primaryPrompt: (file: string) => `基于 ${file} 制定 churn 预测训练计划`,
-    secondaryPrompt: (file: string) => `评估 ${file} 是否需要 GPU 训练，并说明原因`,
-    tertiaryPrompt: (file: string) => `对 ${file} 的历史实验进行模型对比和导出建议`,
   },
 };
 const toolStatusLabel: Record<ToolActivityStatus, string> = {
@@ -151,6 +157,10 @@ export function AgentWorkspace({
   const focusedExperimentId = useUiStore((state) => state.focusedExperimentId);
   const copy = modeCopy[mode];
   const [draft, setDraft] = useState("");
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const lastSubmissionRef = useRef<{ content: string; submittedAt: number } | null>(null);
   const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
   const workflow = useMemo(() => deriveWorkflowState(events, mode, activeFile), [activeFile, events, mode]);
@@ -197,11 +207,64 @@ export function AgentWorkspace({
     return buildToolActivitySummaries(toolEvents, copy.tools);
   }, [copy.tools, toolEvents]);
 
+  const commandContext = useMemo(
+    () => ({
+      mode,
+      activeFile,
+      focusedExperimentId,
+      preprocessingPlanPath,
+      targetColumn: suggestedTargetColumn,
+      trainingDatasetPath,
+    }),
+    [activeFile, focusedExperimentId, mode, preprocessingPlanPath, suggestedTargetColumn, trainingDatasetPath],
+  );
+  const commands = useMemo(() => availableAgentCommands(mode), [mode]);
+  const quickCommands = useMemo(() => quickAgentCommands(mode), [mode]);
+  const slashMatch = draft.match(/^\/(\S*)$/);
+  const slashCommands = useMemo(
+    () => (slashMatch ? filterAgentCommands(commands, slashMatch[1]).slice(0, 6) : []),
+    [commands, slashMatch],
+  );
+  const slashMenuOpen = !commandPaletteOpen && !slashMenuDismissed && Boolean(slashMatch) && slashCommands.length > 0;
+
+  useEffect(() => {
+    function openCommandPalette(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen(true);
+      }
+    }
+    document.addEventListener("keydown", openCommandPalette);
+    return () => document.removeEventListener("keydown", openCommandPalette);
+  }, []);
+
+  useEffect(() => {
+    setSlashActiveIndex(0);
+  }, [draft]);
+
+  function insertCommand(command: AgentCommandDefinition) {
+    setDraft(`${command.slash} `);
+    setSlashMenuDismissed(false);
+    setCommandPaletteOpen(false);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
   function submit(content = draft, label = "自定义消息") {
-    const text = content.trim();
+    let text = content.trim();
     if (!text) {
       setActionFeedback({ kind: "warning", message: "请输入需求或选择一个快捷命令。" });
       return false;
+    }
+
+    if (text.startsWith("/")) {
+      const resolved = resolveSlashCommand(text, commandContext);
+      if (!resolved) {
+        const unknownCommand = text.split(/\s+/, 1)[0];
+        setActionFeedback({ kind: "warning", message: `未知命令 ${unknownCommand}。按 Ctrl+K 查看可用命令。` });
+        return false;
+      }
+      text = resolved.prompt;
+      label = resolved.command.label;
     }
     if (!projectId) {
       setActionFeedback({ kind: "error", message: "当前还没有可用项目，无法发送任务。" });
@@ -231,6 +294,7 @@ export function AgentWorkspace({
     });
     setActionFeedback({ kind: "success", message: `已发送：${label}。可在右侧日志查看执行事件。` });
     setDraft("");
+    setSlashMenuDismissed(false);
     return true;
   }
 
@@ -366,7 +430,7 @@ export function AgentWorkspace({
           {card.facts.map((fact) => (
             <div key={`${card.id}-${fact.label}`}>
               <span>{fact.label}</span>
-              <code>{fact.value}</code>
+              <InformationValue label={fact.label} value={fact.value} />
             </div>
           ))}
         </div>
@@ -433,7 +497,9 @@ export function AgentWorkspace({
                 <div>
                   <span>{completionFeedback.label}</span>
                   <strong>{completionFeedback.title}</strong>
-                  {completionFeedback.detail ? <code title={completionFeedback.detail}>{completionFeedback.detail}</code> : null}
+                  {completionFeedback.detail ? (
+                    <InformationValue label="产物路径" value={completionFeedback.detail} />
+                  ) : null}
                 </div>
                 {completionFeedback.artifactPath && onSelectFile ? (
                   <button
@@ -449,7 +515,12 @@ export function AgentWorkspace({
             ) : null}
           </div>
         </div>
-        <div className="workflow-stage-strip" role="list">
+        <div
+          aria-label="工作流阶段，可横向滚动"
+          className="workflow-stage-strip"
+          role="list"
+          tabIndex={0}
+        >
           {workflow.stages.map((stage, index) => (
             <div className={`workflow-stage ${stage.status}`} data-workflow-stage={stage.id} key={stage.id} role="listitem">
               <span className="workflow-stage-index">{index + 1}</span>
@@ -469,12 +540,14 @@ export function AgentWorkspace({
           <div>
             <span className="section-kicker">组件</span>
             <strong>{workflow.component ? workflow.component.title : "检查器跟随产物"}</strong>
-            {workflow.component?.artifactPath ? <small>{workflow.component.artifactPath}</small> : null}
+            {workflow.component?.artifactPath ? (
+              <InformationValue label="组件产物" value={workflow.component.artifactPath} />
+            ) : null}
           </div>
           <div>
             <span className="section-kicker">产物</span>
             <strong>{workflow.latestArtifact ? workflow.latestArtifact.name : activeFile || "无活动文件"}</strong>
-            <small>{workflow.latestArtifact?.path ?? activeFile}</small>
+            <InformationValue label="产物路径" value={workflow.latestArtifact?.path ?? (activeFile || "无活动文件")} />
           </div>
         </div>
         {cockpitCards.length > 0 ? (
@@ -566,41 +639,85 @@ export function AgentWorkspace({
         </div>
       ) : null}
 
-      <div className="composer">
-        <textarea
-          aria-label="Agent 输入"
-          placeholder="输入你的数据分析需求，或输入 / 查看可用命令"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit(draft);
-            }
-          }}
-        />
-        <button
-          aria-label="发送消息"
-          disabled={!connected || !projectId || !draft.trim()}
-          onClick={() => submit(draft)}
-          title="发送"
-          type="button"
-        >
-          <SendHorizontal size={17} />
-        </button>
+      <div className="composer-shell">
+        {slashMenuOpen ? (
+          <SlashCommandSuggestions activeIndex={slashActiveIndex} commands={slashCommands} onChoose={insertCommand} />
+        ) : null}
+        <div className="composer">
+          <button
+            aria-label="打开命令面板（Ctrl/Command+K）"
+            className="composer-command-trigger"
+            onClick={() => setCommandPaletteOpen(true)}
+            title="打开命令面板 (Ctrl/Command+K)"
+            type="button"
+          >
+            <CommandIcon aria-hidden="true" size={16} />
+            <kbd>Ctrl K</kbd>
+          </button>
+          <textarea
+            aria-controls={slashMenuOpen ? "slash-command-results" : undefined}
+            aria-label="Agent 输入"
+            placeholder="描述目标，输入 / 查看命令，或按 Ctrl+K"
+            ref={composerRef}
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setSlashMenuDismissed(false);
+            }}
+            onKeyDown={(event) => {
+              if (slashMenuOpen && event.key === "ArrowDown") {
+                event.preventDefault();
+                setSlashActiveIndex((current) => (current + 1) % slashCommands.length);
+                return;
+              }
+              if (slashMenuOpen && event.key === "ArrowUp") {
+                event.preventDefault();
+                setSlashActiveIndex((current) => (current - 1 + slashCommands.length) % slashCommands.length);
+                return;
+              }
+              if (slashMenuOpen && event.key === "Escape") {
+                event.preventDefault();
+                setSlashMenuDismissed(true);
+                return;
+              }
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                if (resolveSlashCommand(draft, commandContext) || !slashMenuOpen) {
+                  submit(draft);
+                } else if (slashCommands[slashActiveIndex]) {
+                  insertCommand(slashCommands[slashActiveIndex]);
+                }
+              }
+            }}
+          />
+          <button
+            aria-label="发送消息"
+            className="composer-send"
+            disabled={!connected || !projectId || !draft.trim()}
+            onClick={() => submit(draft)}
+            title="发送"
+            type="button"
+          >
+            <SendHorizontal aria-hidden="true" size={17} />
+          </button>
+        </div>
       </div>
 
       <div className="quick-actions">
-        <button disabled={!connected || !projectId} onClick={() => submit(copy.primaryPrompt(activeFile), copy.primaryQuick)}>
-          {copy.primaryQuick}
-        </button>
-        <button disabled={!connected || !projectId} onClick={() => submit(copy.secondaryPrompt(activeFile), copy.secondaryQuick)}>
-          {copy.secondaryQuick}
-        </button>
-        <button disabled={!connected || !projectId} onClick={() => submit(copy.tertiaryPrompt(activeFile), copy.tertiaryQuick)}>
-          {copy.tertiaryQuick}
-        </button>
+        {quickCommands.map((command) => (
+          <button
+            disabled={!connected || !projectId}
+            key={command.id}
+            onClick={() => submit(command.buildPrompt(commandContext), command.label)}
+            type="button"
+          >
+            {command.label}
+          </button>
+        ))}
       </div>
+      {commandPaletteOpen ? (
+        <CommandPalette mode={mode} onChoose={insertCommand} onClose={() => setCommandPaletteOpen(false)} />
+      ) : null}
     </main>
   );
 }

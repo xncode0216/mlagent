@@ -36,6 +36,7 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
   const api = await playwright.request.newContext();
 
   try {
+    await page.setViewportSize({ width: 1440, height: 900 });
     const project = await postJson<Project>(api, "/api/projects", {
       name: `playwright_golden_path_${Date.now()}`,
     });
@@ -72,15 +73,22 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
       `/?mode=analysis&activity=data&rightTab=data&projectId=${project.id}&file=${encodeURIComponent(DATASET_PATH)}`,
     );
     await expect(page).toHaveTitle("MLAgent");
-    await expect(page.getByRole("navigation", { name: "Main modes" }).getByRole("button", { name: "Data Analysis" }))
+    await expect(page.getByRole("navigation", { name: "主模式" }).getByRole("button", { name: "数据分析" }))
       .toHaveClass(/active/);
 
     const dataQualityCard = page.locator('[data-cockpit-component="data_quality"]');
     await dataQualityCard.getByRole("button", { name: "生成画像" }).click();
     const completionStatus = page.getByRole("status", { name: "最新工作流完成" });
     await expect(completionStatus).toContainText("产物已创建");
-    const generatedProfilePath = await completionStatus.locator("code").innerText();
+    const completedArtifactValue = completionStatus.locator('.information-value[data-information-kind="path"]');
+    await expect(completedArtifactValue.locator("summary code")).toHaveText("data_quality_profile.json");
+    await completedArtifactValue.locator("summary").click();
+    const generatedProfilePath = await completedArtifactValue.locator(".information-value-expanded > code").innerText();
     expect(generatedProfilePath).toMatch(/^results\/.+\/data_quality_profile\.json$/);
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await completedArtifactValue.getByRole("button", { name: "复制产物路径完整值" }).click();
+    await expect(completedArtifactValue.getByText("已复制")).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(generatedProfilePath);
     await completionStatus.getByRole("button", { name: /^打开已完成产物/ }).click();
     await expect(page.locator(".status-bar")).toContainText(generatedProfilePath);
     await expect(page.locator(".data-quality-profile")).toContainText("churn");
@@ -125,12 +133,76 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
         `&experimentId=${training.experiment_id}`,
     );
     await expect(
-      page.getByRole("navigation", { name: "Main modes" }).getByRole("button", { name: "Machine Learning" }),
+      page.getByRole("navigation", { name: "主模式" }).getByRole("button", { name: "机器学习" }),
     ).toHaveClass(/active/);
     await expect(page.locator(".graph-focused-row")).toContainText("baseline");
     await expect(page.locator(".experiment-detail")).toContainText(training.experiment_id);
     await expect(page.locator(".experiment-detail")).toContainText("Evaluation Report");
     await expect(page.locator(".experiment-detail")).toContainText(training.evaluation_report_artifact.path);
+
+    const experimentHistory = page.locator(".model-compare").filter({ hasText: "历史实验" }).first();
+    await experimentHistory.getByLabel("Filter").selectOption("gpu");
+    await expect(experimentHistory).toContainText("当前筛选没有匹配的实验");
+    await expect(experimentHistory.getByRole("button", { name: "重置实验筛选" })).toBeVisible();
+    await experimentHistory.getByRole("button", { name: "重置实验筛选" }).click();
+    await expect(experimentHistory.locator(".graph-focused-row")).toContainText("baseline");
+
+    await page.keyboard.press("Control+K");
+    const commandPalette = page.getByRole("dialog", { name: "Agent 命令面板" });
+    await expect(commandPalette).toBeVisible();
+    await commandPalette.getByRole("searchbox", { name: "搜索 Agent 命令" }).fill("错误诊断");
+    if (process.env.E2E_COMMAND_PALETTE_SCREENSHOT_PATH) {
+      await page.screenshot({ path: process.env.E2E_COMMAND_PALETTE_SCREENSHOT_PATH, fullPage: true });
+    }
+    await commandPalette.getByRole("option", { name: /错误诊断/ }).click();
+    const agentComposer = page.getByRole("textbox", { name: "Agent 输入" });
+    await expect(agentComposer).toHaveValue("/diagnose ");
+    await agentComposer.press("Enter");
+    await expect(page.getByRole("status").filter({ hasText: "已发送：错误诊断" })).toBeVisible();
+
+    await page.goto(`/?mode=evolution&evolutionTab=graph&projectId=${project.id}`);
+    const graphRegion = page.getByRole("region", { name: "自进化知识图谱" });
+    await expect(graphRegion).toHaveAttribute("aria-busy", "false");
+    await expect(graphRegion.locator(".knowledge-graph-canvas")).toBeVisible();
+    await expect(graphRegion.locator(".cytoscape-canvas canvas").first()).toBeVisible();
+    await expect(graphRegion.getByRole("img", { name: /知识图谱，共 \d+ 个节点、\d+ 条关系/ })).toBeVisible();
+    await expect
+      .poll(async () =>
+        graphRegion.locator(".cytoscape-canvas").evaluate((host) =>
+          Array.from(host.querySelectorAll("canvas")).some((canvas) => {
+            const context = canvas.getContext("2d");
+            if (!context || canvas.width === 0 || canvas.height === 0) return false;
+            const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+            for (let index = 3; index < pixels.length; index += 4) {
+              if (pixels[index] !== 0) return true;
+            }
+            return false;
+          }),
+        ),
+      )
+      .toBe(true);
+
+    const nodeLocator = graphRegion.getByRole("combobox", { name: "定位图谱节点" });
+    await nodeLocator.selectOption(`exp_${training.experiment_id}`);
+    await expect(graphRegion.locator(".graph-detail-sidebar")).toContainText(training.experiment_id);
+
+    const zoomOutput = graphRegion.getByRole("status", { name: "知识图谱缩放比例" });
+    const zoomBefore = Number.parseInt((await zoomOutput.textContent()) ?? "0", 10);
+    await graphRegion.getByRole("button", { name: "放大知识图谱" }).click();
+    await expect
+      .poll(async () => Number.parseInt((await zoomOutput.textContent()) ?? "0", 10))
+      .toBeGreaterThan(zoomBefore);
+    await graphRegion.getByRole("button", { name: "适应知识图谱画布" }).click();
+
+    if (process.env.E2E_KNOWLEDGE_GRAPH_SCREENSHOT_PATH) {
+      await page.screenshot({ path: process.env.E2E_KNOWLEDGE_GRAPH_SCREENSHOT_PATH, fullPage: true });
+    }
+
+    await graphRegion.getByRole("button", { name: "定位实验" }).click();
+    await expect(
+      page.getByRole("navigation", { name: "主模式" }).getByRole("button", { name: "机器学习" }),
+    ).toHaveClass(/active/);
+    await expect(page.locator(".graph-focused-row")).toContainText("baseline");
   } finally {
     await api.dispose();
   }

@@ -1300,6 +1300,60 @@
   border: 0;
   margin: 0;
 }
+.data-preview:focus-visible {
+  outline-offset: -2px;
+}
+
+.guided-empty {
+  align-items: start;
+  display: grid;
+  gap: var(--space-2) var(--space-3);
+  grid-template-columns: 20px minmax(0, 1fr);
+}
+
+.guided-empty > svg {
+  color: var(--color-text-subtle);
+  margin-top: var(--space-1);
+}
+
+.guided-empty > div {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.guided-empty strong {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.guided-empty span {
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.guided-empty button {
+  background: rgb(var(--rgb-accent) / 0.1);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  cursor: pointer;
+  grid-column: 2;
+  justify-self: start;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+}
+
+.guided-empty button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text-strong);
+}
+
+.guided-empty button:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-bg-surface), 0 0 0 4px var(--color-accent);
+  outline: none;
+}
 
 .artifact-preview {
   display: grid;

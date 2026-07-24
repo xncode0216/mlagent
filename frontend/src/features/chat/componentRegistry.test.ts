@@ -706,14 +706,15 @@ describe("cockpit component registry", () => {
         { label: "缺少", value: "experiment_id" },
         { label: "意图", value: "evaluate" },
         { label: "候选数", value: "2" },
-        { label: "运行 1", value: "candidate-b | data/b.csv | 目标列 target | sklearn" },
+        { label: "运行 1", value: "b.csv | 目标列 target | sklearn" },
+        { label: "运行 1 ID", value: "candidate-b" },
       ]),
     });
     expect(selectionCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "select_experiment_run",
-          label: "使用 candidate-b",
+          label: "选择 b.csv · sklearn",
           payload: {
             experimentId: "candidate-b",
             intent: "evaluate",
@@ -785,17 +786,16 @@ describe("cockpit component registry", () => {
         { label: "缺少", value: "dataset_path" },
         { label: "意图", value: "train" },
         { label: "候选数", value: "2" },
-        {
-          label: "数据集 1",
-          value: "data/customer_churn.csv | csv-customer_churn | 3 行 × 3 列 | 目标列候选 churn, age, monthly_charges",
-        },
+        { label: "数据集 1", value: "data/customer_churn.csv" },
+        { label: "版本 1", value: "csv-customer_churn" },
+        { label: "规模 1", value: "3 行 × 3 列 | 目标列候选 churn, age, monthly_charges" },
       ]),
     });
     expect(selectionCard?.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "select_training_dataset",
-          label: "使用 data/customer_churn.csv",
+          label: "选择 customer_churn.csv",
           payload: {
             datasetPath: "data/customer_churn.csv",
             datasetVersionId: "csv-customer_churn",

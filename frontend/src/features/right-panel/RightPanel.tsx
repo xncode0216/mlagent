@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Database, Download, FileText, Play, RefreshCw, Table2, XCircle } from "lucide-react";
+import { BarChart3, Database, Download, FileText, Play, RefreshCw, SearchX, Table2, XCircle } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
 import {
@@ -308,7 +308,7 @@ function PreprocessingPlanPreview({
           <code>{plan.sklearn_pipeline_script_path ?? "-"}</code>
         </div>
       </div>
-      <div className="data-preview">
+      <div aria-label="预处理分支对比表，可滚动" className="data-preview" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -399,7 +399,7 @@ function JsonTable({
             <strong>{bestTarget?.column ?? "-"}</strong>
           </div>
         </div>
-        <div className="data-preview">
+        <div aria-label="数据质量字段表，可滚动" className="data-preview" tabIndex={0}>
           <table>
             <thead>
               <tr>
@@ -463,7 +463,7 @@ function JsonTable({
             <strong>{preview.experiment_id ?? "-"}</strong>
           </div>
         </div>
-        <div className="data-preview">
+        <div aria-label="预测样本表，可滚动" className="data-preview" tabIndex={0}>
           <table>
             <thead>
               <tr>
@@ -504,7 +504,7 @@ function JsonTable({
     const rows = value.sample as Record<string, unknown>[];
     const columns = Object.keys(rows[0]);
     return (
-      <div className="data-preview">
+      <div aria-label="产物数据样本表，可滚动" className="data-preview" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -555,7 +555,7 @@ function JsonTable({
     const columns = value.columns as string[];
     const matrix = value.matrix as number[][];
     return (
-      <div className="data-preview">
+      <div aria-label="相关性矩阵，可滚动" className="data-preview" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -582,7 +582,7 @@ function JsonTable({
 
   if ("columns" in value && value.columns && typeof value.columns === "object") {
     return (
-      <div className="data-preview">
+      <div aria-label="缺失值字段表，可滚动" className="data-preview" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -667,6 +667,33 @@ function ArtifactPreview({
   );
 }
 
+function GuidedEmptyState({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="empty-state compact-empty guided-empty" role="status">
+      <SearchX aria-hidden="true" size={18} />
+      <div>
+        <strong>{title}</strong>
+        <span>{description}</span>
+      </div>
+      {actionLabel && onAction ? (
+        <button onClick={onAction} type="button">
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function formatFileSize(size?: number) {
   if (typeof size !== "number") return "-";
   if (size < 1024) return `${size} B`;
@@ -720,10 +747,12 @@ function parseCsvPreview(content: string, maxRows = 50) {
 
 function CsvFilePreview({ content }: { content: string }) {
   const preview = useMemo(() => parseCsvPreview(content), [content]);
-  if (preview.headers.length === 0) return <div className="empty-state compact-empty">CSV 文件为空。</div>;
+  if (preview.headers.length === 0) {
+    return <GuidedEmptyState description="添加表头和数据后，这里会显示可检查的表格预览。" title="CSV 文件为空" />;
+  }
 
   return (
-    <div className="data-preview">
+    <div aria-label="CSV 数据预览表，可滚动" className="data-preview" tabIndex={0}>
       <table>
         <thead>
           <tr>
@@ -801,14 +830,14 @@ function ActiveFilePreview({
   if (!projectId) {
     return (
       <section aria-busy="false" aria-label="活动文件预览" className={previewClassName}>
-        <div className="empty-state compact-empty">请选择项目后查看文件内容。</div>
+        <GuidedEmptyState description="从左侧项目面板选择或创建项目，再打开需要检查的文件。" title="尚未选择项目" />
       </section>
     );
   }
   if (!activeFile) {
     return (
       <section aria-busy="false" aria-label="活动文件预览" className={previewClassName}>
-        <div className="empty-state compact-empty">请选择一个文件。</div>
+        <GuidedEmptyState description="从左侧文件树选择 CSV、JSON 或代码文件进行检查。" title="尚未选择文件" />
       </section>
     );
   }
@@ -1200,6 +1229,15 @@ function TrainingPanel({
     };
   }, [projectId, selectedRun?.prediction_samples_artifact?.path]);
 
+  function resetRunFilters() {
+    setRunFilter("all");
+    setRunSort("newest");
+  }
+
+  function resetSampleFilters() {
+    setSampleFilter({ status: "all", actual: "", predicted: "", query: "" });
+  }
+
   async function submitTraining() {
     const normalizedTarget = targetColumn.trim();
     if (!normalizedTarget) {
@@ -1478,7 +1516,7 @@ function TrainingPanel({
       <div className="model-compare">
         <div className="panel-title">历史实验</div>
         {runs.length === 0 ? (
-          <div className="empty-state compact-empty">还没有训练记录，启动一次训练后这里会显示实验历史。</div>
+          <GuidedEmptyState description="配置目标列并启动一次训练后，这里会显示可比较的实验历史。" title="还没有训练记录" />
         ) : (
           <>
             <div className="table-controls">
@@ -1503,7 +1541,12 @@ function TrainingPanel({
               </label>
             </div>
             {visibleRuns.length === 0 ? (
-              <div className="empty-state compact-empty">No experiment runs match the current filters.</div>
+              <GuidedEmptyState
+                actionLabel="重置实验筛选"
+                description="重置筛选后可查看全部历史运行。"
+                onAction={resetRunFilters}
+                title="当前筛选没有匹配的实验"
+              />
             ) : (
               <table>
             <thead>
@@ -1774,10 +1817,13 @@ function TrainingPanel({
               </div>
               {predictionSampleError ? <div className="inline-alert compact-alert">{predictionSampleError}</div> : null}
               {predictionSamples === null && !predictionSampleError ? (
-                <div className="empty-state compact-empty">Loading prediction samples...</div>
+                <div className="empty-state compact-empty" role="status">正在读取预测样本…</div>
               ) : null}
               {predictionSamples && predictionSamples.length === 0 ? (
-                <div className="empty-state compact-empty">No prediction samples were recorded for this run.</div>
+                <GuidedEmptyState
+                  description="该运行没有可供诊断的行级样本；可打开样本产物检查生成结果，或重新运行评估。"
+                  title="当前运行没有记录预测样本"
+                />
               ) : null}
               {predictionSamples && predictionSamples.length > 0 ? (
                 <>
@@ -1868,7 +1914,12 @@ function TrainingPanel({
                       </tbody>
                     </table>
                   ) : (
-                    <div className="empty-state compact-empty">No prediction samples match the current filters.</div>
+                    <GuidedEmptyState
+                      actionLabel="重置样本筛选"
+                      description="调整条件，或重置筛选后查看全部样本。"
+                      onAction={resetSampleFilters}
+                      title="当前筛选没有匹配的预测样本"
+                    />
                   )}
                 </>
               ) : null}

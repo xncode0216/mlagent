@@ -4,7 +4,12 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { readProjectFileContent, updateProjectFileContent, type ProjectFileContent } from "../../lib/api";
+import {
+  readProjectFileContent,
+  updateProjectFileContent,
+  type ExperimentRun,
+  type ProjectFileContent,
+} from "../../lib/api";
 import { useUiStore } from "../../app/uiStore";
 import type { AgentStreamEvent } from "../chat/types";
 import { RightPanel } from "./RightPanel";
@@ -63,6 +68,32 @@ function fileContent(
     content,
     size: content.length,
     mime_type: mimeType,
+  };
+}
+
+function trainingRun(overrides: Partial<ExperimentRun> = {}): ExperimentRun {
+  return {
+    experiment_id: "experiment-baseline",
+    project_id: "project-1",
+    status: "completed",
+    engine: "baseline",
+    dataset_path: "data/customer_churn.csv",
+    target_column: "churn",
+    use_gpu: false,
+    best_model_name: "MajorityClass",
+    metrics: { accuracy: 0.7, f1_weighted: 0.68, eval_row_count: 10 },
+    model: {},
+    candidate_runs: [],
+    model_artifact: { type: "model", name: "Model", path: "models/model.json" },
+    metrics_artifact: {
+      id: "metrics",
+      type: "training",
+      name: "Metrics",
+      path: "results/metrics.json",
+      created_at: "2026-07-22T00:00:00Z",
+    },
+    created_at: "2026-07-22T00:00:00Z",
+    ...overrides,
   };
 }
 
@@ -216,5 +247,67 @@ describe("RightPanel active file preview async states", () => {
     expect(within(alert).getByText("当前文件是二进制内容，暂不支持直接预览。")).toBeTruthy();
     expect(within(alert).getByRole("link", { name: "下载二进制文件" })).toBeTruthy();
     expect(within(alert).queryByRole("button", { name: "重试文件内容" })).toBeNull();
+  });
+});
+
+describe("RightPanel training information empty states", () => {
+  function renderTrainingPanel(run: ExperimentRun) {
+    useUiStore.setState({
+      activeMode: "machine-learning",
+      activeFile: run.dataset_path,
+      rightPanelTab: "training",
+    });
+    return renderPanel({ events: [], trainingRuns: [run] });
+  }
+
+  it("explains an empty experiment filter and restores all runs", () => {
+    renderTrainingPanel(trainingRun());
+
+    fireEvent.change(screen.getByLabelText("Filter"), { target: { value: "gpu" } });
+
+    expect(screen.getByText("当前筛选没有匹配的实验")).toBeTruthy();
+    expect(screen.getByText("重置筛选后可查看全部历史运行。")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "重置实验筛选" }));
+
+    expect(screen.queryByText("当前筛选没有匹配的实验")).toBeNull();
+    expect(screen.getByText("MajorityClass")).toBeTruthy();
+    expect((screen.getByLabelText("Filter") as HTMLSelectElement).value).toBe("all");
+  });
+
+  it("explains an empty prediction-sample filter and restores all samples", async () => {
+    const samplePath = "results/prediction_samples.json";
+    vi.mocked(readProjectFileContent).mockResolvedValue(
+      fileContent(
+        JSON.stringify({
+          samples: [
+            { row_index: 12, actual: "no", predicted: "no", is_error: false, features: { tenure: 3 } },
+            { row_index: 18, actual: "yes", predicted: "no", is_error: true, features: { tenure: 11 } },
+          ],
+        }),
+        samplePath,
+      ),
+    );
+    renderTrainingPanel(
+      trainingRun({
+        prediction_samples_artifact: {
+          id: "samples",
+          type: "dataframe",
+          name: "Prediction samples",
+          path: samplePath,
+          created_at: "2026-07-22T00:00:00Z",
+        },
+      }),
+    );
+
+    expect(await screen.findByText("2 / 2 samples")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "no-such-sample" } });
+
+    expect(screen.getByText("当前筛选没有匹配的预测样本")).toBeTruthy();
+    expect(screen.getByText("调整条件，或重置筛选后查看全部样本。")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "重置样本筛选" }));
+
+    expect(screen.queryByText("当前筛选没有匹配的预测样本")).toBeNull();
+    expect(screen.getByText("2 / 2 samples")).toBeTruthy();
+    expect((screen.getByLabelText("Search") as HTMLInputElement).value).toBe("");
   });
 });
