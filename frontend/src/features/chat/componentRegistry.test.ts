@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCockpitComponentCards } from "./componentRegistry";
+import { buildCockpitComponentCards, selectVisibleCockpitCards } from "./componentRegistry";
 import type { AgentStreamEvent, Artifact } from "./types";
 import { deriveWorkflowState } from "./workflowState";
 
@@ -1536,6 +1536,82 @@ describe("cockpit preprocessing feature selection", () => {
   });
 });
 
+describe("cockpit card ordering", () => {
+  // cockpit 只渲染前若干张卡片。Agent 会直接让用户"查看训练卡片"，
+  // 若当前阶段的卡片被挤出可见范围，用户就被指向了一个看不到的东西。
+  it("keeps the stages the workflow reached when the list exceeds the limit", () => {
+    // 复现自然语言流程走到训练配置时的真实产物集合：卡片数量超过 cockpit 的可见上限
+    const activeFile = "results/session-1/nl_churn_planned.csv";
+    function producedArtifact(name: string, path: string, metadata: Record<string, unknown> = {}) {
+      return {
+        type: "artifact_created" as const,
+        artifact: {
+          id: `artifact-${name}`,
+          project_id: "project-1",
+          session_id: "session-1",
+          type: "dataframe" as const,
+          name,
+          path,
+          metadata,
+          created_at: "2026-07-27T00:00:00Z",
+        },
+      };
+    }
+    const events: AgentStreamEvent[] = [
+      producedArtifact("data_quality_profile.json", "results/session-1/data_quality_profile.json", {
+        target_candidates: ["churn"],
+      }),
+      producedArtifact("preprocessing_plan.json", "results/session-1/preprocessing_plan.json", {
+        artifact_role: "preprocessing_plan",
+        feature_columns: ["age", "monthly_spend"],
+        drop_columns: [],
+      }),
+      producedArtifact("nl_churn_planned.csv", activeFile, { artifact_role: "preprocessed_dataset" }),
+      producedArtifact(
+        "preprocessing_transform_report.json",
+        "results/session-1/preprocessing_transform_report.json",
+        { artifact_role: "preprocessing_transform_summary", output_dataset_path: activeFile },
+      ),
+      {
+        type: "component_requested",
+        task_id: "session-1",
+        stage: "train",
+        component: "training_config",
+        title: "Configure sklearn training",
+        artifact_path: activeFile,
+        props: { dataset_path: activeFile, target_column: "churn" },
+      },
+    ];
+    const result = buildCockpitComponentCards({
+      activeFile,
+      events,
+      mode: "analysis",
+      projectId: "project-1",
+      suggestedTargetColumn: "churn",
+      trainingDatasetPath: activeFile,
+      workflow: deriveWorkflowState(events, "analysis", activeFile),
+    });
+
+    // 卡片按工作流顺序产生：越靠后越是当前该做的事。超出上限时必须保留后者。
+    expect(result.map((item) => item.kind)).toEqual(
+      expect.arrayContaining(["data_quality", "training_config"]),
+    );
+
+    const visible = selectVisibleCockpitCards(result, 2).map((card) => card.kind);
+    expect(visible).toContain("training_config");
+    expect(visible).not.toContain("data_quality");
+  });
+
+  it("keeps every card when the list is within the limit", () => {
+    const cards = [
+      { id: "a", kind: "data_quality", stage: "profile" },
+      { id: "b", kind: "training_config", stage: "train" },
+    ] as Parameters<typeof selectVisibleCockpitCards>[0];
+
+    expect(selectVisibleCockpitCards(cards, 6)).toHaveLength(2);
+  });
+});
+
 describe("cockpit transformation report card", () => {
   const transformReportEvent: AgentStreamEvent = {
     type: "artifact_created",
@@ -1583,3 +1659,4 @@ describe("cockpit transformation report card", () => {
     );
   });
 });
+

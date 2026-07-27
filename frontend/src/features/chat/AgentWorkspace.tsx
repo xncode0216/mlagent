@@ -13,6 +13,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentStreamEvent, WorkflowStageId } from "./types";
 import {
   buildCockpitComponentCards,
+  selectVisibleCockpitCards,
   type CockpitComponentAction,
   type CockpitComponentCard,
   type CockpitComponentControl,
@@ -112,6 +113,10 @@ const stageKickerLabel: Record<string, string> = {
   export: "导出",
   learn: "沉淀",
 };
+// Agent 常在一次回复里引导用户查看多张卡片（例如"review the model comparison and
+// report cards"）。工作流有 10 个阶段，上限过低会让这类引导指向被截断的卡片。
+const VISIBLE_COCKPIT_CARDS = 8;
+
 const cockpitStatusLabel: Record<string, string> = {
   ready: "就绪",
   attention: "需关注",
@@ -678,7 +683,7 @@ export function AgentWorkspace({
         </div>
         {cockpitCards.length > 0 ? (
           <div className="cockpit-component-grid" aria-label="Agent 上下文工具">
-            {cockpitCards.slice(0, 4).map((card) => (
+            {selectVisibleCockpitCards(cockpitCards, VISIBLE_COCKPIT_CARDS).map((card) => (
               <CockpitCard
                 card={card}
                 featureSelectionDraft={featureSelectionDraft}

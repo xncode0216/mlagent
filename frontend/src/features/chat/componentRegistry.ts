@@ -78,6 +78,18 @@ export type CockpitComponentCard = {
   actions: CockpitComponentAction[];
 };
 
+/**
+ * cockpit 只渲染有限张卡片。卡片按工作流顺序产生，因此取最前面几张等于永远优先
+ * 显示最早期的阶段——流程推进后，Agent 引导用户查看的当前阶段卡片反而被挤出。
+ * 保留最新的若干张，让可见集合跟着工作流走。
+ */
+export function selectVisibleCockpitCards(
+  cards: CockpitComponentCard[],
+  limit: number,
+): CockpitComponentCard[] {
+  return cards.length <= limit ? cards : cards.slice(cards.length - limit);
+}
+
 export type BuildCockpitComponentCardsInput = {
   activeFile: string;
   events: AgentStreamEvent[];
