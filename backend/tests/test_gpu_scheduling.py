@@ -158,6 +158,7 @@ def test_gpu_status_api_endpoint(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()
     client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "gpu-status"}).json()
 
     # Mock the global scheduler status for API check
     orig_status = gpu_scheduler.status
@@ -168,12 +169,12 @@ def test_gpu_status_api_endpoint(tmp_path, monkeypatch):
         gpu_scheduler.status = "busy"
         gpu_scheduler.active_task = {
             "task_id": "test_api_task",
-            "project_id": "proj_123",
+            "project_id": project["id"],
             "started_at": "2026-05-21T18:00:00Z"
         }
         gpu_scheduler.queue = []
 
-        response = client.get("/api/projects/proj_123/resources/gpu/status")
+        response = client.get(f"/api/projects/{project['id']}/resources/gpu/status")
         assert response.status_code == 200
         payload = response.json()
         assert payload["status"] == "busy"
@@ -190,6 +191,7 @@ def test_gpu_cancel_api_endpoint(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()
     client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "gpu-cancel"}).json()
 
     orig_status = gpu_scheduler.status
     orig_active = gpu_scheduler.active_task
@@ -199,12 +201,14 @@ def test_gpu_cancel_api_endpoint(tmp_path, monkeypatch):
         gpu_scheduler.status = "busy"
         gpu_scheduler.active_task = {
             "task_id": "test_api_task",
-            "project_id": "proj_123",
+            "project_id": project["id"],
             "started_at": "2026-05-21T18:00:00Z",
         }
         gpu_scheduler.queue = []
 
-        response = client.post("/api/projects/proj_123/resources/gpu/tasks/test_api_task/cancel")
+        response = client.post(
+            f"/api/projects/{project['id']}/resources/gpu/tasks/test_api_task/cancel"
+        )
         assert response.status_code == 200
         assert response.json() == {
             "task_id": "test_api_task",

@@ -1,6 +1,47 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.services.experiment_service import ExperimentService
+
+
+def _record_minimal_run(service: ExperimentService, experiment_id: str) -> dict:
+    return service.record_run(
+        project_id="project-1",
+        experiment_id=experiment_id,
+        engine="baseline",
+        dataset_path="data/customer_churn.csv",
+        target_column="churn",
+        use_gpu=False,
+        metrics={"accuracy": 0.5},
+        model={"strategy": "majority_class"},
+        candidate_runs=[],
+        model_artifact={"type": "model", "name": "m.json", "path": "models/m.json"},
+        metrics_artifact={
+            "id": f"metrics-{experiment_id}",
+            "type": "training",
+            "name": "training_metrics.json",
+            "path": f"results/{experiment_id}/training_metrics.json",
+            "created_at": "2026-05-14T00:00:00+00:00",
+        },
+    )
+
+
+def test_record_run_keeps_newest_first_order_when_clock_is_frozen(tmp_path: Path, monkeypatch):
+    frozen = datetime(2026, 6, 14, 12, 0, 0, tzinfo=UTC)
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen if tz is None else frozen.astimezone(tz)
+
+    monkeypatch.setattr("app.services.experiment_service.datetime", FrozenDatetime)
+    service = ExperimentService(tmp_path)
+
+    first = _record_minimal_run(service, "run-1")
+    second = _record_minimal_run(service, "run-2")
+
+    assert second["created_at"] > first["created_at"]
+    assert [run["experiment_id"] for run in service.list_runs()] == ["run-2", "run-1"]
 
 
 def test_experiment_service_records_and_lists_runs(tmp_path: Path):

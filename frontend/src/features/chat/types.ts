@@ -102,6 +102,9 @@ export type AgentStreamEvent =
       description?: string;
       artifact_path?: string;
       options?: string[];
+      // "local" 表示该审批由前端本地流程发起，后端没有对应的待办记录，
+      // 因此批准必须在本地执行，不能发往只认识自己审批的编排器。
+      origin?: "local";
     } & TraceFields)
   | ({
       type: "approval_resolved";

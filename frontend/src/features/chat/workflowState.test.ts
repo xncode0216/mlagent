@@ -23,9 +23,9 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "ingest",
       status: "active",
-      detail: "Active file: data/churn.csv",
+      detail: "当前文件：data/churn.csv",
     });
-    expect(state.nextAction).toContain("ingest");
+    expect(state.nextAction).toContain("接入");
   });
 
   it("turns a generated preprocessing plan into an approval checkpoint", () => {
@@ -48,13 +48,13 @@ describe("workflow state", () => {
     });
     expect(state.approval).toMatchObject({
       stage: "transform",
-      title: "Review and execute preprocessing plan",
+      title: "审核并执行预处理计划",
     });
     expect(state.component).toMatchObject({
       kind: "preprocessing_plan",
       artifactPath: "results/session-1/preprocessing_plan.json",
     });
-    expect(state.nextAction).toContain("Review approval checkpoint");
+    expect(state.nextAction).toContain("请审核审批检查点");
   });
 
   it("moves to training after the planned dataset is created", () => {
@@ -92,7 +92,7 @@ describe("workflow state", () => {
       stage: "transform",
       path: "results/session-1/churn_planned.csv",
     });
-    expect(state.nextAction).toContain("Use the planned dataset");
+    expect(state.nextAction).toContain("用变换后数据集");
   });
 
   it("keeps planned datasets ahead of preprocessing plan metadata and learning side effects", () => {
@@ -142,7 +142,7 @@ describe("workflow state", () => {
       status: "active",
     });
     expect(state.approval).toBeNull();
-    expect(state.nextAction).toContain("Use the planned dataset");
+    expect(state.nextAction).toContain("用变换后数据集");
   });
 
   it("clears the approval checkpoint when the task resumes after approval", () => {
@@ -176,7 +176,7 @@ describe("workflow state", () => {
       id: "transform",
       status: "active",
     });
-    expect(state.nextAction).toContain("Continue the transform");
+    expect(state.nextAction).toContain("继续「变换」");
   });
 
   it("does not recreate a synthetic approval after the user requests a plan revision", () => {
@@ -220,7 +220,7 @@ describe("workflow state", () => {
       status: "failed",
       detail: "Approval was not granted",
     });
-    expect(state.nextAction).toContain("Resolve");
+    expect(state.nextAction).toContain("先解决失败");
   });
 
   it("keeps a failed transform as the current stage even when later learn events exist", () => {
@@ -282,7 +282,7 @@ describe("workflow state", () => {
       retryable: true,
       resumeStage: "transform",
     });
-    expect(state.nextAction).toContain("Retry or resume");
+    expect(state.nextAction).toContain("重试或恢复");
   });
 
   it("understands explicit typed events from the future orchestrator", () => {
@@ -317,7 +317,7 @@ describe("workflow state", () => {
     });
     expect(state.component).toMatchObject({
       kind: "data_quality",
-      title: "Data quality review",
+      title: "数据质量检查",
     });
   });
 
@@ -359,7 +359,7 @@ describe("workflow state", () => {
       status: "failed",
       detail: "GPU timeout",
     });
-    expect(state.nextAction).toContain("Resolve");
+    expect(state.nextAction).toContain("先解决失败");
   });
 
   it("preserves retry metadata when a generic error follows a retryable training failure", () => {
@@ -386,7 +386,7 @@ describe("workflow state", () => {
       retryable: true,
       resumeStage: "train",
     });
-    expect(state.nextAction).toContain("Retry or resume");
+    expect(state.nextAction).toContain("重试或恢复");
   });
 
   it("uses structured agent command events to show the interpreted workflow step", () => {
@@ -414,7 +414,7 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "train",
       status: "active",
-      detail: "Command: train",
+      detail: "命令：train",
     });
   });
 
@@ -449,7 +449,7 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "evaluate",
       status: "active",
-      detail: "Command: evaluate",
+      detail: "命令：evaluate",
     });
   });
 
@@ -483,7 +483,7 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "evaluate",
       status: "blocked",
-      detail: "Missing context: experiment_id",
+      detail: "缺少上下文：experiment_id",
     });
   });
 
@@ -514,7 +514,7 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "evaluate",
       status: "active",
-      detail: "Command: evaluate",
+      detail: "命令：evaluate",
     });
   });
 
@@ -545,7 +545,7 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "evaluate",
       status: "active",
-      detail: "Command: evaluate",
+      detail: "命令：evaluate",
     });
   });
 
@@ -589,7 +589,7 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "diagnose",
       status: "active",
-      detail: "Command: diagnose",
+      detail: "命令：diagnose",
     });
   });
 
@@ -629,7 +629,7 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "export",
       status: "active",
-      detail: "Command: export",
+      detail: "命令：export",
     });
   });
 
@@ -667,7 +667,7 @@ describe("workflow state", () => {
     expect(state.currentStage).toMatchObject({
       id: "learn",
       status: "active",
-      detail: "Command: learn",
+      detail: "命令：learn",
     });
   });
 });

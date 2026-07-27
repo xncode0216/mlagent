@@ -6,10 +6,11 @@ from app.schemas.project import ProjectRead
 
 
 class ProjectRegistryService:
-    def __init__(self, workspace_root: Path, user_id: str):
+    def __init__(self, workspace_root: Path, user_id: str, workspace_key: str | None = None):
         self.workspace_root = workspace_root.resolve()
         self.user_id = user_id
-        self.user_root = self.workspace_root / self.user_id
+        self.workspace_key = workspace_key or user_id
+        self.user_root = self.workspace_root / self.workspace_key
         self.registry_path = self.user_root / "projects.json"
 
     def load_projects(self) -> dict[str, ProjectRead]:
@@ -22,10 +23,14 @@ class ProjectRegistryService:
             now = datetime.now(UTC).isoformat()
             item.setdefault("created_at", now)
             item.setdefault("updated_at", item["created_at"])
-            normalized.append(ProjectRead(**item))
+            project = ProjectRead(**item)
+            if project.owner_id == self.user_id:
+                normalized.append(project)
         return {project.id: project for project in normalized}
 
     def save_project(self, project: ProjectRead) -> None:
+        if project.owner_id != self.user_id:
+            raise ValueError("Project owner does not match registry owner")
         projects = self.load_projects()
         projects[project.id] = project
         self.user_root.mkdir(parents=True, exist_ok=True)

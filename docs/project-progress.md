@@ -1,46 +1,53 @@
 # MLAgent 项目进度同步
 
-更新时间：2026-05-24
+更新时间：2026-07-24
 
 ## 当前阶段
 
-项目当前处于“可运行 MVP + 自进化/图谱/GPU 调度增强”阶段。前端已经具备 AI IDE 风格工作台，后端已经具备项目、文件、会话、数据分析、机器学习、自进化知识和资源状态等主要 API。
+项目已完成生产就绪整改的 P0/P1，并按顺序关闭 P2-1 至 P2-7：设计令牌、真实加载/动效、响应式降级、信息设计、命令面板/Slash Commands、Cytoscape 知识图谱升级，以及可访问性审计。当前进入 P2-8 Bundle performance，下一步在现有 Markdown/图表/图谱懒加载基础上做工作区级路由拆分与可量化打包预算。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
 
 ## 已完成
 
 - 前端工作台：三栏 IDE 布局、顶部数据分析/机器学习/自进化知识切换、左侧项目与文件管理、右侧图表/代码/数据/训练/日志面板。
+- LLM 能力：OpenAI/Anthropic/DeepSeek/vLLM 适配、LLM 意图路由、流式回复、分析工具调用循环和真实模型状态指示器。
+- 认证与隔离：JWT/OIDC、Authorization Code + PKCE、BFF HttpOnly 会话、Redis 共享会话、组织/角色 claims、租户资源隔离和认证审计。
+- 工程架构：React Query 服务端状态、Zustand UI 状态、AppShell 领域 action hooks、拆分后的后端 orchestrator、结构化日志/request-id/统一错误响应。
 - 项目管理：创建项目、打开本地项目、项目文件树、上传/新建/重命名/删除/下载/预览文件。
 - Agent 会话：按模式创建会话、加载历史消息、WebSocket 事件流、任务进度和产物事件。
 - 数据分析：CSV profile、缺失值检测、清洗数据、生成分析报告，并把结果同步到右侧面板和项目产物。
 - 数据质量画像：`/analysis/profile` 生成列级质量表、目标列候选、缺失/唯一值/质量标记，并在前端右侧数据面板渲染。
 - 机器学习：baseline/sklearn 训练、训练记录、模型与指标产物、数据分析到 ML 的 handoff、`use_gpu` 参数链路。
 - 自进化知识：候选经验抽取、经验状态迁移、采纳/拒绝/冲突、规则索引、命中规则注入、注入日志、协议展示。
-- 知识图谱：后端 `/evolution/graph` API，前端图谱/高级洞察 tab，图谱加载失败反馈、空态引导、节点键盘访问、规则节点跳转经验详情。
+- 知识图谱：后端 `/evolution/graph` API，前端图谱/高级洞察 tab；React Query 托管加载/刷新，支持无项目与无证据空态、首次骨架、失败重试和刷新失败保留旧图。P2-6 已用懒加载 Cytoscape + COSE 替换手写 SVG，支持 compound 语义聚类、缩放/平移/节点拖拽、邻域强调、44px 视口控制、键盘节点定位、规则/文件/实验 provenance 深链和 insight 节点定位。
 - GPU 调度基础：GPU scheduler 服务、状态 API、队列结构和测试。
 - 前端稳定性：自进化状态统计抽为可测试函数，修复冲突/拒绝统计反转问题，图谱属性由 `any` 收紧为 `unknown` 并做类型防护。
-- 前端深链与烟测：支持 `mode`、`activity`、`rightTab`、`evolutionTab`、`file`、`projectId`、`sessionId`、`experimentId` 入口；`npm.cmd run smoke:deep-links` 会准备稳定项目/数据/分析产物/训练记录/自进化经验并验证关键 DOM 状态。
+- 前端深链与测试：保留覆盖广泛的 `smoke:deep-links`；新增标准 Playwright golden path，以真实 FastAPI + Vite 验证数据画像、预处理执行、baseline 训练和实验详情，并接入 GitHub Actions。
+- P2 视觉与动效基础：P2-1 与 P2-2 均已完成并补齐跨源关闭审计。当前 99 个调色板/语义/尺寸/层级/动效自定义属性中 94 个已引用、0 个未定义；生产 CSS/TS/TSX 中除 `tokens.css` 外无裸色、数值 RGB、渐变或 React `<style>`，且无 `transition: all`。普通过渡只使用 token 化 opacity/transform，图谱持续装饰动画为 0；阶段/产物完成反馈仅执行一次 200ms opacity/transform 入场，全局 reduced-motion 回退已由正式 Playwright 运行时验证。
+- P1-7 数据真实性：删除 File Explorer 假文件树、启动时自动建演示项目/上传示例 CSV 及虚构默认选择；生产源码契约持续禁止退役 demo 标识、路径和自动建项。
+- P2-2 加载态切片：项目、会话、文件、Artifact Preview、Evolution 图谱、ActiveFilePreview 与 model/auth 顶栏服务状态已接入真实异步语义。选中产物内容由版本化 React Query 缓存托管；图谱使用稳定查询键，并在经验审核/训练变更后显式失效；活动文件复用 current-version 查询键，后台刷新保留缓存内容与未保存草稿，保存后同步写入内容缓存并失效文件树元数据。模型/账户弹层保留最后成功 provider/身份并就地重试，登出失败不丢身份、成功先提交匿名缓存再验证。各区域支持首次加载、后台刷新、错误、局部恢复和 `aria-busy`；无项目时显示明确引导并禁用不安全操作。
+- P2-2 完成反馈：从结构化 `stage_completed`、`step_completed`、`artifact_created` 事件派生最近一次真实完成状态；后续普通进度不会清除它，新的完成事件会替换旧状态。Workflow 摘要通过 `aria-live="polite"` 播报阶段或产物完成，产物提供真实打开动作；不对文件/训练等服务端规范写入预先宣告成功，只在服务端成功后提交缓存，并保留明确 pending/error 状态。
+- P2-7 可访问性审计：`accessibility.e2e.ts` 用 `@axe-core/playwright` 对分析工作区、命令面板、模型/账户对话框、ML 实验详情、Evolution 图谱 6 个关键状态做 WCAG 2 A/AA 零容忍扫描；全局 `:focus-visible` 基线与 muted 文本对比度已达审计阈值；抽取共享 `useDialogFocus` hook，统一命令面板与模型/账户 popover 的焦点移入、Tab 陷阱与关闭后焦点恢复，E2E 追加真实浏览器键盘焦点断言。
 
 ## 最近验证
 
-- 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `73 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `6 passed files / 18 tests`。
+- 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
+- 前端测试：`npm.cmd test`，结果 `33 passed files / 195 tests`（设计契约 15/15）。
 - 前端 lint：`npm.cmd run lint`，通过。
 - 前端构建：`npm.cmd run build`，通过。
-- 浏览器烟测：`npm.cmd run smoke:deep-links` 通过，覆盖原始数据预览、数据质量画像、分析报告预览、ML handoff、清洗数据、ML 训练、实验聚焦、知识摘要、自进化日志、规则注入审计和图谱惊奇连接。
+- Playwright E2E：本次 `accessibility.e2e.ts` `2 passed`——axe 对 6 个关键状态 0 违规，并断言命令面板/模型/账户对话框的键盘焦点移入·陷入·恢复；设计系统、数据画像→预处理→训练 golden path、命令面板发送、Cytoscape 图谱与响应式/长路径的 `6 passed` 在 P2-6 验证保持通过。本机已补建 `backend/.venv`（此前缺失），Playwright webServer 现可本地拉起后端执行 E2E。
+- GitHub：`feat/p0-backend-hardening` 已推送并建立草稿 PR #2；backend/frontend/Playwright 三个 CI 闸门全部通过。
 - 后端健康检查：`http://127.0.0.1:8000/health` 返回 `{"status":"ok","service":"mlagent-api"}`。
 
 ## 下一步优先级
 
-1. 完善真实 Docker/Jupyter Kernel 沙箱：容器生命周期、workspace 挂载隔离、资源限制、异常恢复。
-2. 强化 Phase 10 图谱能力：节点定位到文件/实验/日志，补充证据详情面板，增加更稳定的图谱布局。
-3. 完善 GPU 调度闭环：前端队列状态、取消任务、超时释放、真实 GPU worker 绑定。
-4. 增强数据分析和 ML 工具库：Excel/Parquet、大文件采样、更多清洗/特征工程/模型评估工具；下一步优先丰富 sklearn 评估产物和模型对比视图。
-5. 增加企业内部登录与用户记录：用户登录、会话归属、项目权限、审计日志。
-6. 增强数据分析和 ML 工具库：基于已验证的 smoke/golden path 继续扩展数据画像、特征工程、模型评估和可视化解释能力。
+1. P2-8 Bundle performance：在现有 Markdown、图表和图谱懒加载基础上继续做工作区级拆包与可量化预算。
+2. 继续扩展真实数据/ML 工具、上下文 inspector/provenance，以及原始数据→训练→诊断→导出→learned rule 的完整浏览器/API golden path。
+3. Docker Kernel 部署验证、Redis 多实例验证及 GitHub Actions Node 运行时升级。
 
 ## 当前注意事项
 
 - `.codex-runs/` 是本地浏览器烟测截图和服务日志目录，已加入 `.gitignore`。
+- `playwright-report/`、`test-results/` 与 `.playwright-workspaces/` 是 E2E 临时产物，均已忽略。
 - Docker/Jupyter 真实沙箱仍是后续硬化重点，当前可继续使用本地开发模式验证核心流程。
 - 自进化规则仍应保持人工审核或高置信门槛，避免经验污染 Agent 行为。
 

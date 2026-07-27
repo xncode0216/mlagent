@@ -14,13 +14,18 @@ from app.services.kernel_service import (
 import app.services.kernel_service as kernel_service
 
 
-def is_docker_running() -> bool:
+def is_docker_kernel_available() -> bool:
     docker_exe = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
     if not shutil.which(docker_exe):
         return False
+    image = os.environ.get("MLAGENT_KERNEL_IMAGE", "mlagent-kernel:dev")
     try:
-        import subprocess
-        res = subprocess.run([docker_exe, "ps"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        res = subprocess.run(
+            [docker_exe, "image", "inspect", image],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        )
         return res.returncode == 0
     except Exception:
         return False
@@ -59,6 +64,28 @@ def test_local_kernel_uses_current_python_interpreter(monkeypatch):
 
     assert result.status == "ok"
     assert captured_command[:2] == [sys.executable, "-c"]
+
+
+def test_local_kernel_runs_inside_the_project_workspace(tmp_path: Path):
+    # 生成的训练/分析代码使用项目相对路径，Docker 后端靠挂载与 workdir 满足它；
+    # 本地后端若不设 cwd，同样的代码会以后端进程目录解析路径而 FileNotFoundError。
+    (tmp_path / "results").mkdir()
+    (tmp_path / "results" / "planned.csv").write_text("a\n1\n", encoding="utf-8")
+
+    service = LocalPythonKernelService(workspace_root=tmp_path)
+    result = service.execute(
+        "from pathlib import Path; print(Path('results/planned.csv').read_text().strip())"
+    )
+
+    assert result.status == "ok", result.stderr
+    assert result.stdout.strip() == "a\n1"
+
+
+def test_factory_gives_the_local_kernel_its_workspace(tmp_path: Path):
+    service = create_kernel_service("local", workspace_root=tmp_path)
+
+    assert isinstance(service, LocalPythonKernelService)
+    assert service.workspace_root == tmp_path.resolve()
 
 
 def test_local_kernel_returns_structured_timeout(monkeypatch):
@@ -167,7 +194,9 @@ def test_docker_kernel_rejects_invalid_workspace_mount_mode(tmp_path: Path):
         )
 
 
-@pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
+@pytest.mark.skipif(
+    not is_docker_kernel_available(), reason="Docker kernel image is not available"
+)
 def test_jupyter_kernel_service_executes_in_docker(tmp_path: Path):
     docker_executable = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
     service = JupyterKernelService(
@@ -180,7 +209,9 @@ def test_jupyter_kernel_service_executes_in_docker(tmp_path: Path):
     assert result.stdout.strip() == "hello docker kernel"
 
 
-@pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
+@pytest.mark.skipif(
+    not is_docker_kernel_available(), reason="Docker kernel image is not available"
+)
 def test_jupyter_kernel_service_reads_workspace_csv(tmp_path: Path):
     docker_executable = os.environ.get("MLAGENT_DOCKER_EXE", "docker")
     (tmp_path / "data.csv").write_text("a,b\n1,2\n3,4\n", encoding="utf-8")

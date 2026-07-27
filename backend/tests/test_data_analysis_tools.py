@@ -88,6 +88,62 @@ def test_preprocessing_plan_keeps_unique_small_sample_numeric_features(tmp_path:
     assert result["numeric_features"] == ["age", "income"]
 
 
+def _feature_selection_csv(csv_path: Path) -> None:
+    pd.DataFrame(
+        {
+            "age": [20, 31, 42, 55],
+            "income": [50000, 61000, 72000, 83000],
+            "contract": ["monthly", "annual", "monthly", "annual"],
+            "churn": ["no", "yes", "no", "yes"],
+        }
+    ).to_csv(csv_path, index=False)
+
+
+def test_preprocessing_plan_honors_an_explicit_feature_selection(tmp_path: Path):
+    csv_path = tmp_path / "customer_churn.csv"
+    _feature_selection_csv(csv_path)
+
+    result = preprocessing_plan(csv_path, selected_features=["age", "contract"])
+
+    assert result["feature_columns"] == ["age", "contract"]
+    assert result["numeric_features"] == ["age"]
+    assert result["categorical_features"] == ["contract"]
+    assert result["drop_columns"] == ["income"]
+    assert result["drop_reasons"]["income"] == "deselected"
+    # 派生字段必须与选择保持一致，否则执行计划与训练会用上不同的特征集
+    assert result["steps"]["numeric"]["selector"] == ["age"]
+    assert result["steps"]["categorical"]["selector"] == ["contract"]
+    assert "numeric_features = ['age']" in result["pipeline_script"]
+    assert "'income'" in result["pipeline_script"].split("drop_columns = ")[1].splitlines()[0]
+
+
+def test_preprocessing_plan_ignores_unknown_and_target_columns_in_a_selection(tmp_path: Path):
+    csv_path = tmp_path / "customer_churn.csv"
+    _feature_selection_csv(csv_path)
+
+    result = preprocessing_plan(csv_path, selected_features=["age", "churn", "not_a_column"])
+
+    assert result["target_column"] == "churn"
+    assert result["feature_columns"] == ["age"]
+    assert "churn" not in result["drop_columns"]
+    assert "not_a_column" not in result["drop_columns"]
+
+
+def test_preprocessing_plan_keeps_automatic_drops_when_no_selection_is_given(tmp_path: Path):
+    csv_path = tmp_path / "customer_churn.csv"
+    pd.DataFrame(
+        {
+            "customer_id": ["c1", "c2", "c3", "c4"],
+            "age": [20, 31, 42, 55],
+            "churn": ["no", "yes", "no", "yes"],
+        }
+    ).to_csv(csv_path, index=False)
+
+    result = preprocessing_plan(csv_path, selected_features=None)
+
+    assert result["drop_reasons"]["customer_id"] == "identifier_like"
+
+
 def test_execute_preprocessing_plan_writes_transformed_dataset(tmp_path: Path):
     csv_path = tmp_path / "customer_churn.csv"
     csv_path.write_text(

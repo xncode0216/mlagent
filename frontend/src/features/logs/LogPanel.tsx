@@ -14,10 +14,11 @@ import {
 type LogPanelProps = {
   events: AgentStreamEvent[];
   focusedTaskId?: string | null;
+  focusedTraceId?: string | null;
   sessionId?: string;
 };
 
-export function LogPanel({ events, focusedTaskId, sessionId }: LogPanelProps) {
+export function LogPanel({ events, focusedTaskId, focusedTraceId, sessionId }: LogPanelProps) {
   const [levelFilter, setLevelFilter] = useState<LogLevel>("ALL");
   const [query, setQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
@@ -53,6 +54,11 @@ export function LogPanel({ events, focusedTaskId, sessionId }: LogPanelProps) {
   useEffect(() => {
     if (focusedTaskId) setTaskFilter(focusedTaskId);
   }, [focusedTaskId]);
+
+  // 从消息回溯而来：只保留产生该回复的那次执行
+  useEffect(() => {
+    if (focusedTraceId) setTraceFilter(focusedTraceId);
+  }, [focusedTraceId]);
 
   useEffect(() => {
     if (selectedIndex == null) return;

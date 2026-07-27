@@ -1,23 +1,48 @@
-import { Bot, CheckCircle2, Database, FileCode2, SendHorizontal, Sparkles, UserRound } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import {
+  Bot,
+  CheckCircle2,
+  Command as CommandIcon,
+  ExternalLink,
+  FileCheck2,
+  Route,
+  SendHorizontal,
+  Sparkles,
+  UserRound,
+} from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import type { AgentStreamEvent, WorkflowStageId } from "./types";
 import {
   buildCockpitComponentCards,
+  selectVisibleCockpitCards,
   type CockpitComponentAction,
   type CockpitComponentCard,
+  type CockpitComponentControl,
 } from "./componentRegistry";
+import { deriveWorkflowCompletionFeedback } from "./completionFeedback";
+import { InformationValue } from "./InformationValue";
+import { CommandPalette, SlashCommandSuggestions } from "./CommandPalette";
+import {
+  availableAgentCommands,
+  filterAgentCommands,
+  quickAgentCommands,
+  resolveSlashCommand,
+  type AgentCommandDefinition,
+} from "./agentCommands";
 import type { TaskStateInspection } from "./taskStateInspector";
 import { buildToolActivitySummaries, type ToolActivityStatus } from "./toolActivity";
 import { deriveWorkflowState } from "./workflowState";
 import type { AgentMessage } from "../../lib/api";
+import { useUiStore } from "../../app/uiStore";
+
+// Lazy so react-markdown + highlight.js load only when an agent message needs
+// Markdown rendering, keeping them out of the initial bundle.
+const MarkdownMessage = lazy(() => import("./MarkdownMessage"));
 
 type AgentWorkspaceProps = {
-  activeFile: string;
   mode: "analysis" | "machine-learning";
   connected: boolean;
   events: AgentStreamEvent[];
-  focusedExperimentId?: string | null;
   historyMessages: AgentMessage[];
   lastError: string | null;
   preprocessingPlanPath?: string | null;
@@ -40,8 +65,11 @@ type AgentWorkspaceProps = {
   onRetryExport?: () => Promise<void>;
   onRetryLearning?: () => Promise<void>;
   onRetrySklearnTraining?: () => Promise<void>;
+  onApplyFeatureSelection?: (features: string[]) => Promise<void> | void;
+  onOpenTrace?: (traceId: string) => void;
   onSelectExperimentRun?: (experimentId: string) => void;
   onSelectFile?: (path: string) => void;
+  onSelectTargetColumn?: (column: string) => void;
   onTrainSklearn?: (targetColumn: string, preprocessingPlanPath?: string | null, datasetPath?: string) => Promise<void>;
   sendMessage: (
     content: string,
@@ -61,57 +89,41 @@ const modeCopy = {
   analysis: {
     title: "数据分析 Agent",
     description: "面向当前项目文件执行探索、清洗、统计分析和经验沉淀。",
-    assistant:
-      "我会先完成数据概览和质量检测，然后把结果同步到右侧图表、数据和日志面板。你也可以直接在底部输入新的分析需求。",
-    plan: ["加载数据并概览", "检测缺失值", "分析字段相关性", "生成清洗建议", "沉淀可复用经验"],
     tools: ["load_data()", "profile_dataset()", "detect_missing()", "correlation_matrix()"],
-    primaryQuick: "示例分析",
-    secondaryQuick: "清洗与特征",
-    tertiaryQuick: "建模评估",
-    primaryPrompt: (file: string) => `分析 ${file} 的缺失值和相关性`,
-    secondaryPrompt: (file: string) => `为 ${file} 生成清洗方案和特征工程建议`,
-    tertiaryPrompt: (file: string) => `根据 ${file} 判断是否适合进入机器学习建模`,
-    code: (file: string) => `import pandas as pd
-
-df = pd.read_csv('${file}')
-profile = df.describe(include='all')
-missing = df.isnull().mean().sort_values(ascending=False)
-corr = df.select_dtypes('number').corr()`,
   },
   "machine-learning": {
     title: "ML 训练 Agent",
     description: "基于清洗后的数据设计训练计划、选择模型、跟踪实验并导出模型产物。",
-    assistant:
-      "我会先确认目标列、数据切分和评估指标，再启动 baseline/sklearn 训练；如果需要 GPU，会在训练前明确请求。",
-    plan: ["确认目标列与任务类型", "划分 Train/Valid/Test", "训练 baseline", "比较 sklearn 候选模型", "导出最佳模型与实验经验"],
     tools: ["load_data()", "build_features()", "train_baseline()", "train_sklearn()"],
-    primaryQuick: "启动训练计划",
-    secondaryQuick: "申请 GPU",
-    tertiaryQuick: "对比实验",
-    primaryPrompt: (file: string) => `基于 ${file} 制定 churn 预测训练计划`,
-    secondaryPrompt: (file: string) => `评估 ${file} 是否需要 GPU 训练，并说明原因`,
-    tertiaryPrompt: (file: string) => `对 ${file} 的历史实验进行模型对比和导出建议`,
-    code: (file: string) => `from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-
-df = pd.read_csv('${file}')
-X = df.drop(columns=['churn'])
-y = df['churn']
-X_train, X_valid, y_train, y_valid = train_test_split(X, y, stratify=y)`,
   },
 };
-const sampleRows = [
-  ["7590-VHVEG", "1", "29.85", "No"],
-  ["5575-GNVDE", "34", "56.95", "No"],
-  ["3668-QPYBK", "2", "53.85", "Yes"],
-  ["7795-CFOCW", "45", "42.30", "No"],
-];
-
 const toolStatusLabel: Record<ToolActivityStatus, string> = {
   idle: "可用",
   running: "运行中",
   success: "完成",
   error: "失败",
+};
+const stageKickerLabel: Record<string, string> = {
+  ingest: "接入",
+  profile: "画像",
+  clean: "清洗",
+  transform: "变换",
+  train: "训练",
+  evaluate: "评估",
+  diagnose: "诊断",
+  iterate: "迭代",
+  export: "导出",
+  learn: "沉淀",
+};
+// Agent 常在一次回复里引导用户查看多张卡片（例如"review the model comparison and
+// report cards"）。工作流有 10 个阶段，上限过低会让这类引导指向被截断的卡片。
+const VISIBLE_COCKPIT_CARDS = 8;
+
+const cockpitStatusLabel: Record<string, string> = {
+  ready: "就绪",
+  attention: "需关注",
+  blocked: "待处理",
+  complete: "已完成",
 };
 
 type ActionFeedback = {
@@ -119,12 +131,140 @@ type ActionFeedback = {
   message: string;
 };
 
+/** 后端把产生该消息的 trace 写进 metadata；旧消息可能没有，此时不提供入口。 */
+function messageTraceId(message: AgentMessage) {
+  const traceId = message.metadata?.trace_id;
+  return typeof traceId === "string" && traceId ? traceId : undefined;
+}
+
+type CockpitCardProps = {
+  card: CockpitComponentCard;
+  featureSelectionDraft: string[] | null;
+  onRunAction: (action: CockpitComponentAction) => void;
+  onRunControl: (control: CockpitComponentControl, value: string) => void;
+  onToggleFeature: (
+    control: Extract<CockpitComponentControl, { kind: "multi_select" }>,
+    value: string,
+  ) => void;
+};
+
+// 定义在模块作用域而非 AgentWorkspace 内部：内部定义会使每次渲染产生新的组件类型，
+// React 因此卸载并重建整张卡片，勾选特征时焦点会丢失、无法连续操作。
+function CockpitCard({
+  card,
+  featureSelectionDraft,
+  onRunAction,
+  onRunControl,
+  onToggleFeature,
+}: CockpitCardProps) {
+  return (
+    <article className={`cockpit-component-card ${card.status}`} data-cockpit-component={card.kind}>
+      <div className="cockpit-component-header">
+        <div>
+          <span className="section-kicker">{stageKickerLabel[card.stage] ?? card.stage}</span>
+          <strong>{card.title}</strong>
+        </div>
+        <span className={`cockpit-component-status ${card.status}`}>
+          {cockpitStatusLabel[card.status] ?? card.status}
+        </span>
+      </div>
+      <p>{card.description}</p>
+      <div className="cockpit-component-facts">
+        {card.facts.map((fact) => (
+          <div key={`${card.id}-${fact.label}`}>
+            <span>{fact.label}</span>
+            <InformationValue label={fact.label} value={fact.value} />
+          </div>
+        ))}
+      </div>
+      {card.controls && card.controls.length > 0 ? (
+        <div className="cockpit-component-controls">
+          {card.controls.map((control) => {
+            const descriptionId = control.description
+              ? `${card.id}-${control.id}-description`
+              : undefined;
+            if (control.kind === "multi_select") {
+              const selected = featureSelectionDraft ?? control.values;
+              return (
+                <fieldset
+                  aria-describedby={descriptionId}
+                  className="cockpit-component-control"
+                  key={`${card.id}-${control.id}`}
+                >
+                  <legend>{control.label}</legend>
+                  <div className="cockpit-component-checkboxes">
+                    {control.options.map((option) => {
+                      // input 置于 label 外并用 htmlFor 关联：label 包裹会把点击再转发给
+                      // input，导致一次点击 toggle 两次而净效果为零。
+                      const optionId = `${card.id}-${control.id}-${option.value}`;
+                      return (
+                        <div key={optionId}>
+                          <input
+                            checked={selected.includes(option.value)}
+                            disabled={Boolean(control.disabledReason)}
+                            id={optionId}
+                            onChange={() => onToggleFeature(control, option.value)}
+                            type="checkbox"
+                          />
+                          <label htmlFor={optionId}>{option.label}</label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {control.description ? <small id={descriptionId}>{control.description}</small> : null}
+                </fieldset>
+              );
+            }
+            return (
+              <div className="cockpit-component-control" key={`${card.id}-${control.id}`}>
+                <span>{control.label}</span>
+                <select
+                  aria-describedby={descriptionId}
+                  aria-label={control.label}
+                  disabled={Boolean(control.disabledReason)}
+                  onChange={(event) => onRunControl(control, event.target.value)}
+                  title={control.disabledReason ?? control.description ?? control.label}
+                  value={control.value}
+                >
+                  {control.value ? null : (
+                    <option value="" disabled>
+                      请选择
+                    </option>
+                  )}
+                  {control.options.map((option) => (
+                    <option key={`${card.id}-${control.id}-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {control.description ? <small id={descriptionId}>{control.description}</small> : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="cockpit-component-actions">
+        {card.actions.map((action, index) => (
+          <button
+            className={action.tone === "primary" ? "primary" : ""}
+            disabled={Boolean(action.disabledReason)}
+            key={`${card.id}-${action.id}-${index}`}
+            onClick={() => onRunAction(action)}
+            title={action.disabledReason ?? action.label}
+            type="button"
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 export function AgentWorkspace({
-  activeFile,
   mode,
   connected,
   events,
-  focusedExperimentId,
   historyMessages,
   lastError,
   preprocessingPlanPath,
@@ -147,16 +287,29 @@ export function AgentWorkspace({
   onRetryExport,
   onRetryLearning,
   onRetrySklearnTraining,
+  onApplyFeatureSelection,
+  onOpenTrace,
   onSelectExperimentRun,
   onSelectFile,
+  onSelectTargetColumn,
   onTrainSklearn,
   sendMessage,
 }: AgentWorkspaceProps) {
+  // 当前文件 / 聚焦实验改为直接订阅 uiStore（替代原先经 AppShell 钻取的 props）。
+  const activeFile = useUiStore((state) => state.activeFile);
+  const focusedExperimentId = useUiStore((state) => state.focusedExperimentId);
   const copy = modeCopy[mode];
   const [draft, setDraft] = useState("");
+  // null 表示未编辑，直接采用计划里的当前特征；编辑后在提交前保持本地草稿。
+  const [featureSelectionDraft, setFeatureSelectionDraft] = useState<string[] | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const lastSubmissionRef = useRef<{ content: string; submittedAt: number } | null>(null);
   const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
   const workflow = useMemo(() => deriveWorkflowState(events, mode, activeFile), [activeFile, events, mode]);
+  const completionFeedback = useMemo(() => deriveWorkflowCompletionFeedback(events), [events]);
   const cockpitCards = useMemo(
     () =>
       buildCockpitComponentCards({
@@ -199,11 +352,64 @@ export function AgentWorkspace({
     return buildToolActivitySummaries(toolEvents, copy.tools);
   }, [copy.tools, toolEvents]);
 
+  const commandContext = useMemo(
+    () => ({
+      mode,
+      activeFile,
+      focusedExperimentId,
+      preprocessingPlanPath,
+      targetColumn: suggestedTargetColumn,
+      trainingDatasetPath,
+    }),
+    [activeFile, focusedExperimentId, mode, preprocessingPlanPath, suggestedTargetColumn, trainingDatasetPath],
+  );
+  const commands = useMemo(() => availableAgentCommands(mode), [mode]);
+  const quickCommands = useMemo(() => quickAgentCommands(mode), [mode]);
+  const slashMatch = draft.match(/^\/(\S*)$/);
+  const slashCommands = useMemo(
+    () => (slashMatch ? filterAgentCommands(commands, slashMatch[1]).slice(0, 6) : []),
+    [commands, slashMatch],
+  );
+  const slashMenuOpen = !commandPaletteOpen && !slashMenuDismissed && Boolean(slashMatch) && slashCommands.length > 0;
+
+  useEffect(() => {
+    function openCommandPalette(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen(true);
+      }
+    }
+    document.addEventListener("keydown", openCommandPalette);
+    return () => document.removeEventListener("keydown", openCommandPalette);
+  }, []);
+
+  useEffect(() => {
+    setSlashActiveIndex(0);
+  }, [draft]);
+
+  function insertCommand(command: AgentCommandDefinition) {
+    setDraft(`${command.slash} `);
+    setSlashMenuDismissed(false);
+    setCommandPaletteOpen(false);
+    requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
   function submit(content = draft, label = "自定义消息") {
-    const text = content.trim();
+    let text = content.trim();
     if (!text) {
       setActionFeedback({ kind: "warning", message: "请输入需求或选择一个快捷命令。" });
       return false;
+    }
+
+    if (text.startsWith("/")) {
+      const resolved = resolveSlashCommand(text, commandContext);
+      if (!resolved) {
+        const unknownCommand = text.split(/\s+/, 1)[0];
+        setActionFeedback({ kind: "warning", message: `未知命令 ${unknownCommand}。按 Ctrl+K 查看可用命令。` });
+        return false;
+      }
+      text = resolved.prompt;
+      label = resolved.command.label;
     }
     if (!projectId) {
       setActionFeedback({ kind: "error", message: "当前还没有可用项目，无法发送任务。" });
@@ -233,6 +439,7 @@ export function AgentWorkspace({
     });
     setActionFeedback({ kind: "success", message: `已发送：${label}。可在右侧日志查看执行事件。` });
     setDraft("");
+    setSlashMenuDismissed(false);
     return true;
   }
 
@@ -255,7 +462,9 @@ export function AgentWorkspace({
           if (action.payload?.path) onSelectFile?.(action.payload.path);
           break;
         case "approve_preprocessing_plan":
-          if (action.payload?.approvalId) {
+          // 本地发起的审批在后端没有待办记录，发过去只会得到 approval_not_found，
+          // 因此直接就地执行；只有编排器发起的审批才走审批响应通道。
+          if (action.payload?.approvalId && action.payload.approvalOrigin !== "local") {
             onRespondToApproval?.(action.payload.approvalId, "execute", action.payload.preprocessingPlanPath);
           } else {
             await onExecutePreprocessingPlan?.(action.payload?.preprocessingPlanPath);
@@ -338,53 +547,48 @@ export function AgentWorkspace({
         case "retry_lesson_extraction":
           await onRetryLearning?.();
           break;
+        case "apply_feature_selection": {
+          const features = featureSelectionDraft;
+          if (features === null) {
+            setActionFeedback({ kind: "error", message: "特征选择没有变化。" });
+            return;
+          }
+          if (features.length === 0) {
+            // 后端也会拒绝空选择；这里就地拦下，避免用户白跑一次重生成
+            setActionFeedback({ kind: "error", message: "请至少选择一个特征。" });
+            return;
+          }
+          await onApplyFeatureSelection?.(features);
+          setFeatureSelectionDraft(null);
+          break;
+        }
         case "abandon_task_state":
           await onAbandonTaskState?.(action.payload?.stage ?? "train");
           break;
       }
-      setActionFeedback({ kind: "success", message: `${action.label} completed.` });
+      setActionFeedback({ kind: "success", message: `${action.label} 已完成。` });
     } catch (error) {
       setActionFeedback({
         kind: "error",
-        message: error instanceof Error ? error.message : `${action.label} failed.`,
+        message: error instanceof Error ? error.message : `${action.label} 失败。`,
       });
     }
   }
 
-  function CockpitCard({ card }: { card: CockpitComponentCard }) {
-    return (
-      <article className={`cockpit-component-card ${card.status}`} data-cockpit-component={card.kind}>
-        <div className="cockpit-component-header">
-          <div>
-            <span className="section-kicker">{card.stage}</span>
-            <strong>{card.title}</strong>
-          </div>
-          <span className={`cockpit-component-status ${card.status}`}>{card.status}</span>
-        </div>
-        <p>{card.description}</p>
-        <div className="cockpit-component-facts">
-          {card.facts.map((fact) => (
-            <div key={`${card.id}-${fact.label}`}>
-              <span>{fact.label}</span>
-              <code>{fact.value}</code>
-            </div>
-          ))}
-        </div>
-        <div className="cockpit-component-actions">
-          {card.actions.map((action, index) => (
-            <button
-              className={action.tone === "primary" ? "primary" : ""}
-              disabled={Boolean(action.disabledReason)}
-              key={`${card.id}-${action.id}-${index}`}
-              onClick={() => void runCockpitAction(action)}
-              title={action.disabledReason ?? action.label}
-              type="button"
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      </article>
+  function runCockpitControl(control: CockpitComponentControl, value: string) {
+    if (control.kind !== "select" || !value || value === control.value) return;
+    switch (control.id) {
+      case "target_column":
+        onSelectTargetColumn?.(value);
+        setActionFeedback({ kind: "success", message: `目标列已切换为 ${value}。` });
+        break;
+    }
+  }
+
+  function toggleFeature(control: Extract<CockpitComponentControl, { kind: "multi_select" }>, value: string) {
+    const current = featureSelectionDraft ?? control.values;
+    setFeatureSelectionDraft(
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
     );
   }
 
@@ -399,23 +603,64 @@ export function AgentWorkspace({
           <p>{copy.description}</p>
         </div>
         <div className="runtime-chips" aria-label="运行环境">
-          <span className="runtime-chip ready">Kernel: Python 3.11</span>
-          <span className="runtime-chip">Tools: 20</span>
+          <span className="runtime-chip ready">内核: Python 3.11</span>
+          <span className="runtime-chip">工具: 20</span>
           <span className="runtime-chip muted">GPU: 未启用</span>
         </div>
       </div>
 
       {lastError ? <div className="inline-alert">{lastError}</div> : null}
 
-      <section className="workflow-cockpit" aria-label="Agent workflow state">
+      <section className="workflow-cockpit" aria-label="Agent 工作流状态">
         <div className="workflow-cockpit-summary">
           <div>
-            <span className="section-kicker">Workflow</span>
+            <span className="section-kicker">工作流</span>
             <strong>{workflow.currentStage.label}</strong>
           </div>
-          <p>{workflow.nextAction}</p>
+          <div className="workflow-cockpit-summary-copy">
+            <p>{workflow.nextAction}</p>
+            {completionFeedback ? (
+              <div
+                aria-atomic="true"
+                aria-label="最新工作流完成"
+                aria-live="polite"
+                className="workflow-completion-feedback"
+                data-completion-kind={completionFeedback.kind}
+                key={completionFeedback.id}
+                role="status"
+              >
+                {completionFeedback.kind === "artifact" ? (
+                  <FileCheck2 aria-hidden="true" size={16} />
+                ) : (
+                  <CheckCircle2 aria-hidden="true" size={16} />
+                )}
+                <div>
+                  <span>{completionFeedback.label}</span>
+                  <strong>{completionFeedback.title}</strong>
+                  {completionFeedback.detail ? (
+                    <InformationValue label="产物路径" value={completionFeedback.detail} />
+                  ) : null}
+                </div>
+                {completionFeedback.artifactPath && onSelectFile ? (
+                  <button
+                    aria-label={`打开已完成产物 ${completionFeedback.title}`}
+                    onClick={() => onSelectFile(completionFeedback.artifactPath!)}
+                    type="button"
+                  >
+                    打开产物
+                    <ExternalLink aria-hidden="true" size={14} />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
-        <div className="workflow-stage-strip" role="list">
+        <div
+          aria-label="工作流阶段，可横向滚动"
+          className="workflow-stage-strip"
+          role="list"
+          tabIndex={0}
+        >
           {workflow.stages.map((stage, index) => (
             <div className={`workflow-stage ${stage.status}`} data-workflow-stage={stage.id} key={stage.id} role="listitem">
               <span className="workflow-stage-index">{index + 1}</span>
@@ -428,25 +673,34 @@ export function AgentWorkspace({
         </div>
         <div className="workflow-signal-grid">
           <div>
-            <span className="section-kicker">Approval</span>
-            <strong>{workflow.approval ? workflow.approval.title : "No pending approval"}</strong>
+            <span className="section-kicker">审批</span>
+            <strong>{workflow.approval ? workflow.approval.title : "无待审批"}</strong>
             {workflow.approval?.description ? <small>{workflow.approval.description}</small> : null}
           </div>
           <div>
-            <span className="section-kicker">Component</span>
-            <strong>{workflow.component ? workflow.component.title : "Inspector follows artifacts"}</strong>
-            {workflow.component?.artifactPath ? <small>{workflow.component.artifactPath}</small> : null}
+            <span className="section-kicker">组件</span>
+            <strong>{workflow.component ? workflow.component.title : "检查器跟随产物"}</strong>
+            {workflow.component?.artifactPath ? (
+              <InformationValue label="组件产物" value={workflow.component.artifactPath} />
+            ) : null}
           </div>
           <div>
-            <span className="section-kicker">Artifact</span>
-            <strong>{workflow.latestArtifact ? workflow.latestArtifact.name : activeFile || "No active file"}</strong>
-            <small>{workflow.latestArtifact?.path ?? activeFile}</small>
+            <span className="section-kicker">产物</span>
+            <strong>{workflow.latestArtifact ? workflow.latestArtifact.name : activeFile || "无活动文件"}</strong>
+            <InformationValue label="产物路径" value={workflow.latestArtifact?.path ?? (activeFile || "无活动文件")} />
           </div>
         </div>
         {cockpitCards.length > 0 ? (
-          <div className="cockpit-component-grid" aria-label="Agent contextual tools">
-            {cockpitCards.slice(0, 4).map((card) => (
-              <CockpitCard card={card} key={card.id} />
+          <div className="cockpit-component-grid" aria-label="Agent 上下文工具">
+            {selectVisibleCockpitCards(cockpitCards, VISIBLE_COCKPIT_CARDS).map((card) => (
+              <CockpitCard
+                card={card}
+                featureSelectionDraft={featureSelectionDraft}
+                key={card.id}
+                onRunAction={(action) => void runCockpitAction(action)}
+                onRunControl={runCockpitControl}
+                onToggleFeature={toggleFeature}
+              />
             ))}
           </div>
         ) : null}
@@ -463,43 +717,35 @@ export function AgentWorkspace({
                 <span className="message-label">
                   {historyMessage.role === "user" ? "你" : copy.title} · {new Date(historyMessage.created_at).toLocaleTimeString()}
                 </span>
-                <p>{historyMessage.content}</p>
+                {historyMessage.role === "user" ? (
+                  <p>{historyMessage.content}</p>
+                ) : (
+                  <Suspense fallback={<p>{historyMessage.content}</p>}>
+                    <MarkdownMessage content={historyMessage.content} />
+                  </Suspense>
+                )}
+                {historyMessage.role !== "user" && messageTraceId(historyMessage) ? (
+                  <button
+                    className="message-trace-link"
+                    onClick={() => onOpenTrace?.(messageTraceId(historyMessage) as string)}
+                    type="button"
+                  >
+                    <Route aria-hidden="true" size={12} />
+                    查看该回复的执行链路
+                  </button>
+                ) : null}
               </div>
             </div>
           ))
         ) : (
-          <>
-            <div className="chat-row user">
-              <div className="avatar user-avatar">
-                <UserRound size={16} />
-              </div>
-              <div className="message-card user-message">
-                <span className="message-label">你 · 10:21</span>
-                请分析 <code>{activeFile}</code> 的缺失值、字段类型和相关性，并给出可执行的数据处理建议。
-              </div>
-            </div>
-
-            <div className="chat-row agent">
-              <div className="avatar agent-avatar">
-                <Sparkles size={16} />
-              </div>
-              <div className="message-card agent-message">
-                <span className="message-label">{copy.title} · 10:21</span>
-                <p>{copy.assistant}</p>
-                <div className="plan-card">
-                  <div className="panel-title">执行计划</div>
-                  <div className="plan-grid">
-                    {copy.plan.map((step, index) => (
-                      <span key={step}>
-                        <CheckCircle2 size={14} />
-                        {index + 1}. {step}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+          <div className="conversation-empty">
+            <Sparkles size={22} />
+            <strong>{copy.title}</strong>
+            <p>{copy.description}</p>
+            <p className="conversation-empty-hint">
+              选择或上传数据文件，然后在下方描述你的目标——我会规划并执行工作流，结果会显示在右侧检查面板。
+            </p>
+          </div>
         )}
 
         {streamingMessage ? (
@@ -509,49 +755,13 @@ export function AgentWorkspace({
             </div>
             <div className="message-card agent-message">
               <span className="message-label">{copy.title} · 正在回复</span>
-              <p>{streamingMessage}</p>
+              <Suspense fallback={<p>{streamingMessage}</p>}>
+                <MarkdownMessage content={streamingMessage} />
+              </Suspense>
             </div>
           </div>
         ) : null}
       </div>
-
-      <section className="analysis-grid" aria-label="分析结果预览">
-        <div className="workbench-card">
-          <div className="card-heading">
-            <Database size={15} />
-            数据预览（前 4 行）
-          </div>
-          <div className="compact-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>customer_id</th>
-                  <th>tenure</th>
-                  <th>monthly_charges</th>
-                  <th>churn</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sampleRows.map((row) => (
-                  <tr key={row[0]}>
-                    {row.map((cell) => (
-                      <td key={cell}>{cell}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="workbench-card">
-          <div className="card-heading">
-            <FileCode2 size={15} />
-            分析代码
-          </div>
-          <pre className="code-preview">{copy.code(activeFile)}</pre>
-        </div>
-      </section>
 
       <div className="tool-strip">
         {latestRuleMatch && latestRuleMatch.matched_rules.length > 0 ? (
@@ -586,41 +796,85 @@ export function AgentWorkspace({
         </div>
       ) : null}
 
-      <div className="composer">
-        <textarea
-          aria-label="Agent 输入"
-          placeholder="输入你的数据分析需求，或输入 / 查看可用命令"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit(draft);
-            }
-          }}
-        />
-        <button
-          aria-label="发送消息"
-          disabled={!connected || !projectId || !draft.trim()}
-          onClick={() => submit(draft)}
-          title="发送"
-          type="button"
-        >
-          <SendHorizontal size={17} />
-        </button>
+      <div className="composer-shell">
+        {slashMenuOpen ? (
+          <SlashCommandSuggestions activeIndex={slashActiveIndex} commands={slashCommands} onChoose={insertCommand} />
+        ) : null}
+        <div className="composer">
+          <button
+            aria-label="打开命令面板（Ctrl/Command+K）"
+            className="composer-command-trigger"
+            onClick={() => setCommandPaletteOpen(true)}
+            title="打开命令面板 (Ctrl/Command+K)"
+            type="button"
+          >
+            <CommandIcon aria-hidden="true" size={16} />
+            <kbd>Ctrl K</kbd>
+          </button>
+          <textarea
+            aria-controls={slashMenuOpen ? "slash-command-results" : undefined}
+            aria-label="Agent 输入"
+            placeholder="描述目标，输入 / 查看命令，或按 Ctrl+K"
+            ref={composerRef}
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setSlashMenuDismissed(false);
+            }}
+            onKeyDown={(event) => {
+              if (slashMenuOpen && event.key === "ArrowDown") {
+                event.preventDefault();
+                setSlashActiveIndex((current) => (current + 1) % slashCommands.length);
+                return;
+              }
+              if (slashMenuOpen && event.key === "ArrowUp") {
+                event.preventDefault();
+                setSlashActiveIndex((current) => (current - 1 + slashCommands.length) % slashCommands.length);
+                return;
+              }
+              if (slashMenuOpen && event.key === "Escape") {
+                event.preventDefault();
+                setSlashMenuDismissed(true);
+                return;
+              }
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                if (resolveSlashCommand(draft, commandContext) || !slashMenuOpen) {
+                  submit(draft);
+                } else if (slashCommands[slashActiveIndex]) {
+                  insertCommand(slashCommands[slashActiveIndex]);
+                }
+              }
+            }}
+          />
+          <button
+            aria-label="发送消息"
+            className="composer-send"
+            disabled={!connected || !projectId || !draft.trim()}
+            onClick={() => submit(draft)}
+            title="发送"
+            type="button"
+          >
+            <SendHorizontal aria-hidden="true" size={17} />
+          </button>
+        </div>
       </div>
 
       <div className="quick-actions">
-        <button disabled={!connected || !projectId} onClick={() => submit(copy.primaryPrompt(activeFile), copy.primaryQuick)}>
-          {copy.primaryQuick}
-        </button>
-        <button disabled={!connected || !projectId} onClick={() => submit(copy.secondaryPrompt(activeFile), copy.secondaryQuick)}>
-          {copy.secondaryQuick}
-        </button>
-        <button disabled={!connected || !projectId} onClick={() => submit(copy.tertiaryPrompt(activeFile), copy.tertiaryQuick)}>
-          {copy.tertiaryQuick}
-        </button>
+        {quickCommands.map((command) => (
+          <button
+            disabled={!connected || !projectId}
+            key={command.id}
+            onClick={() => submit(command.buildPrompt(commandContext), command.label)}
+            type="button"
+          >
+            {command.label}
+          </button>
+        ))}
       </div>
+      {commandPaletteOpen ? (
+        <CommandPalette mode={mode} onChoose={insertCommand} onClose={() => setCommandPaletteOpen(false)} />
+      ) : null}
     </main>
   );
 }

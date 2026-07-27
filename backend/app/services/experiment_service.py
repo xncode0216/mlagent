@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +29,7 @@ class ExperimentService:
         preprocessing_plan: dict[str, Any] | None = None,
         best_model_name: str | None = None,
     ) -> dict[str, Any]:
-        created_at = datetime.now(UTC).isoformat()
+        created_at = self._next_created_at()
         record = {
             "experiment_id": experiment_id,
             "project_id": project_id,
@@ -58,6 +58,30 @@ class ExperimentService:
         path = self.runs_dir / f"{experiment_id}.json"
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
         return record
+
+    def _next_created_at(self) -> str:
+        # The list_runs newest-first contract sorts by created_at, so timestamps must
+        # stay strictly increasing even when consecutive runs land inside one Windows
+        # clock tick (~15ms); otherwise ordering degrades to filesystem glob order.
+        now = datetime.now(UTC)
+        latest = self._latest_created_at()
+        if latest is not None and now <= latest:
+            now = latest + timedelta(microseconds=1)
+        return now.isoformat()
+
+    def _latest_created_at(self) -> datetime | None:
+        if not self.runs_dir.exists():
+            return None
+        latest: datetime | None = None
+        for path in self.runs_dir.glob("*.json"):
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8")).get("created_at")
+                value = datetime.fromisoformat(raw) if isinstance(raw, str) else None
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+            if value is not None and (latest is None or value > latest):
+                latest = value
+        return latest
 
     def list_runs(self) -> list[dict[str, Any]]:
         if not self.runs_dir.exists():

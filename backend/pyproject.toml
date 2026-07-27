@@ -6,15 +6,17 @@ dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
   "pydantic-settings>=2.6.0",
-  "sqlalchemy>=2.0.0",
-  "psycopg[binary]>=3.2.0",
-  "alembic>=1.13.0",
   "redis>=5.0.0",
   "python-multipart>=0.0.9",
   "pandas>=2.2.0",
   "plotly>=5.24.0",
   "matplotlib>=3.9.0",
+  # sklearn 训练在 kernel 子进程里执行生成的代码，因此必须是后端环境的运行依赖。
+  # 此前未声明，本地恰好装过所以能跑，而全新环境（含 CI）上训练必然失败。
+  "scikit-learn>=1.5.0",
   "jupyter-client>=8.6.0",
+  "httpx>=0.27.0",
+  "PyJWT[crypto]>=2.13.0,<3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -22,12 +24,24 @@ dev = [
   "pytest>=8.3.0",
   "httpx>=0.27.0",
   "ruff>=0.6.0",
+  "fakeredis>=2.20.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["workspaces*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+# 显式声明规则集，不依赖 ruff 的默认值：默认集会随版本变化，而 dev 依赖只约束
+# `ruff>=0.6.0`，CI 每次装最新版。ruff 0.16 扩大默认集后，CI 报 65 个错误而本地
+# 0.15 全绿——闸门结果取决于当天装到哪个版本，且本地无法复现。
+# 扩大规则集应当是一次显式决策，不是工具升级的副作用。
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

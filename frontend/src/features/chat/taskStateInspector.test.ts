@@ -47,32 +47,32 @@ describe("task state inspector", () => {
     expect(inspection).toMatchObject({
       stage: "train",
       taskId: "session-1",
-      title: "Train failure inspector",
+      title: "训练 失败检查器",
       datasetPath: "data/train_retry.csv",
       planPath: "results/session-1/preprocessing_plan.json",
     });
     expect(inspection?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Dataset", value: "data/train_retry.csv" },
-        { label: "Target", value: "churn" },
-        { label: "Engine", value: "sklearn" },
-        { label: "GPU", value: "Not requested" },
-        { label: "Retries", value: "2" },
-        { label: "Last error", value: "Target column was not found" },
-        { label: "Repair", value: "Check saved training inputs before retrying." },
-        { label: "Stale check", value: "Confirm dataset and plan are still current." },
-        { label: "Resume", value: "Retry saved sklearn training." },
-        { label: "Regenerate", value: "Regenerate preprocessing first." },
-        { label: "Abandon", value: "Clear saved training state." },
+        { label: "数据集", value: "data/train_retry.csv" },
+        { label: "目标列", value: "churn" },
+        { label: "引擎", value: "sklearn" },
+        { label: "GPU", value: "未请求" },
+        { label: "重试次数", value: "2" },
+        { label: "最近错误", value: "Target column was not found" },
+        { label: "修复", value: "Check saved training inputs before retrying." },
+        { label: "陈旧检查", value: "Confirm dataset and plan are still current." },
+        { label: "恢复", value: "Retry saved sklearn training." },
+        { label: "重新生成", value: "Regenerate preprocessing first." },
+        { label: "放弃", value: "Clear saved training state." },
         {
-          label: "Stale artifacts",
+          label: "陈旧产物",
           value: "data/train_retry.csv, results/session-1/preprocessing_plan.json",
         },
-        { label: "Related logs", value: "2" },
-        { label: "Latest log", value: "Training execution failed" },
+        { label: "相关日志", value: "2" },
+        { label: "最新日志", value: "Training execution failed" },
       ]),
     );
-    expect(inspection?.facts.find((fact) => fact.label === "Resume")?.value).toBe("Retry saved sklearn training.");
+    expect(inspection?.facts.find((fact) => fact.label === "恢复")?.value).toBe("Retry saved sklearn training.");
   });
 
   it("prefers the requested failed stage and supports transform state field names", () => {
@@ -104,9 +104,9 @@ describe("task state inspector", () => {
     });
     expect(inspection?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Dataset", value: "data/raw.csv" },
-        { label: "Plan", value: "results/session-1/preprocessing_plan.json" },
-        { label: "Last error", value: "Plan target missing" },
+        { label: "数据集", value: "data/raw.csv" },
+        { label: "计划", value: "results/session-1/preprocessing_plan.json" },
+        { label: "最近错误", value: "Plan target missing" },
       ]),
     );
   });
@@ -144,18 +144,18 @@ describe("task state inspector", () => {
     expect(inspection).toMatchObject({
       stage: "evaluate",
       taskId: "eval-session",
-      title: "Evaluate failure inspector",
+      title: "评估 失败检查器",
       datasetPath: "data/customer_churn.csv",
       planPath: "results/eval-session/missing_metrics.json",
     });
     expect(inspection?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Experiment", value: "exp-eval-retry" },
-        { label: "Metrics", value: "results/eval-session/missing_metrics.json" },
-        { label: "Last error", value: "Metrics artifact not found" },
+        { label: "实验", value: "exp-eval-retry" },
+        { label: "指标", value: "results/eval-session/missing_metrics.json" },
+        { label: "最近错误", value: "Metrics artifact not found" },
       ]),
     );
-    expect(inspection?.facts.find((fact) => fact.label === "Resume")?.value).toContain("rerun evaluation");
+    expect(inspection?.facts.find((fact) => fact.label === "恢复")?.value).toContain("重新运行评估");
   });
 
   it("summarizes failed export state with report artifact context", () => {
@@ -178,17 +178,17 @@ describe("task state inspector", () => {
     expect(inspection).toMatchObject({
       stage: "export",
       taskId: "export-session",
-      title: "Export failure inspector",
+      title: "导出 失败检查器",
       planPath: "results/export-session/model_evaluation_report.md",
     });
     expect(inspection?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Experiment", value: "exp-export" },
-        { label: "Report", value: "results/export-session/model_evaluation_report.md" },
-        { label: "Last error", value: "Evaluation Report Artifact not found" },
+        { label: "实验", value: "exp-export" },
+        { label: "报告", value: "results/export-session/model_evaluation_report.md" },
+        { label: "最近错误", value: "Evaluation Report Artifact not found" },
       ]),
     );
-    expect(inspection?.facts.find((fact) => fact.label === "Resume")?.value).toContain("rerun export");
+    expect(inspection?.facts.find((fact) => fact.label === "恢复")?.value).toContain("重新运行导出");
   });
 
   it("summarizes failed learning state with source evidence context", () => {
@@ -211,16 +211,16 @@ describe("task state inspector", () => {
     expect(inspection).toMatchObject({
       stage: "learn",
       taskId: "learn-session",
-      title: "Learn failure inspector",
+      title: "沉淀 失败检查器",
     });
     expect(inspection?.facts).toEqual(
       expect.arrayContaining([
-        { label: "Source", value: "learn-session" },
-        { label: "Retries", value: "1" },
-        { label: "Last error", value: "Session not found for lesson extraction" },
+        { label: "来源", value: "learn-session" },
+        { label: "重试次数", value: "1" },
+        { label: "最近错误", value: "Session not found for lesson extraction" },
       ]),
     );
-    expect(inspection?.facts.find((fact) => fact.label === "Resume")?.value).toContain("rerun lesson extraction");
+    expect(inspection?.facts.find((fact) => fact.label === "恢复")?.value).toContain("重新运行经验提取");
   });
 
   it("returns null when there is no failed workflow task state", () => {

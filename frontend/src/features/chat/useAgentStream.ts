@@ -35,7 +35,12 @@ function wireContext(context: MessageContext) {
   };
 }
 
-export function useAgentStream(sessionId: string) {
+/**
+ * `sessionId` 为 null 表示会话尚未就绪。此时刻意不建立连接：先前的占位会话会让
+ * 消息真的发出去并被后端执行，而会话切换又会清空事件流，响应就此丢失且界面无提示。
+ * 不连接则表现为"未连接"，composer 会如实拒绝发送并保留输入。
+ */
+export function useAgentStream(sessionId: string | null) {
   const socketRef = useRef<WebSocket | null>(null);
   const [events, setEvents] = useState<AgentStreamEvent[]>([]);
   const [connected, setConnected] = useState(false);
@@ -43,6 +48,11 @@ export function useAgentStream(sessionId: string) {
 
   useEffect(() => {
     setEvents([]);
+    if (!sessionId) {
+      socketRef.current = null;
+      setConnected(false);
+      return;
+    }
     const socket = new WebSocket(`ws://127.0.0.1:8000/ws/sessions/${sessionId}`);
     socketRef.current = socket;
     socket.onopen = () => {

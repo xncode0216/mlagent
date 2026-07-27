@@ -1,5 +1,6 @@
-import { BarChart3, Database, Download, FileText, LineChart, Play, RefreshCw, Table2, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { BarChart3, Database, Download, FileText, Play, RefreshCw, SearchX, Table2, XCircle } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
 import {
   projectFileDownloadUrl,
@@ -7,14 +8,31 @@ import {
   updateProjectFileContent,
   type ExperimentRun,
   type GPUStatus,
-  type ProjectFileContent,
   type TrainingMetric,
   type TrainingResult,
 } from "../../lib/api";
 import type { RightPanelTabId } from "../../app/appDeepLink";
+import {
+  projectFileContentQueryKey,
+  useProjectFileContentQuery,
+} from "../files/useProjectFileContentQuery";
+import { filesQueryKeyRoot } from "../files/useProjectFilesQuery";
+
+// Lazy so Recharts loads only when a histogram artifact is opened, keeping it
+// out of the initial bundle.
+const HistogramChart = lazy(() => import("./HistogramChart"));
+import { useUiStore } from "../../app/uiStore";
 import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
+import { deriveWorkflowState } from "../chat/workflowState";
 import { deriveErrorSlices } from "./errorSlices";
+import { inspectorTabForWorkflow } from "./inspectorContext";
+import {
+  buildTransformDiff,
+  isTransformationReport,
+  type TransformDiff,
+  type TransformDiffRow,
+} from "./transformDiff";
 import {
   diagnosticSummary,
   filterAndSortCandidateRuns,
@@ -167,22 +185,11 @@ function ArtifactPathRow({
 }
 
 type RightPanelProps = {
-  activeFile: string;
   events: AgentStreamEvent[];
-  mode: "analysis" | "machine-learning" | "evolution";
-  preprocessingPlanPath?: string | null;
   projectId?: string;
   sessionId?: string;
-  trainingDatasetPath?: string;
-  trainingError: string | null;
-  trainingResult: TrainingResult | null;
   trainingRuns: ExperimentRun[];
   gpuStatus: GPUStatus | null;
-  gpuActionError: string | null;
-  focusedExperimentId?: string | null;
-  focusedLogTaskId?: string | null;
-  initialTab?: RightPanelTabId;
-  suggestedTargetColumn?: string;
   onCleanDataset: () => Promise<void>;
   onExecutePreprocessingPlan: () => Promise<void>;
   onExportRunBundle: (experimentId: string) => Promise<void>;
@@ -309,7 +316,7 @@ function PreprocessingPlanPreview({
           <code>{plan.sklearn_pipeline_script_path ?? "-"}</code>
         </div>
       </div>
-      <div className="data-preview">
+      <div aria-label="预处理分支对比表，可滚动" className="data-preview" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -349,6 +356,68 @@ function PreprocessingPlanPreview({
           {executionFeedback.message}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+const transformKindLabel: Record<TransformDiffRow["kind"], string> = {
+  dropped: "已丢弃",
+  numeric: "数值",
+  categorical: "类别",
+};
+
+function TransformDiffPreview({ diff }: { diff: TransformDiff }) {
+  return (
+    <div className="data-quality-profile transform-diff-preview">
+      <div className="metrics-grid compact">
+        <div>
+          <span>Rows</span>
+          <strong>
+            {diff.summary.inputRows} → {diff.summary.outputRows}
+          </strong>
+        </div>
+        <div>
+          <span>Columns</span>
+          <strong>
+            {diff.summary.inputColumns} → {diff.summary.outputColumns}
+          </strong>
+        </div>
+        <div>
+          <span>Dropped</span>
+          <strong>{diff.summary.droppedCount}</strong>
+        </div>
+        <div>
+          <span>Target</span>
+          <strong>{diff.summary.targetColumn}</strong>
+        </div>
+      </div>
+      {diff.summary.rowsChanged ? (
+        <div aria-label="变换行数变化" className="inspector-async-state error" role="status">
+          变换后行数由 {diff.summary.inputRows} 变为 {diff.summary.outputRows}，请确认是否符合预期。
+        </div>
+      ) : null}
+      <div aria-label="预处理变换列对照，可滚动" className="data-preview" tabIndex={0}>
+        <table aria-label="预处理变换列对照">
+          <thead>
+            <tr>
+              <th>输入列</th>
+              <th>处理</th>
+              <th>变换</th>
+              <th>输出列</th>
+            </tr>
+          </thead>
+          <tbody>
+            {diff.rows.map((row) => (
+              <tr className={row.kind === "dropped" ? "warning-row" : ""} key={row.column}>
+                <td>{row.column}</td>
+                <td>{transformKindLabel[row.kind]}</td>
+                <td>{row.detail}</td>
+                <td>{row.outputColumns.length > 0 ? row.outputColumns.join(", ") : "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -400,7 +469,7 @@ function JsonTable({
             <strong>{bestTarget?.column ?? "-"}</strong>
           </div>
         </div>
-        <div className="data-preview">
+        <div aria-label="数据质量字段表，可滚动" className="data-preview" tabIndex={0}>
           <table>
             <thead>
               <tr>
@@ -437,6 +506,10 @@ function JsonTable({
     );
   }
 
+  if (isTransformationReport(value)) {
+    return <TransformDiffPreview diff={buildTransformDiff(value)} />;
+  }
+
   if ("samples" in value && Array.isArray(value.samples)) {
     const preview = value as PredictionSamplesPreview;
     const samples = preview.samples ?? [];
@@ -464,7 +537,7 @@ function JsonTable({
             <strong>{preview.experiment_id ?? "-"}</strong>
           </div>
         </div>
-        <div className="data-preview">
+        <div aria-label="预测样本表，可滚动" className="data-preview" tabIndex={0}>
           <table>
             <thead>
               <tr>
@@ -505,7 +578,7 @@ function JsonTable({
     const rows = value.sample as Record<string, unknown>[];
     const columns = Object.keys(rows[0]);
     return (
-      <div className="data-preview">
+      <div aria-label="产物数据样本表，可滚动" className="data-preview" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -530,7 +603,6 @@ function JsonTable({
 
   if ("chart_type" in value && value.chart_type === "histogram" && "bins" in value && Array.isArray(value.bins)) {
     const bins = value.bins as Array<{ start?: number; end?: number; count?: number }>;
-    const maxCount = Math.max(1, ...bins.map((bin) => Number(bin.count ?? 0)));
     const summary =
       "summary" in value && value.summary && typeof value.summary === "object"
         ? (value.summary as Record<string, unknown>)
@@ -541,15 +613,9 @@ function JsonTable({
           <span>分布字段</span>
           <strong>{"column" in value ? String(value.column ?? "-") : "-"}</strong>
         </div>
-        <div className="artifact-histogram" aria-label="真实数据分布图">
-          {bins.map((bin, index) => (
-            <span
-              key={`${bin.start}-${bin.end}-${index}`}
-              style={{ height: `${Math.max(8, ((bin.count ?? 0) / maxCount) * 100)}%` }}
-              title={`${Number(bin.start ?? 0).toFixed(2)} - ${Number(bin.end ?? 0).toFixed(2)}: ${bin.count ?? 0}`}
-            />
-          ))}
-        </div>
+        <Suspense fallback={<div className="artifact-histogram-fallback">加载分布图…</div>}>
+          <HistogramChart bins={bins} column={"column" in value ? String(value.column ?? "") : ""} />
+        </Suspense>
         <div className="chart-summary">
           <span>均值 {typeof summary.mean === "number" ? summary.mean.toFixed(2) : "-"}</span>
           <span>中位数 {typeof summary.median === "number" ? summary.median.toFixed(2) : "-"}</span>
@@ -563,7 +629,7 @@ function JsonTable({
     const columns = value.columns as string[];
     const matrix = value.matrix as number[][];
     return (
-      <div className="data-preview">
+      <div aria-label="相关性矩阵，可滚动" className="data-preview" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -590,7 +656,7 @@ function JsonTable({
 
   if ("columns" in value && value.columns && typeof value.columns === "object") {
     return (
-      <div className="data-preview">
+      <div aria-label="缺失值字段表，可滚动" className="data-preview" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -620,24 +686,86 @@ function JsonTable({
 
 function ArtifactPreview({
   artifact,
+  busy,
   content,
   error,
   onExecutePreprocessingPlan,
+  onRetry,
 }: {
   artifact?: Artifact;
+  busy: boolean;
   content: string | null;
   error: string | null;
   onExecutePreprocessingPlan?: () => Promise<void>;
+  onRetry: () => void;
 }) {
   if (!artifact) return null;
-  if (error) return <div className="empty-state">{error}</div>;
-  if (!content) return <div className="empty-state">正在读取产物内容...</div>;
 
+  let preview = null;
   try {
-    return <JsonTable onExecutePreprocessingPlan={onExecutePreprocessingPlan} value={JSON.parse(content)} />;
+    preview = content === null ? null : (
+      <JsonTable onExecutePreprocessingPlan={onExecutePreprocessingPlan} value={JSON.parse(content)} />
+    );
   } catch {
-    return <pre className="json-preview">{content}</pre>;
+    preview = content === null ? null : <pre className="json-preview">{content}</pre>;
   }
+
+  return (
+    <section aria-busy={busy} aria-label="产物预览" className="artifact-preview">
+      {error ? (
+        <div className="inspector-async-state error" role="alert">
+          <span>{error}</span>
+          <button aria-label="重试产物内容" onClick={onRetry} type="button">
+            <RefreshCw aria-hidden="true" size={13} />
+            <span>重试</span>
+          </button>
+        </div>
+      ) : null}
+      {busy && content === null ? (
+        <div className="inspector-async-state loading" role="status">
+          <span>正在读取产物内容…</span>
+          <div aria-hidden="true" className="inspector-skeleton">
+            <span className="inspector-skeleton-row" />
+            <span className="inspector-skeleton-row" />
+            <span className="inspector-skeleton-row" />
+          </div>
+        </div>
+      ) : null}
+      {busy && content !== null ? (
+        <div className="inspector-async-state refreshing" role="status">
+          正在刷新产物内容…
+        </div>
+      ) : null}
+      {preview}
+    </section>
+  );
+}
+
+function GuidedEmptyState({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="empty-state compact-empty guided-empty" role="status">
+      <SearchX aria-hidden="true" size={18} />
+      <div>
+        <strong>{title}</strong>
+        <span>{description}</span>
+      </div>
+      {actionLabel && onAction ? (
+        <button onClick={onAction} type="button">
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function formatFileSize(size?: number) {
@@ -693,10 +821,12 @@ function parseCsvPreview(content: string, maxRows = 50) {
 
 function CsvFilePreview({ content }: { content: string }) {
   const preview = useMemo(() => parseCsvPreview(content), [content]);
-  if (preview.headers.length === 0) return <div className="empty-state compact-empty">CSV 文件为空。</div>;
+  if (preview.headers.length === 0) {
+    return <GuidedEmptyState description="添加表头和数据后，这里会显示可检查的表格预览。" title="CSV 文件为空" />;
+  }
 
   return (
-    <div className="data-preview">
+    <div aria-label="CSV 数据预览表，可滚动" className="data-preview" tabIndex={0}>
       <table>
         <thead>
           <tr>
@@ -719,6 +849,12 @@ function CsvFilePreview({ content }: { content: string }) {
   );
 }
 
+function activeFileReadError(error: unknown) {
+  if (!error) return null;
+  const message = error instanceof Error ? error.message : "文件读取失败";
+  return message.includes("415") ? "当前文件是二进制内容，暂不支持直接预览。" : message;
+}
+
 function ActiveFilePreview({
   activeFile,
   mode,
@@ -730,74 +866,151 @@ function ActiveFilePreview({
   onExecutePreprocessingPlan?: () => Promise<void>;
   projectId?: string;
 }) {
-  const [fileContent, setFileContent] = useState<ProjectFileContent | null>(null);
-  const [draftContent, setDraftContent] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const fileContentQuery = useProjectFileContentQuery(projectId, activeFile);
+  const fileContent = fileContentQuery.data ?? null;
+  const readError = activeFileReadError(fileContentQuery.error);
+  const isBinary = readError === "当前文件是二进制内容，暂不支持直接预览。";
+  const fileKey = projectId && activeFile ? `${projectId}:${activeFile}` : "";
+  const [draft, setDraft] = useState<{ fileKey: string; content: string } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const draftContent = draft?.fileKey === fileKey ? draft.content : fileContent?.content ?? "";
 
   useEffect(() => {
-    if (!projectId || !activeFile) {
-      setFileContent(null);
-      return;
-    }
-
-    let cancelled = false;
-    setFileContent(null);
-    setError(null);
-    readProjectFileContent(projectId, activeFile)
-      .then((result) => {
-        if (!cancelled) {
-          setFileContent(result);
-          setDraftContent(result.content);
-          setSaveState("idle");
-        }
-      })
-      .catch((nextError) => {
-        if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : "文件读取失败");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeFile, projectId]);
+    setDraft(null);
+    setSaveError(null);
+    setSaveState("idle");
+  }, [fileKey]);
 
   async function saveFile() {
     if (!projectId || !fileContent) return;
     setSaveState("saving");
-    setError(null);
+    setSaveError(null);
     try {
       const result = await updateProjectFileContent(projectId, fileContent.path, draftContent);
-      setFileContent(result);
-      setDraftContent(result.content);
+      queryClient.setQueryData(projectFileContentQueryKey(projectId, fileContent.path), result);
+      setDraft(null);
       setSaveState("saved");
+      void queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(projectId) });
     } catch (nextError) {
       setSaveState("error");
-      setError(nextError instanceof Error ? nextError.message : "文件保存失败");
+      setSaveError(nextError instanceof Error ? nextError.message : "文件保存失败");
     }
   }
 
-  if (!projectId) return <div className="empty-state">请选择项目后查看文件内容。</div>;
-  if (!activeFile) return <div className="empty-state">请选择一个文件。</div>;
-  if (error) return <div className="empty-state">{error.includes("415") ? "当前文件是二进制内容，暂不支持直接预览。" : error}</div>;
-  if (!fileContent) return <div className="empty-state">正在读取 {activeFile}...</div>;
+  const previewClassName = `active-file-preview ${mode === "data" ? "data-workspace" : "code-workspace"}`;
+
+  if (!projectId) {
+    return (
+      <section aria-busy="false" aria-label="活动文件预览" className={previewClassName}>
+        <GuidedEmptyState description="从左侧项目面板选择或创建项目，再打开需要检查的文件。" title="尚未选择项目" />
+      </section>
+    );
+  }
+  if (!activeFile) {
+    return (
+      <section aria-busy="false" aria-label="活动文件预览" className={previewClassName}>
+        <GuidedEmptyState description="从左侧文件树选择 CSV、JSON 或代码文件进行检查。" title="尚未选择文件" />
+      </section>
+    );
+  }
+  if (fileContentQuery.isFetching && !fileContent) {
+    return (
+      <section aria-busy="true" aria-label="活动文件预览" className={previewClassName}>
+        <div className="active-file-loading" role="status">
+          <span>正在读取文件内容…</span>
+          <div aria-hidden="true" className="inspector-skeleton">
+            <span className="inspector-skeleton-row" />
+            <span className="inspector-skeleton-row" />
+            <span className="inspector-skeleton-row" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+  if (readError && !fileContent) {
+    return (
+      <section aria-busy={fileContentQuery.isFetching} aria-label="活动文件预览" className={previewClassName}>
+        <div className="inspector-async-state error" role="alert">
+          <span>{readError}</span>
+          {isBinary ? (
+            <a
+              aria-label="下载二进制文件"
+              download
+              href={projectFileDownloadUrl(projectId, activeFile)}
+            >
+              <Download aria-hidden="true" size={14} />
+              下载文件
+            </a>
+          ) : (
+            <button
+              aria-label="重试文件内容"
+              disabled={fileContentQuery.isFetching}
+              onClick={() => void fileContentQuery.refetch()}
+              type="button"
+            >
+              <RefreshCw aria-hidden="true" size={14} />
+              重试
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
+  if (!fileContent) return null;
 
   const isCsv = activeFile.toLowerCase().endsWith(".csv") || fileContent.mime_type === "text/csv";
   const isJson = activeFile.toLowerCase().endsWith(".json") || fileContent.mime_type === "application/json";
+  const hasUnsavedDraft = draftContent !== fileContent.content;
 
   return (
-    <div className={mode === "data" ? "data-workspace" : "code-workspace"}>
+    <section aria-busy={fileContentQuery.isFetching} aria-label="活动文件预览" className={previewClassName}>
       <div className="dataset-strip">
-        <span>当前文件</span>
-        <strong title={fileContent.path}>{fileContent.path}</strong>
+        <div className="active-file-identity">
+          <span>当前文件</span>
+          <strong title={fileContent.path}>{fileContent.path}</strong>
+        </div>
+        <button
+          aria-label="刷新文件内容"
+          className="active-file-refresh"
+          disabled={fileContentQuery.isFetching}
+          onClick={() => void fileContentQuery.refetch()}
+          title="刷新文件内容"
+          type="button"
+        >
+          <RefreshCw aria-hidden="true" size={14} />
+        </button>
       </div>
       <div className="file-meta-row">
         <span>{fileContent.mime_type}</span>
         <span>{formatFileSize(fileContent.size)}</span>
-        {mode === "code" && draftContent !== fileContent.content ? <span>未保存</span> : null}
+        {fileContentQuery.isFetching ? <span role="status">正在刷新文件内容…</span> : null}
+        {mode === "code" && hasUnsavedDraft ? <span>未保存</span> : null}
         {mode === "code" && saveState === "saved" ? <span>已保存</span> : null}
       </div>
+      {readError ? (
+        <div className="inspector-async-state error" role="alert">
+          <span>{readError}</span>
+          <button
+            aria-label="重试文件内容"
+            disabled={fileContentQuery.isFetching}
+            onClick={() => void fileContentQuery.refetch()}
+            type="button"
+          >
+            <RefreshCw aria-hidden="true" size={14} />
+            重试
+          </button>
+        </div>
+      ) : null}
+      {saveError ? (
+        <div className="inspector-async-state error" role="alert">
+          <span>{saveError}</span>
+          <button disabled={saveState === "saving"} onClick={() => void saveFile()} type="button">
+            重试保存
+          </button>
+        </div>
+      ) : null}
       {mode === "data" && isCsv ? <CsvFilePreview content={fileContent.content} /> : null}
       {mode === "data" && isJson ? (
         (() => {
@@ -818,22 +1031,27 @@ function ActiveFilePreview({
             spellCheck={false}
             value={draftContent}
             onChange={(event) => {
-              setDraftContent(event.target.value);
+              setDraft({ fileKey, content: event.target.value });
               setSaveState("idle");
+              setSaveError(null);
             }}
           />
           <div className="editor-actions">
-            <button disabled={saveState === "saving" || draftContent === fileContent.content} onClick={() => void saveFile()}>
+            <button
+              disabled={saveState === "saving" || !hasUnsavedDraft}
+              onClick={() => void saveFile()}
+              type="button"
+            >
               {saveState === "saving" ? "保存中..." : "保存文件"}
             </button>
           </div>
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }
 
-function DemoChartGallery({
+function ChartsEmptyState({
   onCleanDataset,
   onGenerateReport,
   onGenerateProfile,
@@ -846,8 +1064,6 @@ function DemoChartGallery({
   onGeneratePreprocessingPlan: () => Promise<void>;
   onTransferToMl: () => Promise<void>;
 }) {
-  const bars = [18, 42, 68, 86, 76, 58, 35, 20, 12];
-  const heatCells = Array.from({ length: 42 }, (_, index) => (index % 9 === 0 ? "hot" : index % 5 === 0 ? "warm" : ""));
   const [submitting, setSubmitting] = useState<"profile" | "report" | "preprocess" | "clean" | "handoff" | null>(null);
 
   async function generateProfile() {
@@ -897,38 +1113,10 @@ function DemoChartGallery({
 
   return (
     <div className="chart-gallery">
-      <section className="visual-card wide">
-        <div className="card-heading">
-          <BarChart3 size={15} />
-          缺失值热力图
-        </div>
-        <div className="heatmap-grid" aria-label="缺失值热力图">
-          {heatCells.map((state, index) => (
-            <span key={index} className={state} />
-          ))}
-        </div>
-      </section>
-      <section className="visual-card">
-        <div className="card-heading">
-          <LineChart size={15} />
-          月费分布
-        </div>
-        <div className="histogram" aria-label="月费分布">
-          {bars.map((height, index) => (
-            <span key={index} style={{ height: `${height}%` }} />
-          ))}
-        </div>
-      </section>
-      <section className="visual-card">
-        <div className="card-heading">
-          <Table2 size={15} />
-          特征相关性
-        </div>
-        <div className="correlation-grid" aria-label="特征相关性矩阵">
-          {["1.00", "-0.25", "0.83", "-0.35", "0.65", "1.00", "0.19", "-0.20", "0.42"].map((value, index) => (
-            <span key={`${value}-${index}`}>{value}</span>
-          ))}
-        </div>
+      <section className="charts-empty">
+        <BarChart3 size={22} />
+        <strong>还没有图表产物</strong>
+        <p>运行数据画像、报告或预处理，生成的分布、相关性等图表会显示在这里。</p>
       </section>
       <div className="panel-actions">
         <button disabled={submitting !== null} onClick={() => void generateProfile()}>
@@ -1114,6 +1302,15 @@ function TrainingPanel({
       cancelled = true;
     };
   }, [projectId, selectedRun?.prediction_samples_artifact?.path]);
+
+  function resetRunFilters() {
+    setRunFilter("all");
+    setRunSort("newest");
+  }
+
+  function resetSampleFilters() {
+    setSampleFilter({ status: "all", actual: "", predicted: "", query: "" });
+  }
 
   async function submitTraining() {
     const normalizedTarget = targetColumn.trim();
@@ -1393,7 +1590,7 @@ function TrainingPanel({
       <div className="model-compare">
         <div className="panel-title">历史实验</div>
         {runs.length === 0 ? (
-          <div className="empty-state compact-empty">还没有训练记录，启动一次训练后这里会显示实验历史。</div>
+          <GuidedEmptyState description="配置目标列并启动一次训练后，这里会显示可比较的实验历史。" title="还没有训练记录" />
         ) : (
           <>
             <div className="table-controls">
@@ -1418,7 +1615,12 @@ function TrainingPanel({
               </label>
             </div>
             {visibleRuns.length === 0 ? (
-              <div className="empty-state compact-empty">No experiment runs match the current filters.</div>
+              <GuidedEmptyState
+                actionLabel="重置实验筛选"
+                description="重置筛选后可查看全部历史运行。"
+                onAction={resetRunFilters}
+                title="当前筛选没有匹配的实验"
+              />
             ) : (
               <table>
             <thead>
@@ -1689,10 +1891,13 @@ function TrainingPanel({
               </div>
               {predictionSampleError ? <div className="inline-alert compact-alert">{predictionSampleError}</div> : null}
               {predictionSamples === null && !predictionSampleError ? (
-                <div className="empty-state compact-empty">Loading prediction samples...</div>
+                <div className="empty-state compact-empty" role="status">正在读取预测样本…</div>
               ) : null}
               {predictionSamples && predictionSamples.length === 0 ? (
-                <div className="empty-state compact-empty">No prediction samples were recorded for this run.</div>
+                <GuidedEmptyState
+                  description="该运行没有可供诊断的行级样本；可打开样本产物检查生成结果，或重新运行评估。"
+                  title="当前运行没有记录预测样本"
+                />
               ) : null}
               {predictionSamples && predictionSamples.length > 0 ? (
                 <>
@@ -1783,7 +1988,12 @@ function TrainingPanel({
                       </tbody>
                     </table>
                   ) : (
-                    <div className="empty-state compact-empty">No prediction samples match the current filters.</div>
+                    <GuidedEmptyState
+                      actionLabel="重置样本筛选"
+                      description="调整条件，或重置筛选后查看全部样本。"
+                      onAction={resetSampleFilters}
+                      title="当前筛选没有匹配的预测样本"
+                    />
                   )}
                 </>
               ) : null}
@@ -1885,22 +2095,11 @@ function TrainingPanel({
 }
 
 export function RightPanel({
-  activeFile,
   events,
-  mode,
-  preprocessingPlanPath,
   projectId,
   sessionId,
-  trainingDatasetPath,
-  trainingError,
-  trainingResult,
   trainingRuns,
   gpuStatus,
-  gpuActionError,
-  focusedExperimentId,
-  focusedLogTaskId,
-  initialTab,
-  suggestedTargetColumn,
   onCleanDataset,
   onExecutePreprocessingPlan,
   onExportRunBundle,
@@ -1914,11 +2113,44 @@ export function RightPanel({
   onCancelGpuTask,
   onRefreshGpuStatus,
 }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(() => (initialTab ? tabById[initialTab] : "图表"));
+  // 这些 UI 字段已迁入 uiStore，改为直接订阅（替代原先经 AppShell 钻取的 props）。
+  const trainingError = useUiStore((state) => state.trainingError);
+  const trainingResult = useUiStore((state) => state.trainingResult);
+  const gpuActionError = useUiStore((state) => state.gpuActionError);
+  const focusedLogTaskId = useUiStore((state) => state.focusedLogTaskId);
+  const focusedLogTraceId = useUiStore((state) => state.focusedLogTraceId);
+  const rightPanelTab = useUiStore((state) => state.rightPanelTab);
+  const mode = useUiStore((state) => state.activeMode);
+  const activeFile = useUiStore((state) => state.activeFile);
+  const focusedExperimentId = useUiStore((state) => state.focusedExperimentId);
+  const preprocessingPlanPath = useUiStore((state) => state.selectedPreprocessingPlanPath);
+  const trainingDatasetPath = useUiStore((state) => state.trainingDatasetPath);
+  const suggestedTargetColumn = useUiStore((state) => state.suggestedTargetColumn);
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(() => (rightPanelTab ? tabById[rightPanelTab] : "图表"));
+  const [tabPinnedByUser, setTabPinnedByUser] = useState(false);
+  // evolution 模式的主区是自进化工作台，不该被数据/训练工作流拽动检查器
+  const workflowTab = useMemo(
+    () =>
+      mode === "evolution"
+        ? null
+        : inspectorTabForWorkflow(deriveWorkflowState(events, mode, activeFile)),
+    [activeFile, events, mode],
+  );
+
+  function selectTab(tab: (typeof tabs)[number]) {
+    setTabPinnedByUser(true);
+    setActiveTab(tab);
+  }
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
-  const [artifactContent, setArtifactContent] = useState<string | null>(null);
-  const [artifactError, setArtifactError] = useState<string | null>(null);
   const [panelFeedback, setPanelFeedback] = useState<PanelActionFeedback | null>(null);
+  const artifactContentQuery = useProjectFileContentQuery(projectId, selectedArtifact?.path, selectedArtifact?.id);
+  const artifactContent = artifactContentQuery.data?.content ?? null;
+  const artifactError =
+    artifactContentQuery.error instanceof Error
+      ? artifactContentQuery.error.message
+      : artifactContentQuery.error
+        ? "产物读取失败"
+        : null;
   const artifacts = useMemo(() => artifactEvents(events), [events]);
   const chartArtifacts = artifacts.filter((artifact) => artifact.type === "chart");
   const dataArtifacts = artifacts.filter((artifact) => artifact.type === "dataframe");
@@ -1926,65 +2158,66 @@ export function RightPanel({
   const activeArtifacts =
     activeTab === "图表" ? chartArtifacts : activeTab === "数据" ? dataArtifacts : codeArtifacts;
 
-  function openArtifactPath(path: string) {
-    const nextTab = previewTabForPath(path);
-    const virtualArtifact: Artifact = {
+  function virtualArtifactForPath(path: string, openedFrom: string): Artifact {
+    return {
       id: `path:${path}`,
       project_id: projectId ?? "",
       session_id: sessionId ?? "manual",
       type: previewArtifactType(path),
       name: artifactNameFromPath(path),
       path,
-      metadata: { opened_from: "training_detail" },
+      metadata: { opened_from: openedFrom },
       created_at: new Date().toISOString(),
     };
+  }
+
+  function openArtifactPath(path: string) {
     onSelectFile(path);
-    setActiveTab(nextTab);
-    setSelectedArtifact(virtualArtifact);
+    setActiveTab(previewTabForPath(path));
+    setSelectedArtifact(virtualArtifactForPath(path, "training_detail"));
     setPanelFeedback({ kind: "info", message: `Opening ${path}` });
   }
 
+  // 选中产物同时设为活动文件：两者都表示"右侧正在看什么"，各自为政会让
+  // cockpit 打开产物后预览仍停在旧产物上。
+  function selectArtifact(artifact: Artifact) {
+    setSelectedArtifact(artifact);
+    onSelectFile(artifact.path);
+  }
+
+  // 切换主模式或跟随深链都是显式导航，会重新交还给自动跟随。
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(tabById[initialTab]);
+    setTabPinnedByUser(false);
+    if (rightPanelTab) {
+      setActiveTab(tabById[rightPanelTab]);
       return;
     }
     setActiveTab(mode === "machine-learning" ? "训练" : mode === "evolution" ? "日志" : "图表");
-  }, [initialTab, mode]);
+  }, [rightPanelTab, mode]);
+
+  // 检查器跟随工作流所处阶段：训练完成后不该还停在图表页。
+  // 深链和用户手动选择都优先于自动跟随。
+  useEffect(() => {
+    if (rightPanelTab || tabPinnedByUser || !workflowTab) return;
+    setActiveTab(tabById[workflowTab]);
+  }, [rightPanelTab, tabPinnedByUser, workflowTab]);
 
   useEffect(() => {
     if (!["图表", "代码", "数据"].includes(activeTab)) {
       setSelectedArtifact(undefined);
       return;
     }
-    if (!selectedArtifact || !activeArtifacts.some((artifact) => artifact.id === selectedArtifact.id)) {
-      setSelectedArtifact(activeArtifacts[0]);
-    }
-  }, [activeArtifacts, activeTab, selectedArtifact]);
-
-  useEffect(() => {
-    if (!projectId || !selectedArtifact) {
-      setArtifactContent(null);
+    // 活动文件由 cockpit 的打开产物、文件树和深链共同驱动，预览应当跟随它。
+    // 命中已知产物时选中该产物；否则清空选中，交给功能更完整的活动文件预览
+    // （它同样渲染结构化 JSON，并额外提供刷新、编辑、保存与二进制下载）。
+    if (activeFile && selectedArtifact?.path !== activeFile) {
+      setSelectedArtifact(artifacts.find((artifact) => artifact.path === activeFile));
       return;
     }
-
-    let cancelled = false;
-    setArtifactContent(null);
-    setArtifactError(null);
-    readProjectFileContent(projectId, selectedArtifact.path)
-      .then((result) => {
-        if (!cancelled) setArtifactContent(result.content);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setArtifactError(error instanceof Error ? error.message : "产物读取失败");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, selectedArtifact]);
+    if (!selectedArtifact && !activeFile) {
+      setSelectedArtifact(activeArtifacts[0]);
+    }
+  }, [activeArtifacts, activeFile, activeTab, artifacts, selectedArtifact]);
 
   function exportCurrentPanel() {
     const payload = {
@@ -2019,9 +2252,10 @@ export function RightPanel({
       <div className="right-tabs">
         {tabs.map((tab) => (
           <button
+            aria-pressed={tab === activeTab}
             key={tab}
             className={tab === activeTab ? "active" : ""}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => selectTab(tab)}
           >
             {tab}
           </button>
@@ -2029,11 +2263,17 @@ export function RightPanel({
       </div>
       {activeTab === "图表" ? (
         <>
-          <ArtifactList artifacts={chartArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          <ArtifactList artifacts={chartArtifacts} selectedId={selectedArtifact?.id} onSelect={selectArtifact} />
           {selectedArtifact ? (
-            <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+            <ArtifactPreview
+              artifact={selectedArtifact}
+              busy={artifactContentQuery.isFetching}
+              content={artifactContent}
+              error={artifactError}
+              onRetry={() => void artifactContentQuery.refetch()}
+            />
           ) : (
-            <DemoChartGallery
+            <ChartsEmptyState
               onCleanDataset={onCleanDataset}
               onGenerateReport={onGenerateReport}
               onGenerateProfile={onGenerateProfile}
@@ -2045,9 +2285,15 @@ export function RightPanel({
       ) : null}
       {activeTab === "代码" ? (
         <>
-          <ArtifactList artifacts={codeArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          <ArtifactList artifacts={codeArtifacts} selectedId={selectedArtifact?.id} onSelect={selectArtifact} />
           {selectedArtifact ? (
-            <ArtifactPreview artifact={selectedArtifact} content={artifactContent} error={artifactError} />
+            <ArtifactPreview
+              artifact={selectedArtifact}
+              busy={artifactContentQuery.isFetching}
+              content={artifactContent}
+              error={artifactError}
+              onRetry={() => void artifactContentQuery.refetch()}
+            />
           ) : (
             <ActiveFilePreview activeFile={activeFile} mode="code" projectId={projectId} />
           )}
@@ -2055,13 +2301,15 @@ export function RightPanel({
       ) : null}
       {activeTab === "数据" ? (
         <>
-          <ArtifactList artifacts={dataArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          <ArtifactList artifacts={dataArtifacts} selectedId={selectedArtifact?.id} onSelect={selectArtifact} />
           {selectedArtifact ? (
             <ArtifactPreview
               artifact={selectedArtifact}
+              busy={artifactContentQuery.isFetching}
               content={artifactContent}
               error={artifactError}
               onExecutePreprocessingPlan={onExecutePreprocessingPlan}
+              onRetry={() => void artifactContentQuery.refetch()}
             />
           ) : (
             <ActiveFilePreview
@@ -2095,7 +2343,14 @@ export function RightPanel({
           onTrainModel={onTrainModel}
         />
       ) : null}
-      {activeTab === "日志" ? <LogPanel events={events} focusedTaskId={focusedLogTaskId} sessionId={sessionId} /> : null}
+      {activeTab === "日志" ? (
+        <LogPanel
+          events={events}
+          focusedTaskId={focusedLogTaskId}
+          focusedTraceId={focusedLogTraceId}
+          sessionId={sessionId}
+        />
+      ) : null}
       {panelFeedback ? (
         <div className={`action-feedback ${panelFeedback.kind}`} role={panelFeedback.kind === "error" ? "alert" : "status"}>
           {panelFeedback.message}

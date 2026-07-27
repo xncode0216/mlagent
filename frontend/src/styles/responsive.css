@@ -1,0 +1,189 @@
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .app-shell {
+    grid-template-columns: 48px 260px minmax(420px, 1fr);
+  }
+
+  .right-panel {
+    display: none;
+  }
+
+  .top-nav,
+  .status-bar {
+    grid-column: 1 / 4;
+  }
+
+  .evolution-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lesson-list,
+  .knowledge-panel {
+    max-height: none;
+    min-height: auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 1100px) {
+  .graph-container {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-detail-sidebar {
+    max-height: none;
+  }
+
+  .graph-empty-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 740px) {
+  .evolution-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lesson-list,
+  .knowledge-panel {
+    max-height: none;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .graph-container,
+  .graph-empty-steps,
+  .graph-skeleton,
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-detail-sidebar {
+    max-height: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .file-sidebar {
+    display: none;
+  }
+
+  .agent-workspace {
+    grid-column: 2;
+  }
+
+  .top-nav,
+  .status-bar {
+    grid-column: 1 / 3;
+  }
+
+  .evolution-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-cockpit-summary,
+  .workflow-signal-grid,
+  .cockpit-component-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-completion-feedback {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+
+  .workflow-completion-feedback button {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .agent-header {
+    align-items: flex-start;
+  }
+
+  .runtime-chips {
+    justify-content: flex-start;
+  }
+
+  .evolution-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .top-nav {
+    gap: var(--space-2);
+  }
+
+  .auth-menu {
+    margin-left: 0;
+  }
+
+  .model-status-label,
+  .auth-menu-label {
+    display: none;
+  }
+
+  .evolution-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .graph-query-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .graph-refresh-error {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .graph-refresh-error button {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .lesson-actions button,
+  .lesson-filter-bar button {
+    flex: 1 1 120px;
+    justify-content: center;
+  }
+
+  .view-tabs button {
+    flex: 1 1 220px;
+    justify-content: center;
+  }
+
+  .graph-container {
+    padding: var(--space-3);
+  }
+
+  .cytoscape-canvas,
+  .graph-canvas-loading {
+    min-height: 360px;
+  }
+
+  .knowledge-graph-canvas {
+    grid-template-rows: auto minmax(360px, 1fr) auto;
+  }
+
+  .graph-node-locator,
+  .graph-node-locator select {
+    flex: 1 1 180px;
+    max-width: none;
+  }
+}
