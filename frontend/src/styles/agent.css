@@ -738,6 +738,25 @@ fieldset.cockpit-component-control legend {
   text-transform: uppercase;
 }
 
+/* 从回复回溯到产生它的那次执行 */
+.message-trace-link {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  min-height: 44px;
+  padding: 0;
+}
+
+.message-trace-link:hover {
+  color: var(--color-accent);
+}
+
 .user-message {
   background: rgb(var(--rgb-accent) / 0.12);
   color: var(--color-text);

@@ -2118,6 +2118,7 @@ export function RightPanel({
   const trainingResult = useUiStore((state) => state.trainingResult);
   const gpuActionError = useUiStore((state) => state.gpuActionError);
   const focusedLogTaskId = useUiStore((state) => state.focusedLogTaskId);
+  const focusedLogTraceId = useUiStore((state) => state.focusedLogTraceId);
   const rightPanelTab = useUiStore((state) => state.rightPanelTab);
   const mode = useUiStore((state) => state.activeMode);
   const activeFile = useUiStore((state) => state.activeFile);
@@ -2342,7 +2343,14 @@ export function RightPanel({
           onTrainModel={onTrainModel}
         />
       ) : null}
-      {activeTab === "日志" ? <LogPanel events={events} focusedTaskId={focusedLogTaskId} sessionId={sessionId} /> : null}
+      {activeTab === "日志" ? (
+        <LogPanel
+          events={events}
+          focusedTaskId={focusedLogTaskId}
+          focusedTraceId={focusedLogTraceId}
+          sessionId={sessionId}
+        />
+      ) : null}
       {panelFeedback ? (
         <div className={`action-feedback ${panelFeedback.kind}`} role={panelFeedback.kind === "error" ? "alert" : "status"}>
           {panelFeedback.message}

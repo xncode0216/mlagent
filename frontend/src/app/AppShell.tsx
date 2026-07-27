@@ -148,6 +148,7 @@ export function AppShell() {
   const setTrainingError = useUiStore((state) => state.setTrainingError);
   const setGpuActionError = useUiStore((state) => state.setGpuActionError);
   const openLogs = useUiStore((state) => state.openLogs);
+  const openTrace = useUiStore((state) => state.openTrace);
   const [preferences, setPreferences] = useState<AppPreferences>(() => readAppPreferences());
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
   // 会话级服务端态全部由 react-query 托管，随 activeSession.id 取数：
@@ -688,6 +689,7 @@ export function AppShell() {
           onGeneratePreprocessingPlan={handleGeneratePreprocessingPlan}
           onGenerateProfile={handleGenerateProfile}
           onOpenLogs={(taskId) => openLogs(taskId)}
+          onOpenTrace={openTrace}
           onOpenTraining={() => setActiveMode("machine-learning")}
           onRegenerateEvaluationReport={handleGenerateEvaluationReport}
           onRespondToApproval={handleRespondToApproval}

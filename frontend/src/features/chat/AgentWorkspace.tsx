@@ -4,6 +4,7 @@ import {
   Command as CommandIcon,
   ExternalLink,
   FileCheck2,
+  Route,
   SendHorizontal,
   Sparkles,
   UserRound,
@@ -65,6 +66,7 @@ type AgentWorkspaceProps = {
   onRetryLearning?: () => Promise<void>;
   onRetrySklearnTraining?: () => Promise<void>;
   onApplyFeatureSelection?: (features: string[]) => Promise<void> | void;
+  onOpenTrace?: (traceId: string) => void;
   onSelectExperimentRun?: (experimentId: string) => void;
   onSelectFile?: (path: string) => void;
   onSelectTargetColumn?: (column: string) => void;
@@ -128,6 +130,12 @@ type ActionFeedback = {
   kind: "info" | "success" | "warning" | "error";
   message: string;
 };
+
+/** 后端把产生该消息的 trace 写进 metadata；旧消息可能没有，此时不提供入口。 */
+function messageTraceId(message: AgentMessage) {
+  const traceId = message.metadata?.trace_id;
+  return typeof traceId === "string" && traceId ? traceId : undefined;
+}
 
 type CockpitCardProps = {
   card: CockpitComponentCard;
@@ -280,6 +288,7 @@ export function AgentWorkspace({
   onRetryLearning,
   onRetrySklearnTraining,
   onApplyFeatureSelection,
+  onOpenTrace,
   onSelectExperimentRun,
   onSelectFile,
   onSelectTargetColumn,
@@ -715,6 +724,16 @@ export function AgentWorkspace({
                     <MarkdownMessage content={historyMessage.content} />
                   </Suspense>
                 )}
+                {historyMessage.role !== "user" && messageTraceId(historyMessage) ? (
+                  <button
+                    className="message-trace-link"
+                    onClick={() => onOpenTrace?.(messageTraceId(historyMessage) as string)}
+                    type="button"
+                  >
+                    <Route aria-hidden="true" size={12} />
+                    查看该回复的执行链路
+                  </button>
+                ) : null}
               </div>
             </div>
           ))

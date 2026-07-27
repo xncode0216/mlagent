@@ -45,6 +45,8 @@ interface UiState {
   gpuActionError: string | null;
   // 右栏：聚焦日志任务 + 当前标签（深链 rightTab 初始化）。
   focusedLogTaskId: string | null;
+  // 从一条消息回溯到产生它的那次执行（事件流按 trace 过滤）。
+  focusedLogTraceId: string | null;
   rightPanelTab: RightPanelTabId | undefined;
   setWorkspaceStatus: (value: string) => void;
   setTrainingResult: (value: TrainingResult | null) => void;
@@ -53,6 +55,8 @@ interface UiState {
   setRightPanelTab: (value: RightPanelTabId) => void;
   // 复合动作：打开某任务日志（聚焦任务 + 切到日志标签），替代原先成对的 setState。
   openLogs: (taskId?: string | null) => void;
+  // 复合动作：按 trace 打开日志，用于从消息回溯到产生它的那次执行。
+  openTrace: (traceId: string) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -80,6 +84,7 @@ export const useUiStore = create<UiState>((set) => ({
   trainingError: null,
   gpuActionError: null,
   focusedLogTaskId: null,
+  focusedLogTraceId: null,
   rightPanelTab: initialDeepLink.rightTab,
   setWorkspaceStatus: (value) => set({ workspaceStatus: value }),
   setTrainingResult: (value) => set({ trainingResult: value }),
@@ -87,4 +92,5 @@ export const useUiStore = create<UiState>((set) => ({
   setGpuActionError: (value) => set({ gpuActionError: value }),
   setRightPanelTab: (value) => set({ rightPanelTab: value }),
   openLogs: (taskId) => set({ focusedLogTaskId: taskId ?? null, rightPanelTab: "logs" }),
+  openTrace: (traceId) => set({ focusedLogTraceId: traceId, rightPanelTab: "logs" }),
 }));

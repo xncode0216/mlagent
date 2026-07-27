@@ -203,6 +203,60 @@ describe("agent command palette and slash commands", () => {
   });
 });
 
+describe("消息回溯到执行链路", () => {
+  // 事件流每条都带 trace_id，消息此前只是文本：用户看到一句结论，
+  // 无从查看它背后跑了哪些工具、产出了什么、有没有报错。
+  function messageWithTrace(traceId?: string) {
+    return {
+      id: "message-1",
+      session_id: "session-1",
+      role: "assistant" as const,
+      content: "我已生成数据质量画像。",
+      metadata: traceId ? { trace_id: traceId } : {},
+      created_at: "2026-07-27T00:00:00Z",
+    };
+  }
+
+  it("为带 trace 的消息提供查看执行链路的入口", () => {
+    const onOpenTrace = vi.fn();
+    render(
+      <AgentWorkspace
+        connected
+        events={[]}
+        historyMessages={[messageWithTrace("trace-abc")]}
+        lastError={null}
+        mode="analysis"
+        onOpenTrace={onOpenTrace}
+        onSelectFile={vi.fn()}
+        projectId="project-1"
+        sendMessage={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "查看该回复的执行链路" }));
+
+    expect(onOpenTrace).toHaveBeenCalledWith("trace-abc");
+  });
+
+  it("没有 trace 的历史消息不显示无效入口", () => {
+    render(
+      <AgentWorkspace
+        connected
+        events={[]}
+        historyMessages={[messageWithTrace()]}
+        lastError={null}
+        mode="analysis"
+        onOpenTrace={vi.fn()}
+        onSelectFile={vi.fn()}
+        projectId="project-1"
+        sendMessage={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "查看该回复的执行链路" })).toBeNull();
+  });
+});
+
 describe("训练配置卡片的目标列选择", () => {
   const profileEvent: AgentStreamEvent = {
     type: "component_requested",

@@ -115,6 +115,13 @@ test("自然语言可驱动从原始数据到经验沉淀的完整工作流", as
     await ask(page, "extract lessons and propose learned rules");
     await expect(card(page, "lesson_review")).toBeVisible();
 
+    // 8. 回溯：任一回复都能追到产生它的那次执行，日志随即按该 trace 过滤
+    await page.getByRole("button", { name: "查看该回复的执行链路" }).last().click();
+    await expect(page.getByRole("button", { name: "日志", pressed: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "清除过滤" })).toBeVisible();
+    // 过滤后仍有事件，才说明这条回复真的能追回它的执行链路
+    await expect(page.locator(".log-row").first()).toBeVisible();
+
     if (process.env.E2E_NATURAL_LANGUAGE_SCREENSHOT_PATH) {
       await page.screenshot({
         path: process.env.E2E_NATURAL_LANGUAGE_SCREENSHOT_PATH,
