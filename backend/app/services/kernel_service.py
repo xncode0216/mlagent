@@ -18,6 +18,17 @@ class KernelServiceProtocol(Protocol):
 
 
 class LocalPythonKernelService:
+    """Runs Python code in a subprocess rooted at the project workspace.
+
+    Generated analysis and training code addresses files by project-relative
+    path. The Docker kernel satisfies that by mounting the workspace and setting
+    the container workdir, so the local kernel must run with the same working
+    directory or identical code fails with FileNotFoundError.
+    """
+
+    def __init__(self, workspace_root: Path | None = None) -> None:
+        self.workspace_root = workspace_root.resolve() if workspace_root else None
+
     def execute(self, code: str, timeout_seconds: int = 10) -> KernelExecutionResult:
         try:
             process = subprocess.run(
@@ -26,6 +37,7 @@ class LocalPythonKernelService:
                 text=True,
                 timeout=timeout_seconds,
                 check=False,
+                cwd=self.workspace_root,
             )
         except subprocess.TimeoutExpired:
             return KernelExecutionResult(
@@ -141,7 +153,7 @@ def create_kernel_service(
     workspace_mount_mode: str = "rw",
 ) -> KernelServiceProtocol:
     if backend == "local":
-        return LocalPythonKernelService()
+        return LocalPythonKernelService(workspace_root=workspace_root)
     if backend == "jupyter":
         return DockerPythonKernelService(
             image=image,
