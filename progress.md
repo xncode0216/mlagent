@@ -1185,3 +1185,13 @@
 - **按来源分派而非猜测**：给 `approval_required` 事件增加可选 `origin: "local"`，由本地流程显式标注，经 `workflowState.approval` 透传到 action payload。批准时只有编排器发起的审批才走 WebSocket 审批响应，本地审批直接调用既有的执行路径。两条路径各有组件测试固定，避免以后再次混淆。
 - **门禁与浏览器证据**：前端 Vitest `35 files / 224 tests`、ESLint 0、TypeScript + Vite build + 预算门禁（主包 467.20kB / gzip 134.41kB）；真实 FastAPI + Vite Playwright `8 passed`。golden path 现在直接点卡片上的「批准并执行」完成变换，再点「打开列对照」验证右侧渲染出逐列对照表——这两步在修复前分别是空操作和不联动，如今都是真实可走的路径。
 - **动态计划**：两处一致性问题已闭环。`task_plan.md` 的北极星 follow-up 还剩两项：上下文 inspector 视图（126）与全链路 provenance 回链（128）；另有自然语言全流程 golden-path 覆盖（129）。其中 126 与本次修复的“activeFile 驱动右侧预览”方向一致，可作为下一主线的自然延续。
+
+## 2026-07-27 自然语言全流程 golden-path（129 完成）
+
+- **选择理由与边界**：后端 intent 路由已有 27 个 WebSocket 单测，覆盖全部 10 个 intent 与重试/放弃/歧义；前端有命令面板发送测试。缺的是把两者串成一条真实浏览器全链路——此前的 golden path 只验证到“已发送”，从未验证 Agent 的实际响应。新增 `e2e/natural-language.e2e.ts`，全部指令经对话框以自然语言输入。
+- **覆盖的真实链路**：原始数据 → 画像与可审计的预处理计划并**停在审批检查点** → 批准后产出训练就绪数据集 → 训练意图只召唤配置卡片（真实训练仍需用户确认）→ 启动 sklearn 真实训练 → 评估（真实指标、候选模型、报告）→ 诊断（类别误差与行级样本）→ 重试（无保存状态时如实说明）→ 导出交接包 → 经验沉淀。截图 `.codex-runs/natural-language-flow.png` 显示 `agent_orchestrator x7 · 完成`。
+- **揪出缺陷一：本地 kernel 不在项目工作区内执行**。生成的训练代码使用项目相对路径，Docker kernel 靠挂载与 workdir 满足；而 `LocalPythonKernelService` 的 `subprocess.run` **既不设 cwd 也不接受 workspace_root**，工厂函数对 local 后端直接丢弃该参数。因此在没有 Docker 的机器上，任何 sklearn 训练都以 `FileNotFoundError` 失败——而工具层在交给 kernel 前刚用绝对路径校验过同一文件存在，失败只在运行时暴露。既有 kernel 测试从未执行过一次工作区相对读取，所以长期未被发现。已修复并补两项后端测试。
+- **揪出缺陷二：cockpit 卡片上限截断了 Agent 正在引导的卡片**。卡片按工作流顺序产生，而渲染取**前** 4 张，等于永远优先保留最早期的阶段。流程推进后，Agent 明确说“review the training card”“review the model comparison and report cards”，对应卡片却已被挤出可见范围——用户被指向看不到的东西。先尝试“当前阶段优先”排序，实测无效（真实渲染为 `[data_quality, preprocessing_plan, transformation_report, planned_dataset, training_config, model_comparison]`，评估报告卡在第 7 位）；改为保留**最新**的若干张，抽出纯函数 `selectVisibleCockpitCards` 并把上限提到 8。
+- **揪出缺陷三：会话就绪前发送会丢失响应**。套接字在真实会话建立前连的是占位的 `dev-session`，切换会话时 `setEvents([])` 清空事件流。首次运行时后端确实执行并在 `results/dev-session/` 下产出了画像、计划、脚本与待审批记录，但 UI 事件流已被清空，界面停在空状态、产物计数为 0。E2E 因此显式等待真实会话就绪后再发送；该竞态窗口对真实用户同样存在，已记录待后续处理。
+- **门禁**：后端 ruff + `229 passed, 3 skipped`；前端 Vitest `35 files / 226 tests`、ESLint 0、TypeScript + Vite build + 预算门禁（主包 467.26kB / gzip 134.42kB）；Playwright `9 passed`（新增自然语言全流程，既有 8 条无回归）。
+- **动态计划**：129 完成。北极星 follow-up 仅剩 126（上下文 inspector 视图）与 128（全链路 provenance 回链）。另记录一项本次发现但未处理的问题：会话建立前的发送竞态，宜与 126 一并考虑，因为两者都涉及“右侧/会话状态由谁驱动”。
