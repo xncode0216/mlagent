@@ -419,3 +419,48 @@ describe("RightPanel 变换报告 diff 预览", () => {
     expect(await screen.findByRole("status", { name: "变换行数变化" })).toBeTruthy();
   });
 });
+
+describe("RightPanel 跟随工作流阶段", () => {
+  const trainingStageEvent: AgentStreamEvent = {
+    type: "component_requested",
+    task_id: "session-1",
+    stage: "train",
+    component: "training_config",
+    title: "Configure sklearn training",
+    artifact_path: "results/session-1/churn_planned.csv",
+    props: { dataset_path: "results/session-1/churn_planned.csv", target_column: "churn" },
+  };
+
+  function activeTabName() {
+    return screen.getByRole("button", { name: /^(图表|代码|数据|训练|日志)$/, pressed: true }).textContent;
+  }
+
+  beforeEach(() => {
+    // 深链是显式意图，会压过自动跟随，因此这里清空它
+    useUiStore.setState({ rightPanelTab: undefined });
+  });
+
+  it("工作流进入训练阶段时切换到训练检查器", () => {
+    renderPanel({ events: [trainingStageEvent] });
+
+    expect(activeTabName()).toBe("训练");
+  });
+
+  it("用户手动切换后不再被工作流拽走", () => {
+    const { rerender } = renderPanel({ events: [] });
+
+    fireEvent.click(screen.getByRole("button", { name: "代码" }));
+    expect(activeTabName()).toBe("代码");
+
+    rerender(<RightPanel {...baseProps} events={[trainingStageEvent]} />);
+
+    expect(activeTabName()).toBe("代码");
+  });
+
+  it("深链指定的检查器优先于工作流阶段", () => {
+    useUiStore.setState({ rightPanelTab: "logs" });
+    renderPanel({ events: [trainingStageEvent] });
+
+    expect(activeTabName()).toBe("日志");
+  });
+});

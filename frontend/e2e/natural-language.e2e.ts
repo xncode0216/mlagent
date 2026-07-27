@@ -60,8 +60,9 @@ test("自然语言可驱动从原始数据到经验沉淀的完整工作流", as
       content: DATASET_CSV,
     });
 
+    // 刻意不带 rightTab 深链：检查器应当自己跟随工作流阶段
     await page.goto(
-      `/?mode=analysis&activity=data&rightTab=data&projectId=${project.id}` +
+      `/?mode=analysis&activity=data&projectId=${project.id}` +
         `&file=${encodeURIComponent(DATASET_PATH)}`,
     );
     await expect(page.locator(".status-bar")).toContainText(DATASET_PATH);
@@ -88,6 +89,8 @@ test("自然语言可驱动从原始数据到经验沉淀的完整工作流", as
     await expect(page.getByRole("status").filter({ hasText: "启动 sklearn 已完成" })).toBeVisible({
       timeout: 60_000,
     });
+    // 检查器应当已经跟到训练页，而不是把用户留在数据页自己去找
+    await expect(page.getByRole("button", { name: "训练", pressed: true })).toBeVisible();
 
     // 4. 评估：真实指标、候选模型与报告
     await ask(page, "evaluate this model and show the report");

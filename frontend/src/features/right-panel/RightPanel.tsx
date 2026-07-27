@@ -24,7 +24,9 @@ const HistogramChart = lazy(() => import("./HistogramChart"));
 import { useUiStore } from "../../app/uiStore";
 import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
+import { deriveWorkflowState } from "../chat/workflowState";
 import { deriveErrorSlices } from "./errorSlices";
+import { inspectorTabForWorkflow } from "./inspectorContext";
 import {
   buildTransformDiff,
   isTransformationReport,
@@ -2124,6 +2126,20 @@ export function RightPanel({
   const trainingDatasetPath = useUiStore((state) => state.trainingDatasetPath);
   const suggestedTargetColumn = useUiStore((state) => state.suggestedTargetColumn);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(() => (rightPanelTab ? tabById[rightPanelTab] : "图表"));
+  const [tabPinnedByUser, setTabPinnedByUser] = useState(false);
+  // evolution 模式的主区是自进化工作台，不该被数据/训练工作流拽动检查器
+  const workflowTab = useMemo(
+    () =>
+      mode === "evolution"
+        ? null
+        : inspectorTabForWorkflow(deriveWorkflowState(events, mode, activeFile)),
+    [activeFile, events, mode],
+  );
+
+  function selectTab(tab: (typeof tabs)[number]) {
+    setTabPinnedByUser(true);
+    setActiveTab(tab);
+  }
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | undefined>();
   const [panelFeedback, setPanelFeedback] = useState<PanelActionFeedback | null>(null);
   const artifactContentQuery = useProjectFileContentQuery(projectId, selectedArtifact?.path, selectedArtifact?.id);
@@ -2168,13 +2184,22 @@ export function RightPanel({
     onSelectFile(artifact.path);
   }
 
+  // 切换主模式或跟随深链都是显式导航，会重新交还给自动跟随。
   useEffect(() => {
+    setTabPinnedByUser(false);
     if (rightPanelTab) {
       setActiveTab(tabById[rightPanelTab]);
       return;
     }
     setActiveTab(mode === "machine-learning" ? "训练" : mode === "evolution" ? "日志" : "图表");
   }, [rightPanelTab, mode]);
+
+  // 检查器跟随工作流所处阶段：训练完成后不该还停在图表页。
+  // 深链和用户手动选择都优先于自动跟随。
+  useEffect(() => {
+    if (rightPanelTab || tabPinnedByUser || !workflowTab) return;
+    setActiveTab(tabById[workflowTab]);
+  }, [rightPanelTab, tabPinnedByUser, workflowTab]);
 
   useEffect(() => {
     if (!["图表", "代码", "数据"].includes(activeTab)) {
@@ -2226,9 +2251,10 @@ export function RightPanel({
       <div className="right-tabs">
         {tabs.map((tab) => (
           <button
+            aria-pressed={tab === activeTab}
             key={tab}
             className={tab === activeTab ? "active" : ""}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => selectTab(tab)}
           >
             {tab}
           </button>
