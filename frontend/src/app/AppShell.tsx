@@ -168,8 +168,9 @@ export function AppShell() {
   );
   const durableTaskStates = taskStatesSnapshot.states;
   const taskStateEvents = taskStatesSnapshot.events;
+  // 没有真实会话时传 null：占位会话会让消息发到一个随后被丢弃的事件流里。
   const { connected, events, lastError, sendApprovalResponse, sendMessage, sendResumeStep } = useAgentStream(
-    activeSession?.id ?? "dev-session",
+    activeSession?.id ?? null,
   );
   const projectsQuery = useProjectsQuery();
   const projects = projectsQuery.data ?? [];

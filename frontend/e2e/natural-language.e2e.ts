@@ -65,9 +65,7 @@ test("自然语言可驱动从原始数据到经验沉淀的完整工作流", as
         `&file=${encodeURIComponent(DATASET_PATH)}`,
     );
     await expect(page.locator(".status-bar")).toContainText(DATASET_PATH);
-    // 会话建立前套接字连的是占位的 dev-session，切换会话时事件流会被清空。
-    // 因此先等真实会话就绪，再等新连接打开，否则首条指令的响应会丢失。
-    await expect(page.locator(".status-bar")).not.toContainText("会话：无");
+    // 只有真实会话就绪后才会建立连接，因此"已连接"即代表可以安全发送指令。
     await expect(page.locator(".status-bar")).toContainText("WebSocket 已连接");
 
     // 1. 原始数据 -> 画像与预处理计划，并刻意停在审批检查点（变换属于会改数据的动作）
