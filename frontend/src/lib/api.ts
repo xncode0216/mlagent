@@ -579,11 +579,17 @@ export async function generatePreprocessingPlan(
   projectId: string,
   datasetPath: string,
   sessionId = "manual-analysis",
+  // 省略时沿用后端的自动质量丢弃规则；给定时由调用方决定参与训练的特征。
+  selectedFeatures?: string[],
 ): Promise<PreprocessingPlanResult> {
   return request<PreprocessingPlanResult>(`/api/projects/${projectId}/analysis/preprocess-plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dataset_path: datasetPath, session_id: sessionId }),
+    body: JSON.stringify({
+      dataset_path: datasetPath,
+      session_id: sessionId,
+      ...(selectedFeatures ? { selected_features: selectedFeatures } : {}),
+    }),
   });
 }
 

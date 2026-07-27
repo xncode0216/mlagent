@@ -276,3 +276,78 @@ describe("训练配置卡片的目标列选择", () => {
     expect(screen.queryByRole("combobox", { name: "目标列" })).toBeNull();
   });
 });
+
+describe("预处理计划卡片的特征选择", () => {
+  const planEvent: AgentStreamEvent = {
+    type: "artifact_created",
+    artifact: {
+      id: "artifact-plan",
+      project_id: "project-1",
+      session_id: "session-1",
+      type: "dataframe",
+      name: "preprocessing_plan.json",
+      path: "results/session-1/preprocessing_plan.json",
+      metadata: {
+        artifact_role: "preprocessing_plan",
+        target_column: "churn",
+        feature_columns: ["age", "contract"],
+        drop_columns: ["customer_id"],
+      },
+      created_at: "2026-07-27T00:00:00Z",
+    },
+  };
+
+  function renderPlanCockpit(onApplyFeatureSelection = vi.fn()) {
+    render(
+      <AgentWorkspace
+        connected
+        events={[planEvent]}
+        historyMessages={[]}
+        lastError={null}
+        mode="analysis"
+        onApplyFeatureSelection={onApplyFeatureSelection}
+        onSelectFile={vi.fn()}
+        projectId="project-1"
+        sendMessage={vi.fn()}
+        trainingDatasetPath="data/customer_churn.csv"
+      />,
+    );
+    return { onApplyFeatureSelection };
+  }
+
+  function checkbox(group: HTMLElement, name: string) {
+    return within(group).getByRole("checkbox", { name }) as HTMLInputElement;
+  }
+
+  it("按计划预勾选特征并把丢弃列一并列出", () => {
+    renderPlanCockpit();
+    const group = screen.getByRole("group", { name: "参与训练的特征" });
+
+    expect(checkbox(group, "age").checked).toBe(true);
+    expect(checkbox(group, "contract").checked).toBe(true);
+    expect(checkbox(group, "customer_id").checked).toBe(false);
+  });
+
+  it("提交编辑后的特征集合", () => {
+    const { onApplyFeatureSelection } = renderPlanCockpit();
+    const group = screen.getByRole("group", { name: "参与训练的特征" });
+
+    fireEvent.click(within(group).getByRole("checkbox", { name: "contract" }));
+    fireEvent.click(within(group).getByRole("checkbox", { name: "customer_id" }));
+    fireEvent.click(screen.getByRole("button", { name: "应用特征选择" }));
+
+    expect(onApplyFeatureSelection).toHaveBeenCalledWith(["age", "customer_id"]);
+  });
+
+  it("不允许提交空特征集合", () => {
+    const { onApplyFeatureSelection } = renderPlanCockpit();
+    const group = screen.getByRole("group", { name: "参与训练的特征" });
+
+    fireEvent.click(within(group).getByRole("checkbox", { name: "age" }));
+    fireEvent.click(within(group).getByRole("checkbox", { name: "contract" }));
+    fireEvent.click(screen.getByRole("button", { name: "应用特征选择" }));
+
+    expect(onApplyFeatureSelection).not.toHaveBeenCalled();
+    expect(screen.getByText(/至少选择一个特征/)).toBeTruthy();
+  });
+});

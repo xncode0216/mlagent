@@ -123,6 +123,35 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
     }
     await page.getByRole("navigation", { name: "主模式" }).getByRole("button", { name: "数据分析" }).click();
 
+    // 特征选择必须落到计划里才能复现，因此在卡片内取消勾选后应重新生成计划与管道脚本。
+    const dataQualityPanel = page.locator('[data-cockpit-component="data_quality"]');
+    await dataQualityPanel.getByRole("button", { name: "生成计划" }).click();
+    const planCard = page.locator('[data-cockpit-component="preprocessing_plan"]');
+    const featureGroup = planCard.getByRole("group", { name: "参与训练的特征" });
+    await expect(featureGroup).toBeVisible();
+    const supportTickets = featureGroup.getByRole("checkbox", { name: "support_tickets" });
+    await expect(supportTickets).toBeChecked();
+
+    await supportTickets.uncheck();
+    if (process.env.E2E_FEATURE_SELECT_SCREENSHOT_PATH) {
+      await page.screenshot({ path: process.env.E2E_FEATURE_SELECT_SCREENSHOT_PATH, fullPage: true });
+    }
+    await planCard.getByRole("button", { name: "应用特征选择" }).click();
+    await expect(supportTickets).not.toBeChecked();
+
+    // 计划由界面会话重新生成，路径与 setup 时的 API 调用不同，因此从卡片里取真实路径。
+    const planPathValue = planCard.locator('.information-value[data-information-kind="path"]').first();
+    await planPathValue.locator("summary").click();
+    const regeneratedPlanPath = await planPathValue.locator(".information-value-expanded > code").innerText();
+
+    const regeneratedPlan = await api.get(
+      `${API_BASE_URL}/api/projects/${project.id}/files/content?path=${encodeURIComponent(regeneratedPlanPath)}`,
+    );
+    expect(regeneratedPlan.ok()).toBeTruthy();
+    const planJson = JSON.parse((await regeneratedPlan.json()).content);
+    expect(planJson.feature_columns).not.toContain("support_tickets");
+    expect(planJson.drop_reasons.support_tickets).toBe("deselected");
+
     await page.goto(
       `/?mode=analysis&activity=data&rightTab=data&projectId=${project.id}&file=${encodeURIComponent(executed.transformed_data_artifact.path)}`,
     );

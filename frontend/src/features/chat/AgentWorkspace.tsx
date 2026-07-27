@@ -63,6 +63,7 @@ type AgentWorkspaceProps = {
   onRetryExport?: () => Promise<void>;
   onRetryLearning?: () => Promise<void>;
   onRetrySklearnTraining?: () => Promise<void>;
+  onApplyFeatureSelection?: (features: string[]) => Promise<void> | void;
   onSelectExperimentRun?: (experimentId: string) => void;
   onSelectFile?: (path: string) => void;
   onSelectTargetColumn?: (column: string) => void;
@@ -123,6 +124,130 @@ type ActionFeedback = {
   message: string;
 };
 
+type CockpitCardProps = {
+  card: CockpitComponentCard;
+  featureSelectionDraft: string[] | null;
+  onRunAction: (action: CockpitComponentAction) => void;
+  onRunControl: (control: CockpitComponentControl, value: string) => void;
+  onToggleFeature: (
+    control: Extract<CockpitComponentControl, { kind: "multi_select" }>,
+    value: string,
+  ) => void;
+};
+
+// 定义在模块作用域而非 AgentWorkspace 内部：内部定义会使每次渲染产生新的组件类型，
+// React 因此卸载并重建整张卡片，勾选特征时焦点会丢失、无法连续操作。
+function CockpitCard({
+  card,
+  featureSelectionDraft,
+  onRunAction,
+  onRunControl,
+  onToggleFeature,
+}: CockpitCardProps) {
+  return (
+    <article className={`cockpit-component-card ${card.status}`} data-cockpit-component={card.kind}>
+      <div className="cockpit-component-header">
+        <div>
+          <span className="section-kicker">{stageKickerLabel[card.stage] ?? card.stage}</span>
+          <strong>{card.title}</strong>
+        </div>
+        <span className={`cockpit-component-status ${card.status}`}>
+          {cockpitStatusLabel[card.status] ?? card.status}
+        </span>
+      </div>
+      <p>{card.description}</p>
+      <div className="cockpit-component-facts">
+        {card.facts.map((fact) => (
+          <div key={`${card.id}-${fact.label}`}>
+            <span>{fact.label}</span>
+            <InformationValue label={fact.label} value={fact.value} />
+          </div>
+        ))}
+      </div>
+      {card.controls && card.controls.length > 0 ? (
+        <div className="cockpit-component-controls">
+          {card.controls.map((control) => {
+            const descriptionId = control.description
+              ? `${card.id}-${control.id}-description`
+              : undefined;
+            if (control.kind === "multi_select") {
+              const selected = featureSelectionDraft ?? control.values;
+              return (
+                <fieldset
+                  aria-describedby={descriptionId}
+                  className="cockpit-component-control"
+                  key={`${card.id}-${control.id}`}
+                >
+                  <legend>{control.label}</legend>
+                  <div className="cockpit-component-checkboxes">
+                    {control.options.map((option) => {
+                      // input 置于 label 外并用 htmlFor 关联：label 包裹会把点击再转发给
+                      // input，导致一次点击 toggle 两次而净效果为零。
+                      const optionId = `${card.id}-${control.id}-${option.value}`;
+                      return (
+                        <div key={optionId}>
+                          <input
+                            checked={selected.includes(option.value)}
+                            disabled={Boolean(control.disabledReason)}
+                            id={optionId}
+                            onChange={() => onToggleFeature(control, option.value)}
+                            type="checkbox"
+                          />
+                          <label htmlFor={optionId}>{option.label}</label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {control.description ? <small id={descriptionId}>{control.description}</small> : null}
+                </fieldset>
+              );
+            }
+            return (
+              <div className="cockpit-component-control" key={`${card.id}-${control.id}`}>
+                <span>{control.label}</span>
+                <select
+                  aria-describedby={descriptionId}
+                  aria-label={control.label}
+                  disabled={Boolean(control.disabledReason)}
+                  onChange={(event) => onRunControl(control, event.target.value)}
+                  title={control.disabledReason ?? control.description ?? control.label}
+                  value={control.value}
+                >
+                  {control.value ? null : (
+                    <option value="" disabled>
+                      请选择
+                    </option>
+                  )}
+                  {control.options.map((option) => (
+                    <option key={`${card.id}-${control.id}-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {control.description ? <small id={descriptionId}>{control.description}</small> : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="cockpit-component-actions">
+        {card.actions.map((action, index) => (
+          <button
+            className={action.tone === "primary" ? "primary" : ""}
+            disabled={Boolean(action.disabledReason)}
+            key={`${card.id}-${action.id}-${index}`}
+            onClick={() => onRunAction(action)}
+            title={action.disabledReason ?? action.label}
+            type="button"
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 export function AgentWorkspace({
   mode,
   connected,
@@ -149,6 +274,7 @@ export function AgentWorkspace({
   onRetryExport,
   onRetryLearning,
   onRetrySklearnTraining,
+  onApplyFeatureSelection,
   onSelectExperimentRun,
   onSelectFile,
   onSelectTargetColumn,
@@ -160,6 +286,8 @@ export function AgentWorkspace({
   const focusedExperimentId = useUiStore((state) => state.focusedExperimentId);
   const copy = modeCopy[mode];
   const [draft, setDraft] = useState("");
+  // null 表示未编辑，直接采用计划里的当前特征；编辑后在提交前保持本地草稿。
+  const [featureSelectionDraft, setFeatureSelectionDraft] = useState<string[] | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false);
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
@@ -403,6 +531,21 @@ export function AgentWorkspace({
         case "retry_lesson_extraction":
           await onRetryLearning?.();
           break;
+        case "apply_feature_selection": {
+          const features = featureSelectionDraft;
+          if (features === null) {
+            setActionFeedback({ kind: "error", message: "特征选择没有变化。" });
+            return;
+          }
+          if (features.length === 0) {
+            // 后端也会拒绝空选择；这里就地拦下，避免用户白跑一次重生成
+            setActionFeedback({ kind: "error", message: "请至少选择一个特征。" });
+            return;
+          }
+          await onApplyFeatureSelection?.(features);
+          setFeatureSelectionDraft(null);
+          break;
+        }
         case "abandon_task_state":
           await onAbandonTaskState?.(action.payload?.stage ?? "train");
           break;
@@ -417,7 +560,7 @@ export function AgentWorkspace({
   }
 
   function runCockpitControl(control: CockpitComponentControl, value: string) {
-    if (!value || value === control.value) return;
+    if (control.kind !== "select" || !value || value === control.value) return;
     switch (control.id) {
       case "target_column":
         onSelectTargetColumn?.(value);
@@ -426,76 +569,10 @@ export function AgentWorkspace({
     }
   }
 
-  function CockpitCard({ card }: { card: CockpitComponentCard }) {
-    return (
-      <article className={`cockpit-component-card ${card.status}`} data-cockpit-component={card.kind}>
-        <div className="cockpit-component-header">
-          <div>
-            <span className="section-kicker">{stageKickerLabel[card.stage] ?? card.stage}</span>
-            <strong>{card.title}</strong>
-          </div>
-          <span className={`cockpit-component-status ${card.status}`}>
-            {cockpitStatusLabel[card.status] ?? card.status}
-          </span>
-        </div>
-        <p>{card.description}</p>
-        <div className="cockpit-component-facts">
-          {card.facts.map((fact) => (
-            <div key={`${card.id}-${fact.label}`}>
-              <span>{fact.label}</span>
-              <InformationValue label={fact.label} value={fact.value} />
-            </div>
-          ))}
-        </div>
-        {card.controls && card.controls.length > 0 ? (
-          <div className="cockpit-component-controls">
-            {card.controls.map((control) => {
-              const descriptionId = control.description
-                ? `${card.id}-${control.id}-description`
-                : undefined;
-              return (
-                <div className="cockpit-component-control" key={`${card.id}-${control.id}`}>
-                  <span>{control.label}</span>
-                  <select
-                    aria-describedby={descriptionId}
-                    aria-label={control.label}
-                    disabled={Boolean(control.disabledReason)}
-                    onChange={(event) => runCockpitControl(control, event.target.value)}
-                    title={control.disabledReason ?? control.description ?? control.label}
-                    value={control.value}
-                  >
-                    {control.value ? null : (
-                      <option value="" disabled>
-                        请选择
-                      </option>
-                    )}
-                    {control.options.map((option) => (
-                      <option key={`${card.id}-${control.id}-${option.value}`} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  {control.description ? <small id={descriptionId}>{control.description}</small> : null}
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
-        <div className="cockpit-component-actions">
-          {card.actions.map((action, index) => (
-            <button
-              className={action.tone === "primary" ? "primary" : ""}
-              disabled={Boolean(action.disabledReason)}
-              key={`${card.id}-${action.id}-${index}`}
-              onClick={() => void runCockpitAction(action)}
-              title={action.disabledReason ?? action.label}
-              type="button"
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      </article>
+  function toggleFeature(control: Extract<CockpitComponentControl, { kind: "multi_select" }>, value: string) {
+    const current = featureSelectionDraft ?? control.values;
+    setFeatureSelectionDraft(
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
     );
   }
 
@@ -600,7 +677,14 @@ export function AgentWorkspace({
         {cockpitCards.length > 0 ? (
           <div className="cockpit-component-grid" aria-label="Agent 上下文工具">
             {cockpitCards.slice(0, 4).map((card) => (
-              <CockpitCard card={card} key={card.id} />
+              <CockpitCard
+                card={card}
+                featureSelectionDraft={featureSelectionDraft}
+                key={card.id}
+                onRunAction={(action) => void runCockpitAction(action)}
+                onRunControl={runCockpitControl}
+                onToggleFeature={toggleFeature}
+              />
             ))}
           </div>
         ) : null}

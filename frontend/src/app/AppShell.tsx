@@ -695,6 +695,7 @@ export function AppShell() {
           onRetryExport={handleRetryExportBundle}
           onRetryLearning={handleRetryLearningExtraction}
           onRetrySklearnTraining={handleRetrySklearnTraining}
+          onApplyFeatureSelection={(features) => handleGeneratePreprocessingPlan(features)}
           onSelectExperimentRun={setFocusedExperimentId}
           onSelectFile={handleSelectProjectFile}
           onSelectTargetColumn={setSuggestedTargetColumn}

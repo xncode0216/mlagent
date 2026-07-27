@@ -623,6 +623,46 @@
   line-height: 1.45;
 }
 
+fieldset.cockpit-component-control {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+fieldset.cockpit-component-control legend {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0;
+  text-transform: uppercase;
+}
+
+.cockpit-component-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.cockpit-component-checkboxes > div {
+  align-items: center;
+  display: flex;
+  gap: var(--space-1);
+  min-height: 44px;
+}
+
+.cockpit-component-checkboxes input {
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  height: 16px;
+  width: 16px;
+}
+
+.cockpit-component-checkboxes label {
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
 .cockpit-component-actions {
   display: flex;
   flex-wrap: wrap;

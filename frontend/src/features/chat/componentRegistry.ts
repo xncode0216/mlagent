@@ -23,6 +23,7 @@ export type CockpitActionId =
   | "retry_sklearn_training"
   | "select_experiment_run"
   | "select_training_dataset"
+  | "apply_feature_selection"
   | "abandon_task_state";
 
 export type CockpitComponentAction = {
@@ -45,21 +46,22 @@ export type CockpitComponentAction = {
   tone?: "primary" | "secondary";
 };
 
-export type CockpitControlId = "target_column";
+export type CockpitControlId = "target_column" | "feature_columns";
 
-/**
- * 卡片内的输入控件。facts 只读、actions 只触发，两者都无法表达“用户在卡片里做选择”，
- * 而训练配置正需要这一步。这里只落地当前真实用到的 select，不预造其他控件类型。
- */
-export type CockpitComponentControl = {
-  id: CockpitControlId;
-  kind: "select";
+type CockpitControlBase = {
   label: string;
   description?: string;
-  value: string;
   options: Array<{ value: string; label: string }>;
   disabledReason?: string;
 };
+
+/**
+ * 卡片内的输入控件。facts 只读、actions 只触发，两者都无法表达“用户在卡片里做选择”，
+ * 而训练目标列与预处理特征都需要这一步。只落地当前真实用到的两种控件形态。
+ */
+export type CockpitComponentControl =
+  | (CockpitControlBase & { id: "target_column"; kind: "select"; value: string })
+  | (CockpitControlBase & { id: "feature_columns"; kind: "multi_select"; values: string[] });
 
 export type CockpitComponentCard = {
   id: string;
@@ -128,6 +130,34 @@ function targetCandidatesFromProps(props: Record<string, unknown> | undefined) {
       return undefined;
     })
     .filter((column): column is string => Boolean(column));
+}
+
+function stringListFromProps(props: Record<string, unknown> | undefined, key: string) {
+  return (arrayProp(props, key) ?? [])
+    .map((item) => stringValue(item))
+    .filter((item): item is string => Boolean(item));
+}
+
+/**
+ * 特征选择的候选是计划里的“全部非目标列”，即已选特征加上被丢弃的列；已选特征保持勾选。
+ * 计划未报告列信息时不造控件，避免呈现一个空的、会把全部特征清空的选择器。
+ */
+function buildFeatureSelectionControls(
+  plannedFeatures: string[],
+  droppedColumns: string[],
+): CockpitComponentControl[] {
+  if (plannedFeatures.length === 0 && droppedColumns.length === 0) return [];
+  const options = [...new Set([...plannedFeatures, ...droppedColumns])];
+  return [
+    {
+      id: "feature_columns",
+      kind: "multi_select",
+      label: "参与训练的特征",
+      description: "取消勾选的列会以 deselected 记入计划，重新生成计划与管道脚本后生效。",
+      values: plannedFeatures,
+      options: options.map((value) => ({ value, label: value })),
+    },
+  ];
 }
 
 /**
@@ -232,7 +262,12 @@ function classifyArtifact(event: Extract<AgentStreamEvent, { type: "artifact_cre
   const text = artifactText(event);
 
   if (namePath.includes("preprocessing_plan")) {
-    return { kind: "preprocessing_plan", stage: "transform", artifactPath: event.artifact.path };
+    return {
+      kind: "preprocessing_plan",
+      stage: "transform",
+      artifactPath: event.artifact.path,
+      props: event.artifact.metadata,
+    };
   }
   if (artifactRole === "dataset_registry_entry" || namePath.includes("dataset_registry_entry")) {
     return { kind: "dataset_summary", stage: "ingest", artifactPath: event.artifact.path };
@@ -760,6 +795,11 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
 
   if (planPath || input.workflow.approval?.stage === "transform" || signals.has("preprocessing_plan")) {
     const isPendingApproval = Boolean(input.workflow.approval?.stage === "transform" && !plannedDatasetPath);
+    const planSignalProps = signals.get("preprocessing_plan")?.props;
+    const featureControls = buildFeatureSelectionControls(
+      stringListFromProps(planSignalProps, "feature_columns"),
+      stringListFromProps(planSignalProps, "drop_columns"),
+    );
     cards.push({
       id: "preprocessing-plan",
       kind: "preprocessing_plan",
@@ -782,12 +822,21 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
         { label: "计划", value: planPath ?? "未选择计划" },
         { label: "输出", value: plannedDatasetPath ?? "等待执行" },
       ],
+      ...(featureControls.length > 0 ? { controls: featureControls } : {}),
       actions: [
         action("open_artifact", "打开计划", {
           disabledReason: planPath ? undefined : "没有可用的预处理计划产物。",
           payload: { path: planPath },
           tone: "secondary",
         }),
+        ...(featureControls.length > 0
+          ? [
+              action("apply_feature_selection", "应用特征选择", {
+                disabledReason: projectDisabled ?? datasetDisabled,
+                tone: "secondary",
+              }),
+            ]
+          : []),
         failedTransformNeedsRevision
           ? action("generate_preprocessing_plan", "刷新计划", {
               disabledReason: projectDisabled ?? datasetDisabled,

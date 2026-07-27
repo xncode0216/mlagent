@@ -1467,3 +1467,71 @@ describe("cockpit training target selection", () => {
     expect(control?.options.map((option) => option.value)).toEqual(["churn", "contract_type"]);
   });
 });
+
+describe("cockpit preprocessing feature selection", () => {
+  function planArtifactEvent(metadata: Record<string, unknown>): AgentStreamEvent {
+    return {
+      type: "artifact_created",
+      artifact: {
+        id: "artifact-plan",
+        project_id: "project-1",
+        session_id: "session-1",
+        type: "dataframe",
+        name: "preprocessing_plan.json",
+        path: "results/session-1/preprocessing_plan.json",
+        metadata: { artifact_role: "preprocessing_plan", ...metadata },
+        created_at: "2026-07-27T00:00:00Z",
+      },
+    };
+  }
+
+  function planCardFor(events: AgentStreamEvent[]) {
+    const activeFile = "data/customer_churn.csv";
+    return buildCockpitComponentCards({
+      activeFile,
+      events,
+      mode: "analysis",
+      projectId: "project-1",
+      trainingDatasetPath: activeFile,
+      workflow: deriveWorkflowState(events, "analysis", activeFile),
+    }).find((card) => card.kind === "preprocessing_plan");
+  }
+
+  it("offers every non-target column as a feature choice with planned features preselected", () => {
+    const card = planCardFor([
+      planArtifactEvent({
+        target_column: "churn",
+        feature_columns: ["age", "contract"],
+        drop_columns: ["customer_id"],
+      }),
+    ]);
+
+    const control = card?.controls?.find((item) => item.id === "feature_columns");
+    expect(control?.kind).toBe("multi_select");
+    expect(control?.kind === "multi_select" ? control.values : []).toEqual(["age", "contract"]);
+    expect(control?.options.map((option) => option.value)).toEqual([
+      "age",
+      "contract",
+      "customer_id",
+    ]);
+  });
+
+  it("exposes an apply action for the edited feature selection", () => {
+    const card = planCardFor([
+      planArtifactEvent({
+        target_column: "churn",
+        feature_columns: ["age"],
+        drop_columns: ["customer_id"],
+      }),
+    ]);
+
+    expect(card?.actions.map((action) => action.id)).toContain("apply_feature_selection");
+  });
+
+  it("does not offer feature editing before a plan reported its columns", () => {
+    const card = planCardFor([planArtifactEvent({ target_column: "churn" })]);
+
+    expect(card?.controls ?? []).toHaveLength(0);
+    expect(card?.actions.map((action) => action.id)).not.toContain("apply_feature_selection");
+  });
+});
