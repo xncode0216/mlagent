@@ -1176,3 +1176,12 @@
 - **审计中发现两个既有问题（均不在本片范围，未扩大改动）**：① cockpit 的"批准并执行"在**前端按钮生成计划**的路径上不会真正执行变换——该 approval id 由前端本地生成，`handleRespondToApproval` 只经 WebSocket 发给后端 orchestrator，而后端并不认识它，按钮却回报"已完成"。真正执行入口是选中计划产物后的 `Execute Plan`。② cockpit 的 `open_artifact` 只设置 activeFile，不改变右侧选中产物，因此结构化预览仍停留在先前选中的产物上。两者都影响多个既有卡片，宜作为独立切片处理。
 - **门禁与浏览器证据**：前端 Vitest `35 files / 220 tests`、ESLint 0、TypeScript + Vite build + 预算门禁（主包 466.94kB / gzip 134.28kB，仍在 140kB 预算内）；真实 FastAPI + Vite Playwright `8 passed`。golden path 在特征选择之后继续执行刚编辑过的计划，断言变换卡片出现且入口可用，再从产物列表选中变换明细，验证列对照表中 `support_tickets` 呈现为"已丢弃"、`age` 显示 median 填充与 standard 缩放。1440×900 截图 `.codex-runs/cockpit-transform-diff.png` 确认 Rows 12→12、Columns 4→3、Dropped 1 与逐列对照可读。
 - **动态计划**：127 的七类组件至此全部有真实落地或已确认由检查器承担，该项可以关闭。下一步建议处理本片审计出的两个既有一致性问题（本地审批按钮无效、`open_artifact` 不联动右侧选中产物），它们比继续堆新组件更直接地影响可用性。
+
+## 2026-07-27 cockpit 与检查器的两处一致性修复
+
+- **问题一：打开产物不联动右侧预览**。`activeFile` 与 `RightPanel` 内部的 `selectedArtifact` 是两个各自独立的“右侧正在看什么”，而预览是二选一（有选中产物就完全不渲染活动文件预览）。cockpit 的 `open_artifact` 只调 `onSelectFile`，于是用户点“打开列对照/打开报告/打开指标”后，预览仍停在此前选中的产物上；反过来点产物列表也不更新活动文件。修复：产物列表选中时同步 `onSelectFile`，并让 `selectedArtifact` 跟随 `activeFile`——命中已知产物则选中它，否则清空选中交给功能更完整的活动文件预览（它同样渲染结构化 JSON，还额外提供刷新、编辑、保存与二进制下载）。
+- **首版修复引入过真实回归并被测试拦下**：最初为任意 `activeFile` 构造虚拟产物，导致 `selectedArtifact` 恒非空、`ActiveFilePreview` 永不渲染，5 个既有用例（骨架、读取重试、未保存草稿、保存写缓存、二进制下载）同时变红，等于废掉活动文件的编辑能力。改为“只在命中已知产物时选中”后 14/14 恢复。
+- **问题二：本地审批的「批准并执行」不会真正执行**。前端按钮生成计划时会 push 一条本地 `approval_required`，其 approval id 与后端格式完全相同（`{session_id}-preprocessing-plan`），无法靠 id 区分；但这条计划走的是 REST 调用，后端从未写入待审批记录。用户点“批准并执行”后，前端立即回报“已完成”，后端却异步返回 `approval_not_found` 错误——假成功叠加实际失败。
+- **按来源分派而非猜测**：给 `approval_required` 事件增加可选 `origin: "local"`，由本地流程显式标注，经 `workflowState.approval` 透传到 action payload。批准时只有编排器发起的审批才走 WebSocket 审批响应，本地审批直接调用既有的执行路径。两条路径各有组件测试固定，避免以后再次混淆。
+- **门禁与浏览器证据**：前端 Vitest `35 files / 224 tests`、ESLint 0、TypeScript + Vite build + 预算门禁（主包 467.20kB / gzip 134.41kB）；真实 FastAPI + Vite Playwright `8 passed`。golden path 现在直接点卡片上的「批准并执行」完成变换，再点「打开列对照」验证右侧渲染出逐列对照表——这两步在修复前分别是空操作和不联动，如今都是真实可走的路径。
+- **动态计划**：两处一致性问题已闭环。`task_plan.md` 的北极星 follow-up 还剩两项：上下文 inspector 视图（126）与全链路 provenance 回链（128）；另有自然语言全流程 golden-path 覆盖（129）。其中 126 与本次修复的“activeFile 驱动右侧预览”方向一致，可作为下一主线的自然延续。
