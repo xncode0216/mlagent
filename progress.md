@@ -1154,3 +1154,14 @@
 - **可访问性与视觉**：首版用 `<label>` 包裹 select，导致可访问名称把 description 文本一并计入、`getByRole("combobox", { name: "目标列" })` 取不到——改为显式 `aria-label` + `aria-describedby`。控件 44px、Catppuccin token、无渐变与装饰动画。1440×900 截图复核发现卡片里“目标列”出现两次（facts 只读值 + 选择器），属信息重复，已改为有控件时 facts 不再输出该条，并补断言防回归。
 - **门禁与浏览器证据**：Vitest `34 files / 203 tests`、ESLint 0、TypeScript + Vite build + 预算门禁（主包 460.49kB / gzip 132.30kB，仍在 140kB 预算内）全绿；真实 FastAPI + Vite Playwright `8 passed`，其中 golden path 新增真实用户路径——点击「生成画像」后用顶栏切到机器学习模式（刻意不用 `page.goto` 重载，以保留刚生成的会话事件流），断言卡片内出现目标列选择器、候选含 `churn`、选择后「启动 sklearn」按钮启用。`accessibility.e2e.ts` 的 axe WCAG A/AA 扫描对新控件仍为 0 违规。
 - **动态计划**：127 保持进行中。下一切片按同一模式处理特征选择或预处理计划编辑——两者都会复用本片建立的卡片输入能力；预处理计划编辑需要把修改写回 plan 产物，涉及后端契约，届时先做接口审计再动手。
+
+## 2026-07-27 中心 cockpit 组件增强（切片 2：特征选择 = 预处理计划编辑）
+
+- **审计推翻了原切片划分**：原计划把“特征选择”与“预处理计划编辑”当作两项。审计 `train_sklearn.py` 后确认二者在本架构下是同一件事——训练请求没有也不应有特征参数，`TrainSklearnRequest` 只有 `use_gpu`/`preprocessing_plan_path`，特征唯一的载体是 plan 的 `numeric_features`/`categorical_features`/`drop_columns`。特征必须写进 plan 才可复现，因此本片一次覆盖两项的核心。
+- **拒绝直接改写 plan JSON**：plan 的 `feature_columns`、`drop_columns`、`drop_reasons`、`steps.*.selector` 和 `pipeline_script` 全部由同一次决策派生，手改 JSON 必然造成计划与生成脚本不一致。改为让特征选择成为 plan 生成的输入：`preprocessing_plan()` 新增可选 `selected_features`，未选中的非目标列以 `deselected` 理由进入 drop，所有派生字段自动跟随；不给该参数时自动质量丢弃行为完全不变。因为 `/preprocess-plan` 本就覆写同名产物，**无需新增端点**。
+- **拦截一个会静默违背用户意图的边界**：`train_sklearn` 在计划无特征时会回退到“使用全部列”，因此空选择会把“我只要这几个特征”变成“用全部特征”。API 直接以 400 拒绝空选择，前端也在提交前就地拦下，避免用户白跑一次重生成。
+- **TDD 红→绿**：后端工具层 3 项（显式选择生效且派生字段一致、忽略未知列与目标列、无选择时保留自动丢弃）先红后绿；API 层 2 项（选择落到产物与脚本、空选择被拒）同样先红后绿。前端注册表层 3 项、组件层 3 项，各自观察预期红灯后转绿。
+- **修复两个被测试暴露的真实缺陷**：① `CockpitCard` 原本定义在 `AgentWorkspace` 函数体内，每次渲染都是新的组件类型，React 因此卸载重建整张卡片——勾选一个特征就会销毁所在节点并丢失焦点，无法连续选择。已提到模块作用域并显式传入回调。② `<label>` 包裹 `<input type="checkbox">` 时，点击会被 label 再次转发给 input，一次点击 toggle 两次、净效果为零，编辑被静默抵消。改为 `htmlFor`/`id` 关联，input 置于 label 外。两者都是真实用户会遇到的问题，而非仅测试现象。
+- **交互与可访问性**：多选用 `fieldset` + `legend` 形成命名分组，未提交前保留本地草稿（`null` 表示未编辑即采用计划当前值），提交成功后清空草稿。复选框行 44px、`accent-color` 用 Catppuccin 强调色、无渐变与装饰动画。
+- **门禁与浏览器证据**：后端 ruff + `227 passed, 3 skipped`；前端 Vitest `34 files / 209 tests`、ESLint 0、TypeScript + Vite build + 预算门禁（主包 462.37kB / gzip 132.98kB，仍在 140kB 预算内）；真实 FastAPI + Vite Playwright `8 passed`。golden path 新增完整往返：点「生成计划」→ 卡片内取消勾选 `support_tickets` → 点「应用特征选择」→ 复选框保持未勾选 → 再从卡片读出真实计划路径并校验产物中 `feature_columns` 不含该列、`drop_reasons.support_tickets === "deselected"`。首版 E2E 校验读错了路径（前端用会话 id 重新生成，与 setup 时 API 直接生成的目录不同），改为从卡片取真实路径后通过。`accessibility.e2e.ts` 的 axe WCAG A/AA 对新的 fieldset/checkbox 结构仍为 0 违规。1440×900 截图复核 `.codex-runs/cockpit-feature-selection.png`。
+- **动态计划**：127 的 target/feature selection 与 preprocessing-plan editing 两项已闭环。剩余：变换 diff 复核、模型对比、错误切片下钻、预测样本、最终报告预览——其中模型对比、错误切片、预测样本在右侧检查器已有成熟实现，下一切片宜先审计“把既有检查器视图搬进 cockpit 卡片”与“127 真正缺什么”，避免重复造已有能力。
