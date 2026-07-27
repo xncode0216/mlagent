@@ -1142,3 +1142,15 @@
 - **预算门禁与负向验证**：新增 `scripts/check-bundle-budget.mjs`，解析真实 `dist/index.html` 的引用集合（含 modulepreload）得到首屏资源，强制首屏 JS gzip ≤140kB、原始 ≤490kB、CSS gzip ≤16kB、首屏 JS chunk ≤3 个、单 chunk ≤500kB，并断言四个重依赖 chunk 既存在又不被首屏引用。单位与 Vite 输出统一为 1000 进制 kB，避免日后数字对不上。门禁接入 `npm run build`，因此无需改 CI workflow 即成为 PR 闸门。用被否决的探针产物做负向验证：门禁如实报出 gzip 486.00kB、原始 1616.15kB、单 chunk 1415.52kB 三项违规并退出码 1，确认不是假绿。
 - **门禁与浏览器证据**：Vitest `34 files / 197 tests`（设计契约 15/15）、ESLint 0、TypeScript + Vite build + 预算门禁全绿。真实 FastAPI + Vite Playwright `8 passed`；其中 `design-system.e2e.ts` 切到自进化知识模式后 `.evolution-workspace` 可见、图谱 region 与 ML 品牌强调色覆盖正常，直接证明 `Suspense` 边界在真实浏览器中正确解析懒加载 chunk。新脚本首次 lint 因 `console`/`process`/`URL` 报 12 个 `no-undef`，按 `deep-link-smoke.mjs` 既有惯例补 `/* global */` 头后恢复干净。
 - **动态计划**：P2-8 的路由级拆分、懒加载与可量化预算均已闭环，正式关闭；至此 P0/P1/P2 三条编号主线全部完成。复核 `task_plan.md` 后确认：2026-05-30 记录中留作缺口的“编排器 retry/失败恢复与 durable task 持久化”实际已由后续切片完成（北极星清单 112–125 行全部勾选），该缺口描述已过时。真正剩余的是产品北极星 follow-up 的 4 项（`task_plan.md` 126–129）：上下文 inspector 视图、更丰富的中心 cockpit 组件、全链路 provenance 回链、自然语言全流程 golden-path 覆盖。下一主线方向需与用户确认后再开工。
+
+## 2026-07-27 中心 cockpit 组件增强（切片 1：卡片输入能力 + 目标列选择）
+
+- **方向确认**：用户在 4 项北极星 follow-up 中选定“更丰富的中心 cockpit 组件”（`task_plan.md` 127）作为下一主线。该项含 7 类组件，本片按惯例只做一个可独立验证的垂直切片。
+- **真实链路审计与死锁定位**：`CockpitComponentCard` 的形状是只读 `facts` + 触发式 `actions`，14 种卡片全部没有输入控件。这在训练配置卡片上形成真实产品死锁——目标列缺失时卡片 `status: "attention"`、启动按钮 `disabledReason: "训练前请选择或推断一个目标列。"`，但卡片自身不提供任何选择方式，用户必须离开中心工作台去右侧训练面板或改用自然语言。这正是 127 中 "target/feature selection" 的入口。
+- **无需后端改动**：`data_quality_profile` 早已产出带评分与理由的目标列候选（`{column, score, dtype, unique_count, missing_ratio, reasons}`，按分降序），`uiStore` 也已有 `suggestedTargetColumn` 与 setter。本片只补前端的表达能力和接线。
+- **TDD 红→绿**：注册表层先加 3 项（提供候选控件、已解析目标列即使未被画像排名也保留可选、无画像时不造假控件并保持原禁用理由），稳定观察 2 项预期失败；组件层再加 2 项（渲染候选并回传选择、无画像不渲染选择器），观察 1 项失败。实现后聚焦全绿。
+- **发现并修复第二个真实缺口**：首版实现只读 `component_requested` 的 props，而最常用的「生成画像」按钮走的是本地 `artifact_created`，候选放在 artifact metadata 里且是**带评分的对象数组**（后端 `profile_props` 只在自然语言路径上把候选降级成列名数组）。即最常见的按钮路径拿不到选择器。补一条红测试固定该形状后，`classifyArtifact` 现在把 data_quality 的 metadata 一并作为信号 props，提取函数同时接受字符串与对象两种候选形状。
+- **窄接口而非通用抽象**：新增 `CockpitComponentControl` 只落地当前真实用到的 `select`，不预造 input/checkbox/multi-select。选择结果经 `onSelectTargetColumn` 回到既有的 `uiStore.suggestedTargetColumn`，与右侧训练面板共用同一状态，不新造并行状态。
+- **可访问性与视觉**：首版用 `<label>` 包裹 select，导致可访问名称把 description 文本一并计入、`getByRole("combobox", { name: "目标列" })` 取不到——改为显式 `aria-label` + `aria-describedby`。控件 44px、Catppuccin token、无渐变与装饰动画。1440×900 截图复核发现卡片里“目标列”出现两次（facts 只读值 + 选择器），属信息重复，已改为有控件时 facts 不再输出该条，并补断言防回归。
+- **门禁与浏览器证据**：Vitest `34 files / 203 tests`、ESLint 0、TypeScript + Vite build + 预算门禁（主包 460.49kB / gzip 132.30kB，仍在 140kB 预算内）全绿；真实 FastAPI + Vite Playwright `8 passed`，其中 golden path 新增真实用户路径——点击「生成画像」后用顶栏切到机器学习模式（刻意不用 `page.goto` 重载，以保留刚生成的会话事件流），断言卡片内出现目标列选择器、候选含 `churn`、选择后「启动 sklearn」按钮启用。`accessibility.e2e.ts` 的 axe WCAG A/AA 扫描对新控件仍为 0 违规。
+- **动态计划**：127 保持进行中。下一切片按同一模式处理特征选择或预处理计划编辑——两者都会复用本片建立的卡片输入能力；预处理计划编辑需要把修改写回 plan 产物，涉及后端契约，届时先做接口审计再动手。
