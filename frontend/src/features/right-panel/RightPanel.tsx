@@ -26,6 +26,12 @@ import type { AgentStreamEvent, Artifact } from "../chat/types";
 import { LogPanel } from "../logs/LogPanel";
 import { deriveErrorSlices } from "./errorSlices";
 import {
+  buildTransformDiff,
+  isTransformationReport,
+  type TransformDiff,
+  type TransformDiffRow,
+} from "./transformDiff";
+import {
   diagnosticSummary,
   filterAndSortCandidateRuns,
   filterAndSortExperimentRuns,
@@ -352,6 +358,68 @@ function PreprocessingPlanPreview({
   );
 }
 
+const transformKindLabel: Record<TransformDiffRow["kind"], string> = {
+  dropped: "已丢弃",
+  numeric: "数值",
+  categorical: "类别",
+};
+
+function TransformDiffPreview({ diff }: { diff: TransformDiff }) {
+  return (
+    <div className="data-quality-profile transform-diff-preview">
+      <div className="metrics-grid compact">
+        <div>
+          <span>Rows</span>
+          <strong>
+            {diff.summary.inputRows} → {diff.summary.outputRows}
+          </strong>
+        </div>
+        <div>
+          <span>Columns</span>
+          <strong>
+            {diff.summary.inputColumns} → {diff.summary.outputColumns}
+          </strong>
+        </div>
+        <div>
+          <span>Dropped</span>
+          <strong>{diff.summary.droppedCount}</strong>
+        </div>
+        <div>
+          <span>Target</span>
+          <strong>{diff.summary.targetColumn}</strong>
+        </div>
+      </div>
+      {diff.summary.rowsChanged ? (
+        <div aria-label="变换行数变化" className="inspector-async-state error" role="status">
+          变换后行数由 {diff.summary.inputRows} 变为 {diff.summary.outputRows}，请确认是否符合预期。
+        </div>
+      ) : null}
+      <div aria-label="预处理变换列对照，可滚动" className="data-preview" tabIndex={0}>
+        <table aria-label="预处理变换列对照">
+          <thead>
+            <tr>
+              <th>输入列</th>
+              <th>处理</th>
+              <th>变换</th>
+              <th>输出列</th>
+            </tr>
+          </thead>
+          <tbody>
+            {diff.rows.map((row) => (
+              <tr className={row.kind === "dropped" ? "warning-row" : ""} key={row.column}>
+                <td>{row.column}</td>
+                <td>{transformKindLabel[row.kind]}</td>
+                <td>{row.detail}</td>
+                <td>{row.outputColumns.length > 0 ? row.outputColumns.join(", ") : "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function JsonTable({
   onExecutePreprocessingPlan,
   value,
@@ -434,6 +502,10 @@ function JsonTable({
         plan={value as PreprocessingPlanPreviewValue}
       />
     );
+  }
+
+  if (isTransformationReport(value)) {
+    return <TransformDiffPreview diff={buildTransformDiff(value)} />;
   }
 
   if ("samples" in value && Array.isArray(value.samples)) {

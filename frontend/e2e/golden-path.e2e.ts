@@ -152,6 +152,29 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
     expect(planJson.feature_columns).not.toContain("support_tickets");
     expect(planJson.drop_reasons.support_tickets).toBe("deselected");
 
+    // 执行刚编辑过的计划，并从卡片进入结构化列对照，确认取消的列确实呈现为「已丢弃」。
+    // 执行入口在选中产物的预览里，因此从右侧产物列表选中计划产物。
+    await page.locator(".artifact-card").filter({ hasText: "preprocessing_plan.json" }).first().click();
+    await page.getByRole("button", { name: "Execute Plan" }).click();
+    const transformCard = page.locator('[data-cockpit-component="transformation_report"]');
+    await expect(transformCard).toBeVisible();
+    await expect(transformCard.getByRole("button", { name: "打开列对照" })).toBeEnabled();
+
+    // 结构化预览渲染的是右侧选中的产物，因此从产物列表选中变换明细。
+    await page
+      .locator(".artifact-card")
+      .filter({ hasText: "preprocessing_transform_report.json" })
+      .first()
+      .click();
+
+    const diffTable = page.getByRole("table", { name: "预处理变换列对照" });
+    await expect(diffTable).toBeVisible();
+    await expect(diffTable.getByRole("row", { name: /support_tickets/ })).toContainText("已丢弃");
+    await expect(diffTable.getByRole("row", { name: /^age/ })).toContainText("median");
+    if (process.env.E2E_TRANSFORM_DIFF_SCREENSHOT_PATH) {
+      await page.screenshot({ path: process.env.E2E_TRANSFORM_DIFF_SCREENSHOT_PATH, fullPage: true });
+    }
+
     await page.goto(
       `/?mode=analysis&activity=data&rightTab=data&projectId=${project.id}&file=${encodeURIComponent(executed.transformed_data_artifact.path)}`,
     );

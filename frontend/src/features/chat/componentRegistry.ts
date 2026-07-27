@@ -286,7 +286,12 @@ function classifyArtifact(event: Extract<AgentStreamEvent, { type: "artifact_cre
     artifactRole === "preprocessing_transform_report" ||
     artifactRole === "preprocessing_transform_summary"
   ) {
-    return { kind: "transformation_report", stage: "transform", artifactPath: event.artifact.path };
+    return {
+      kind: "transformation_report",
+      stage: "transform",
+      artifactPath: event.artifact.path,
+      props: event.artifact.metadata,
+    };
   }
   if (text.includes("data_quality") || text.includes("quality profile")) {
     return {
@@ -877,6 +882,50 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
               }),
             ]
           : []),
+      ],
+    });
+  }
+
+  if (signals.has("transformation_report")) {
+    const transformSignal = signals.get("transformation_report");
+    // 执行计划会写出同名的 .json 明细与 .md 报告，事件里后到的 .md 会覆盖 signal。
+    // 结构化列对照只存在于 .json，因此两个入口都按扩展名归一化后分别给出。
+    const transformArtifactPath = transformSignal?.artifactPath;
+    const transformDetailPath = transformArtifactPath?.replace(/\.md$/, ".json");
+    const transformReportPath = transformArtifactPath?.replace(/\.json$/, ".md");
+    const transformOutputPath =
+      stringProp(transformSignal?.props, "output_dataset_path") ?? plannedDatasetPath;
+    const transformSourcePath = stringProp(transformSignal?.props, "dataset_path");
+    cards.push({
+      id: "transformation-report",
+      kind: "transformation_report",
+      stage: "transform",
+      title: "变换结果复核",
+      description:
+        "对照变换前后的列与形状，确认丢弃、填充与编码结果符合预期，再把数据集交给训练。",
+      artifactPath: transformDetailPath,
+      status: transformOutputPath ? "complete" : "attention",
+      facts: [
+        { label: "源数据", value: transformSourcePath ?? "-" },
+        { label: "输出", value: transformOutputPath ?? "等待执行" },
+        { label: "明细", value: transformDetailPath ?? "未生成" },
+      ],
+      actions: [
+        action("open_artifact", "打开列对照", {
+          disabledReason: transformDetailPath ? undefined : "没有可用的变换明细产物。",
+          payload: { path: transformDetailPath },
+          tone: "primary",
+        }),
+        action("open_artifact", "打开变换报告", {
+          disabledReason: transformReportPath ? undefined : "没有可用的变换报告产物。",
+          payload: { path: transformReportPath },
+          tone: "secondary",
+        }),
+        action("open_artifact", "打开输出数据集", {
+          disabledReason: transformOutputPath ? undefined : "没有可用的变换后数据集产物。",
+          payload: { path: transformOutputPath },
+          tone: "secondary",
+        }),
       ],
     });
   }

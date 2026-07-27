@@ -1535,3 +1535,51 @@ describe("cockpit preprocessing feature selection", () => {
     expect(card?.actions.map((action) => action.id)).not.toContain("apply_feature_selection");
   });
 });
+
+describe("cockpit transformation report card", () => {
+  const transformReportEvent: AgentStreamEvent = {
+    type: "artifact_created",
+    artifact: {
+      id: "artifact-transform",
+      project_id: "project-1",
+      session_id: "session-1",
+      type: "report",
+      name: "preprocessing_transform_report.md",
+      path: "results/session-1/preprocessing_transform_report.md",
+      metadata: {
+        artifact_role: "preprocessing_transform_report",
+        dataset_path: "data/customer_churn.csv",
+        output_dataset_path: "results/session-1/customer_churn_planned.csv",
+      },
+      created_at: "2026-07-27T00:00:00Z",
+    },
+  };
+
+  it("surfaces the transform diff with entries into the report and planned dataset", () => {
+    const activeFile = "data/customer_churn.csv";
+    const events = [transformReportEvent];
+    const card = buildCockpitComponentCards({
+      activeFile,
+      events,
+      mode: "analysis",
+      projectId: "project-1",
+      trainingDatasetPath: activeFile,
+      workflow: deriveWorkflowState(events, "analysis", activeFile),
+    }).find((item) => item.id === "transformation-report");
+
+    expect(card).toMatchObject({ kind: "transformation_report", stage: "transform" });
+    expect(card?.facts.map((fact) => fact.value)).toEqual(
+      expect.arrayContaining(["results/session-1/customer_churn_planned.csv"]),
+    );
+
+    // 结构化列对照只在 .json 明细里，.md 报告是纯文本，两个入口必须分别指向各自产物
+    const paths = card?.actions.map((action) => action.payload?.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "results/session-1/preprocessing_transform_report.json",
+        "results/session-1/preprocessing_transform_report.md",
+        "results/session-1/customer_churn_planned.csv",
+      ]),
+    );
+  });
+});

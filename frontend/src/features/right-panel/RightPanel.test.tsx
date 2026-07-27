@@ -311,3 +311,52 @@ describe("RightPanel training information empty states", () => {
     expect((screen.getByLabelText("Search") as HTMLInputElement).value).toBe("");
   });
 });
+
+describe("RightPanel 变换报告 diff 预览", () => {
+  const transformReport = {
+    source_dataset_path: "data/customer_churn.csv",
+    output_dataset_path: "results/session-1/customer_churn_planned.csv",
+    target_column: "churn",
+    input_shape: { rows: 120, columns: 4 },
+    output_shape: { rows: 120, columns: 4 },
+    drop_columns: ["customer_id"],
+    numeric_features: ["age"],
+    categorical_features: ["contract"],
+    encoded_feature_columns: ["age", "contract_annual", "contract_monthly"],
+    transformations: {
+      numeric: {
+        age: { imputer: "median", fill_value: 41, scaler: "standard", mean: 41.2, std: 12.4 },
+      },
+      categorical: {
+        contract: {
+          imputer: "most_frequent",
+          fill_value: "monthly",
+          encoder: "one_hot_ignore_unknown",
+        },
+      },
+    },
+  };
+
+  it("把变换报告渲染成逐列的输入到输出对照", async () => {
+    vi.mocked(readProjectFileContent).mockResolvedValue(
+      fileContent(JSON.stringify(transformReport)),
+    );
+    renderPanel();
+
+    const diff = await screen.findByRole("table", { name: "预处理变换列对照" });
+    const droppedRow = within(diff).getByRole("row", { name: /customer_id/ });
+    expect(within(droppedRow).getByText("已丢弃")).toBeTruthy();
+
+    const categoricalRow = within(diff).getByRole("row", { name: /contract_annual/ });
+    expect(within(categoricalRow).getByText(/one_hot_ignore_unknown/)).toBeTruthy();
+  });
+
+  it("行数变化时给出明确提示", async () => {
+    vi.mocked(readProjectFileContent).mockResolvedValue(
+      fileContent(JSON.stringify({ ...transformReport, output_shape: { rows: 100, columns: 4 } })),
+    );
+    renderPanel();
+
+    expect(await screen.findByRole("status", { name: "变换行数变化" })).toBeTruthy();
+  });
+});
