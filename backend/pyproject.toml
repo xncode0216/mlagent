@@ -35,3 +35,10 @@ exclude = ["workspaces*"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+# 显式声明规则集，不依赖 ruff 的默认值：默认集会随版本变化，而 dev 依赖只约束
+# `ruff>=0.6.0`，CI 每次装最新版。ruff 0.16 扩大默认集后，CI 报 65 个错误而本地
+# 0.15 全绿——闸门结果取决于当天装到哪个版本，且本地无法复现。
+# 扩大规则集应当是一次显式决策，不是工具升级的副作用。
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
