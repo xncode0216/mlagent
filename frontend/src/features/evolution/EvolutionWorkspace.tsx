@@ -786,3 +786,5 @@ export function EvolutionWorkspace({
     </main>
   );
 }
+
+export default EvolutionWorkspace;

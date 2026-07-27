@@ -1046,3 +1046,29 @@
     opacity: 0.75;
   }
 }
+
+/* 路由级懒加载工作区的 Suspense 占位，保持主工作面在 chunk 到达前不塌陷 */
+.workspace-loading {
+  align-items: center;
+  animation: workspace-loading-pulse var(--duration-status-cycle) var(--ease-in-out) infinite;
+  color: var(--color-text-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 240px;
+}
+
+.workspace-loading span {
+  font-size: 12px;
+}
+
+@keyframes workspace-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}

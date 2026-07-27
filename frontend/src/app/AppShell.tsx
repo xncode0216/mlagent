@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
   Database,
@@ -27,7 +27,6 @@ import type { AgentStreamEvent, WorkflowStageId } from "../features/chat/types";
 import { useAgentStream } from "../features/chat/useAgentStream";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { EvolutionWorkspace } from "../features/evolution/EvolutionWorkspace";
 import { useEvolutionActions } from "../features/evolution/useEvolutionActions";
 import { useEvolutionProtocolsQuery } from "../features/evolution/useEvolutionProtocolsQuery";
 import {
@@ -72,6 +71,9 @@ import {
   type Project,
   abandonTaskState,
 } from "../lib/api";
+
+// 路由级拆分：自进化工作区只在 evolution 模式渲染，静态引入会把它连同图谱依赖打进首屏主包。
+const EvolutionWorkspace = lazy(() => import("../features/evolution/EvolutionWorkspace"));
 
 const activityIcons: Record<ActivityMode, ReactNode> = {
   explorer: <FolderOpen size={18} />,
@@ -638,23 +640,34 @@ export function AppShell() {
         )}
       </aside>
       {activeMode === "evolution" ? (
-        <EvolutionWorkspace
-          projectId={project?.id ?? ""}
-          taskStateInspection={taskStateInspection}
-          lessons={lessons}
-          injectionLogs={injectionLogs}
-          protocols={protocols}
-          initialTab={deepLink.evolutionTab}
-          onAdopt={handleAdoptLesson}
-          onAbandonTaskState={() => handleAbandonTaskState("learn")}
-          onExtractLessonsFromSession={handleExtractLessonsFromSession}
-          onOpenLogs={(taskId) => openLogs(taskId)}
-          onRetryLearning={handleRetryLearningExtraction}
-          onMarkConflict={handleMarkLessonConflict}
-          onSelectExperimentRun={handleSelectExperimentRun}
-          onSelectProjectFile={handleSelectProjectFile}
-          onReject={handleRejectLesson}
-        />
+        <Suspense
+          fallback={
+            <main aria-busy="true" className="agent-workspace">
+              <div className="workspace-loading" role="status">
+                <GitBranch aria-hidden="true" size={22} />
+                <span>正在加载自进化工作区…</span>
+              </div>
+            </main>
+          }
+        >
+          <EvolutionWorkspace
+            projectId={project?.id ?? ""}
+            taskStateInspection={taskStateInspection}
+            lessons={lessons}
+            injectionLogs={injectionLogs}
+            protocols={protocols}
+            initialTab={deepLink.evolutionTab}
+            onAdopt={handleAdoptLesson}
+            onAbandonTaskState={() => handleAbandonTaskState("learn")}
+            onExtractLessonsFromSession={handleExtractLessonsFromSession}
+            onOpenLogs={(taskId) => openLogs(taskId)}
+            onRetryLearning={handleRetryLearningExtraction}
+            onMarkConflict={handleMarkLessonConflict}
+            onSelectExperimentRun={handleSelectExperimentRun}
+            onSelectProjectFile={handleSelectProjectFile}
+            onReject={handleRejectLesson}
+          />
+        </Suspense>
       ) : (
         <AgentWorkspace
           mode={activeMode}
