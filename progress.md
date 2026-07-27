@@ -1203,3 +1203,13 @@
 - **额外收益**：不再为每个项目产生游离的 `dev-session` 会话目录。E2E 运行后核对工作区，`sessions/` 下只剩真实会话，`dev-session` 已消失。
 - **TDD 与门禁**：扩展 `websocketStub` 记录实例与出站消息后，新增 4 项 `useAgentStream` 测试（无会话不连接、无会话拒绝发送并报错、会话就绪后连到正确 URL、发送落在真正连接的会话上），先稳定观察 3 项预期失败再实现。前端 Vitest `36 files / 230 tests`、ESLint 0、build + 预算门禁（主包 467.29kB / gzip 134.43kB）、Playwright `9 passed`。修复后"已连接"即等价于"会话就绪"，自然语言 E2E 的双重等待相应简化为一个条件。
 - **动态计划**：北极星 follow-up 现仅剩 126（上下文 inspector 视图）与 128（全链路 provenance 回链）。
+
+## 2026-07-27 P126 上下文 inspector 视图（检查器跟随工作流）
+
+- **承接已完成的一半**：126 要求"面板由 workflow state 与选中产物驱动"。选中产物这一半已在同日的一致性修复中完成（`activeFile` 驱动右侧预览）。本片补上 workflow 驱动。
+- **真实缺口**：右侧 tab 只由主模式映射（`machine-learning→训练`、`evolution→日志`、其余→图表），工作流推进完全不影响它。在数据分析模式下跑完训练，检查器仍停在图表页，用户得自己去找训练详情——而中心 Agent 刚刚告诉他结果已就绪。
+- **不能用 `currentStage` 驱动**：首版实现用了它，浏览器验证直接暴露问题——检查器纹丝不动。`currentStage` 的语义是"需要用户注意的阶段"（failed > blocked > active），训练完成后它仍可能停在更早的待办阶段。改为以**最新产物所属阶段**为准（`latestArtifact.stage`），尚无产物时才回退 `currentStage`，这才对应"刚产出了什么、该去哪看"。
+- **映射与优先级**：数据形态阶段（ingest/profile/clean/transform）→ 数据页，模型形态阶段（train/evaluate/diagnose/iterate/export）→ 训练页，沉淀阶段 → 日志页（其证据就是事件流）。显式意图始终优先：`rightTab` 深链生效；用户点击 tab 即"接管"，直到切换主模式或再次深链才交还自动跟随。evolution 模式不参与跟随，其主区是自进化工作台。
+- **顺带修可访问性缺口**：tab 的选中状态此前只通过 CSS class 表达，辅助技术无法得知当前在哪个检查器。补 `aria-pressed`，同时让组件测试可以稳定断言选中项。
+- **门禁与浏览器证据**：纯逻辑 6 项 + 组件 3 项（进入训练阶段自动切换、用户接管后不被拽走、深链优先）；前端 Vitest `37 files / 239 tests`、ESLint 0、build + 预算门禁（主包 467.79kB / gzip 134.67kB）、Playwright `9 passed`。自然语言 E2E 刻意去掉 `rightTab` 深链，训练完成后断言"训练"页处于选中态——修复前该断言失败，是真实回归证据。
+- **动态计划**：126 完成。北极星 follow-up 仅剩 128（全链路 provenance 回链）。
