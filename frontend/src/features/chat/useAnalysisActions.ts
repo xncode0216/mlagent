@@ -204,6 +204,8 @@ export function useAnalysisActions({
         description: "Review the generated plan before executing dataset transformation.",
         artifact_path: result.plan_artifact.path,
         options: ["execute", "revise"],
+        // 计划由本地 REST 调用生成，后端没有对应的待审批记录
+        origin: "local",
       },
       {
         type: "artifact_created",

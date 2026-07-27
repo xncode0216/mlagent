@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useUiStore } from "../../app/uiStore";
@@ -337,6 +337,109 @@ describe("预处理计划卡片的特征选择", () => {
     fireEvent.click(screen.getByRole("button", { name: "应用特征选择" }));
 
     expect(onApplyFeatureSelection).toHaveBeenCalledWith(["age", "customer_id"]);
+  });
+
+  it("本地发起的审批直接执行计划，不发给不认识它的后端", async () => {
+    const onExecutePreprocessingPlan = vi.fn(async () => undefined);
+    const onRespondToApproval = vi.fn();
+    const planPath = "results/session-1/preprocessing_plan.json";
+    render(
+      <AgentWorkspace
+        connected
+        events={[
+          {
+            type: "artifact_created",
+            artifact: {
+              id: "artifact-plan",
+              project_id: "project-1",
+              session_id: "session-1",
+              type: "dataframe",
+              name: "preprocessing_plan.json",
+              path: planPath,
+              metadata: { artifact_role: "preprocessing_plan", target_column: "churn" },
+              created_at: "2026-07-27T00:00:00Z",
+            },
+          },
+          {
+            type: "approval_required",
+            task_id: "session-1",
+            approval_id: "session-1-preprocessing-plan",
+            stage: "transform",
+            title: "Approve preprocessing transform",
+            artifact_path: planPath,
+            options: ["execute", "revise"],
+            origin: "local",
+          },
+        ]}
+        historyMessages={[]}
+        lastError={null}
+        mode="analysis"
+        onExecutePreprocessingPlan={onExecutePreprocessingPlan}
+        onRespondToApproval={onRespondToApproval}
+        onSelectFile={vi.fn()}
+        projectId="project-1"
+        sendMessage={vi.fn()}
+        trainingDatasetPath="data/customer_churn.csv"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "批准并执行" }));
+
+    await waitFor(() => expect(onExecutePreprocessingPlan).toHaveBeenCalledWith(planPath));
+    expect(onRespondToApproval).not.toHaveBeenCalled();
+  });
+
+  it("后端发起的审批仍走审批响应通道", () => {
+    const onExecutePreprocessingPlan = vi.fn(async () => undefined);
+    const onRespondToApproval = vi.fn();
+    const planPath = "results/session-1/preprocessing_plan.json";
+    render(
+      <AgentWorkspace
+        connected
+        events={[
+          {
+            type: "artifact_created",
+            artifact: {
+              id: "artifact-plan",
+              project_id: "project-1",
+              session_id: "session-1",
+              type: "dataframe",
+              name: "preprocessing_plan.json",
+              path: planPath,
+              metadata: { artifact_role: "preprocessing_plan", target_column: "churn" },
+              created_at: "2026-07-27T00:00:00Z",
+            },
+          },
+          {
+            type: "approval_required",
+            task_id: "session-1",
+            approval_id: "session-1-preprocessing-plan",
+            stage: "transform",
+            title: "Approve preprocessing transform",
+            artifact_path: planPath,
+            options: ["execute", "revise"],
+          },
+        ]}
+        historyMessages={[]}
+        lastError={null}
+        mode="analysis"
+        onExecutePreprocessingPlan={onExecutePreprocessingPlan}
+        onRespondToApproval={onRespondToApproval}
+        onSelectFile={vi.fn()}
+        projectId="project-1"
+        sendMessage={vi.fn()}
+        trainingDatasetPath="data/customer_churn.csv"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "批准并执行" }));
+
+    expect(onRespondToApproval).toHaveBeenCalledWith(
+      "session-1-preprocessing-plan",
+      "execute",
+      planPath,
+    );
+    expect(onExecutePreprocessingPlan).not.toHaveBeenCalled();
   });
 
   it("不允许提交空特征集合", () => {

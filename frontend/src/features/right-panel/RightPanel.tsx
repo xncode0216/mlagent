@@ -2141,22 +2141,31 @@ export function RightPanel({
   const activeArtifacts =
     activeTab === "图表" ? chartArtifacts : activeTab === "数据" ? dataArtifacts : codeArtifacts;
 
-  function openArtifactPath(path: string) {
-    const nextTab = previewTabForPath(path);
-    const virtualArtifact: Artifact = {
+  function virtualArtifactForPath(path: string, openedFrom: string): Artifact {
+    return {
       id: `path:${path}`,
       project_id: projectId ?? "",
       session_id: sessionId ?? "manual",
       type: previewArtifactType(path),
       name: artifactNameFromPath(path),
       path,
-      metadata: { opened_from: "training_detail" },
+      metadata: { opened_from: openedFrom },
       created_at: new Date().toISOString(),
     };
+  }
+
+  function openArtifactPath(path: string) {
     onSelectFile(path);
-    setActiveTab(nextTab);
-    setSelectedArtifact(virtualArtifact);
+    setActiveTab(previewTabForPath(path));
+    setSelectedArtifact(virtualArtifactForPath(path, "training_detail"));
     setPanelFeedback({ kind: "info", message: `Opening ${path}` });
+  }
+
+  // 选中产物同时设为活动文件：两者都表示"右侧正在看什么"，各自为政会让
+  // cockpit 打开产物后预览仍停在旧产物上。
+  function selectArtifact(artifact: Artifact) {
+    setSelectedArtifact(artifact);
+    onSelectFile(artifact.path);
   }
 
   useEffect(() => {
@@ -2172,10 +2181,17 @@ export function RightPanel({
       setSelectedArtifact(undefined);
       return;
     }
-    if (!selectedArtifact || !activeArtifacts.some((artifact) => artifact.id === selectedArtifact.id)) {
+    // 活动文件由 cockpit 的打开产物、文件树和深链共同驱动，预览应当跟随它。
+    // 命中已知产物时选中该产物；否则清空选中，交给功能更完整的活动文件预览
+    // （它同样渲染结构化 JSON，并额外提供刷新、编辑、保存与二进制下载）。
+    if (activeFile && selectedArtifact?.path !== activeFile) {
+      setSelectedArtifact(artifacts.find((artifact) => artifact.path === activeFile));
+      return;
+    }
+    if (!selectedArtifact && !activeFile) {
       setSelectedArtifact(activeArtifacts[0]);
     }
-  }, [activeArtifacts, activeTab, selectedArtifact]);
+  }, [activeArtifacts, activeFile, activeTab, artifacts, selectedArtifact]);
 
   function exportCurrentPanel() {
     const payload = {
@@ -2220,7 +2236,7 @@ export function RightPanel({
       </div>
       {activeTab === "图表" ? (
         <>
-          <ArtifactList artifacts={chartArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          <ArtifactList artifacts={chartArtifacts} selectedId={selectedArtifact?.id} onSelect={selectArtifact} />
           {selectedArtifact ? (
             <ArtifactPreview
               artifact={selectedArtifact}
@@ -2242,7 +2258,7 @@ export function RightPanel({
       ) : null}
       {activeTab === "代码" ? (
         <>
-          <ArtifactList artifacts={codeArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          <ArtifactList artifacts={codeArtifacts} selectedId={selectedArtifact?.id} onSelect={selectArtifact} />
           {selectedArtifact ? (
             <ArtifactPreview
               artifact={selectedArtifact}
@@ -2258,7 +2274,7 @@ export function RightPanel({
       ) : null}
       {activeTab === "数据" ? (
         <>
-          <ArtifactList artifacts={dataArtifacts} selectedId={selectedArtifact?.id} onSelect={setSelectedArtifact} />
+          <ArtifactList artifacts={dataArtifacts} selectedId={selectedArtifact?.id} onSelect={selectArtifact} />
           {selectedArtifact ? (
             <ArtifactPreview
               artifact={selectedArtifact}

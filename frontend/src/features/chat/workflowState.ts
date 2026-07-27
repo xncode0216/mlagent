@@ -17,6 +17,7 @@ export type WorkflowApprovalState = {
   title: string;
   description?: string;
   artifactPath?: string;
+  origin?: "local";
 };
 
 export type WorkflowComponentState = {
@@ -335,6 +336,7 @@ export function deriveWorkflowState(
         title: event.title,
         description: event.description,
         artifactPath: event.artifact_path,
+        origin: event.origin,
       };
       continue;
     }

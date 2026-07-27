@@ -351,6 +351,65 @@ describe("RightPanel 变换报告 diff 预览", () => {
     expect(within(categoricalRow).getByText(/one_hot_ignore_unknown/)).toBeTruthy();
   });
 
+  it("跟随活动文件切换到该产物的结构化预览", async () => {
+    const planPath = "results/session-1/preprocessing_plan.json";
+    const planEvent: AgentStreamEvent = {
+      type: "artifact_created",
+      artifact: {
+        id: "artifact-plan",
+        project_id: "project-1",
+        session_id: "session-1",
+        type: "dataframe",
+        name: "preprocessing_plan.json",
+        path: planPath,
+        metadata: {},
+        created_at: "2026-07-27T00:00:00Z",
+      },
+    };
+    const transformPath = "results/session-1/preprocessing_transform_report.json";
+    const transformEvent: AgentStreamEvent = {
+      type: "artifact_created",
+      artifact: {
+        id: "artifact-transform",
+        project_id: "project-1",
+        session_id: "session-1",
+        type: "dataframe",
+        name: "preprocessing_transform_report.json",
+        path: transformPath,
+        metadata: {},
+        created_at: "2026-07-27T00:01:00Z",
+      },
+    };
+    vi.mocked(readProjectFileContent).mockImplementation(async (_projectId, path) =>
+      fileContent(
+        path === transformPath
+          ? JSON.stringify(transformReport)
+          : JSON.stringify({ sklearn_pipeline: "ColumnTransformer", steps: {}, feature_columns: [] }),
+        path,
+      ),
+    );
+    useUiStore.setState({ activeFile: planPath });
+    renderPanel({ events: [planEvent, transformEvent] });
+
+    // 打开变换明细（cockpit 的 open_artifact 只改活动文件）后，右侧应显示它而非停留在计划上
+    useUiStore.setState({ activeFile: transformPath });
+
+    expect(await screen.findByRole("table", { name: "预处理变换列对照" })).toBeTruthy();
+  });
+
+  it("选中产物时同步活动文件，使两者不再各说各话", async () => {
+    const onSelectFile = vi.fn();
+    vi.mocked(readProjectFileContent).mockResolvedValue(
+      fileContent(JSON.stringify(transformReport)),
+    );
+    renderPanel({ onSelectFile });
+
+    const card = await screen.findByRole("button", { name: /Data profile/ });
+    fireEvent.click(card);
+
+    expect(onSelectFile).toHaveBeenCalledWith(artifactPath);
+  });
+
   it("行数变化时给出明确提示", async () => {
     vi.mocked(readProjectFileContent).mockResolvedValue(
       fileContent(JSON.stringify({ ...transformReport, output_shape: { rows: 100, columns: 4 } })),

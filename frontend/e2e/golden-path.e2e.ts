@@ -152,20 +152,12 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
     expect(planJson.feature_columns).not.toContain("support_tickets");
     expect(planJson.drop_reasons.support_tickets).toBe("deselected");
 
-    // 执行刚编辑过的计划，并从卡片进入结构化列对照，确认取消的列确实呈现为「已丢弃」。
-    // 执行入口在选中产物的预览里，因此从右侧产物列表选中计划产物。
-    await page.locator(".artifact-card").filter({ hasText: "preprocessing_plan.json" }).first().click();
-    await page.getByRole("button", { name: "Execute Plan" }).click();
+    // 本地生成的计划由卡片上的「批准并执行」直接执行——该审批后端没有待办记录，
+    // 发往编排器只会得到 approval_not_found，因此这条按钮路径必须真正产出变换产物。
+    await planCard.getByRole("button", { name: "批准并执行" }).click();
     const transformCard = page.locator('[data-cockpit-component="transformation_report"]');
     await expect(transformCard).toBeVisible();
-    await expect(transformCard.getByRole("button", { name: "打开列对照" })).toBeEnabled();
-
-    // 结构化预览渲染的是右侧选中的产物，因此从产物列表选中变换明细。
-    await page
-      .locator(".artifact-card")
-      .filter({ hasText: "preprocessing_transform_report.json" })
-      .first()
-      .click();
+    await transformCard.getByRole("button", { name: "打开列对照" }).click();
 
     const diffTable = page.getByRole("table", { name: "预处理变换列对照" });
     await expect(diffTable).toBeVisible();

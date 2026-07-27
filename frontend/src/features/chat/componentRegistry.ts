@@ -36,6 +36,8 @@ export type CockpitComponentAction = {
     preprocessingPlanPath?: string;
     targetColumn?: string;
     approvalId?: string;
+    // "local" 表示审批由前端本地流程发起，批准应本地执行而非发往编排器
+    approvalOrigin?: "local";
     experimentId?: string;
     intent?: string;
     sourceSessionId?: string;
@@ -861,7 +863,13 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
               plannedDatasetPath ? "重新执行计划" : "批准并执行",
               {
                 disabledReason: projectDisabled ?? (planPath ? undefined : "没有可用的预处理计划产物。"),
-                payload: { approvalId: input.workflow.approval?.id, preprocessingPlanPath: planPath },
+                payload: {
+                  approvalId: input.workflow.approval?.id,
+                  ...(input.workflow.approval?.origin
+                    ? { approvalOrigin: input.workflow.approval.origin }
+                    : {}),
+                  preprocessingPlanPath: planPath,
+                },
                 tone: "primary",
               },
             ),

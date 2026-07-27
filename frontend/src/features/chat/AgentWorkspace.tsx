@@ -448,7 +448,9 @@ export function AgentWorkspace({
           if (action.payload?.path) onSelectFile?.(action.payload.path);
           break;
         case "approve_preprocessing_plan":
-          if (action.payload?.approvalId) {
+          // 本地发起的审批在后端没有待办记录，发过去只会得到 approval_not_found，
+          // 因此直接就地执行；只有编排器发起的审批才走审批响应通道。
+          if (action.payload?.approvalId && action.payload.approvalOrigin !== "local") {
             onRespondToApproval?.(action.payload.approvalId, "execute", action.payload.preprocessingPlanPath);
           } else {
             await onExecutePreprocessingPlan?.(action.payload?.preprocessingPlanPath);
