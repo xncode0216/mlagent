@@ -46,6 +46,10 @@ function visibleCardKinds(page: Page) {
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-cockpit-component") ?? ""));
 }
 
+// 这条链路要走完 8 次编排往返并真实训练一次 sklearn，默认 30s 上限在 CI 上不够；
+// 上限低于单个断言的等待时间时，断言还没等到结果测试就先超时了。
+test.describe.configure({ timeout: 180_000 });
+
 test("自然语言可驱动从原始数据到经验沉淀的完整工作流", async ({ page, playwright }) => {
   const api = await playwright.request.newContext();
 
