@@ -65,9 +65,31 @@ class MessagingMixin:
         )
         return event
 
-    def _append_user_message(self, context: AgentContext, content: str) -> None:
-        context.session_service.append_message(
+    def _persist_message(
+        self,
+        session_service: Any,
+        *,
+        role: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Persist a message with its trace id attached.
+
+        Every stream event carries a trace id; messages must too, otherwise a
+        reply in the transcript cannot be traced back to the run that produced
+        it. Routing all writes through here keeps that guarantee in one place
+        instead of relying on each call site to remember.
+        """
+        session_service.append_message(
             session_id=self.session_id,
+            role=role,
+            content=content,
+            metadata={**(metadata or {}), "trace_id": self.trace_id},
+        )
+
+    def _append_user_message(self, context: AgentContext, content: str) -> None:
+        self._persist_message(
+            context.session_service,
             role="user",
             content=content,
             metadata={"active_file": context.active_file},
@@ -83,8 +105,8 @@ class MessagingMixin:
             }
             await asyncio.sleep(0.001)
         if self.session_service is not None and self.session_service.get_session(self.session_id):
-            self.session_service.append_message(
-                session_id=self.session_id,
+            self._persist_message(
+                self.session_service,
                 role="assistant",
                 content=text,
                 metadata={"message_id": self.message_id},
@@ -124,8 +146,8 @@ class MessagingMixin:
 
         text = "".join(collected) or fallback_text
         if self.session_service is not None and self.session_service.get_session(self.session_id):
-            self.session_service.append_message(
-                session_id=self.session_id,
+            self._persist_message(
+                self.session_service,
                 role="assistant",
                 content=text,
                 metadata={"message_id": self.message_id},

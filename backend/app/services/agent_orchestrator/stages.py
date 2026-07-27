@@ -164,8 +164,8 @@ class StageRunnersMixin:
             return
 
         active_file = context.get("active_file") if isinstance(context.get("active_file"), str) else ""
-        session_context.session_service.append_message(
-            session_id=self.session_id,
+        self._persist_message(
+            session_context.session_service,
             role="user",
             content=content,
             metadata={"active_file": active_file, "intent": "continue_from_failure"},
@@ -300,8 +300,8 @@ class StageRunnersMixin:
             return
 
         active_file = context.get("active_file") if isinstance(context.get("active_file"), str) else ""
-        session_context.session_service.append_message(
-            session_id=self.session_id,
+        self._persist_message(
+            session_context.session_service,
             role="user",
             content=content,
             metadata={"active_file": active_file, "intent": "abandon_last_failure"},
@@ -814,8 +814,8 @@ class StageRunnersMixin:
         target_column = str(run.get("target_column") or "")
         diagnosis = self._diagnosis_summary(run)
 
-        iteration_context.session_service.append_message(
-            session_id=self.session_id,
+        self._persist_message(
+            iteration_context.session_service,
             role="user",
             content=content,
             metadata={
@@ -955,8 +955,8 @@ class StageRunnersMixin:
             return
 
         active_file = context.get("active_file") if isinstance(context.get("active_file"), str) else ""
-        training_context.session_service.append_message(
-            session_id=self.session_id,
+        self._persist_message(
+            training_context.session_service,
             role="user",
             content=content,
             metadata={
@@ -1117,8 +1117,8 @@ class StageRunnersMixin:
         target_column = str(run.get("target_column") or "")
         best_model_name = str(run.get("best_model_name") or run.get("engine") or "")
 
-        evaluation_context.session_service.append_message(
-            session_id=self.session_id,
+        self._persist_message(
+            evaluation_context.session_service,
             role="user",
             content=content,
             metadata={
@@ -1298,8 +1298,8 @@ class StageRunnersMixin:
         best_model_name = str(run.get("best_model_name") or run.get("engine") or "")
         diagnosis = self._diagnosis_summary(run)
 
-        diagnosis_context.session_service.append_message(
-            session_id=self.session_id,
+        self._persist_message(
+            diagnosis_context.session_service,
             role="user",
             content=content,
             metadata={
@@ -1504,8 +1504,8 @@ class StageRunnersMixin:
         ]
         bundle_ready = not missing_required
 
-        export_context.session_service.append_message(
-            session_id=self.session_id,
+        self._persist_message(
+            export_context.session_service,
             role="user",
             content=content,
             metadata={
@@ -1642,8 +1642,8 @@ class StageRunnersMixin:
         ]
         source_artifacts = [str(path) for path in source_artifacts[-5:]]
 
-        session_context.session_service.append_message(
-            session_id=self.session_id,
+        self._persist_message(
+            session_context.session_service,
             role="user",
             content=content,
             metadata={

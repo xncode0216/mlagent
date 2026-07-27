@@ -95,6 +95,47 @@ def test_session_socket_emits_artifact_with_created_at(tmp_path, monkeypatch):
     assert first_artifact["path"].startswith("results/test-session/")
 
 
+def test_session_socket_links_persisted_messages_to_their_trace(tmp_path, monkeypatch):
+    # 事件流每条都带 trace_id，但消息此前没有，界面上的一句回复无从回溯到
+    # 产生它的那次执行——工具调用、产物与错误都查不到。
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,churn\n42,1\n37,0\n",
+        encoding="utf-8",
+    )
+
+    with client.websocket_connect("/ws/sessions/trace-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                },
+            }
+        )
+        event_trace_ids = set()
+        while True:
+            event = websocket.receive_json()
+            if event.get("trace_id"):
+                event_trace_ids.add(event["trace_id"])
+            if event["type"] == "task_progress" and event.get("progress") == 1:
+                break
+
+    assert len(event_trace_ids) == 1
+    trace_id = event_trace_ids.pop()
+
+    messages = client.get("/api/sessions/trace-session/messages").json()["items"]
+    roles = {message["role"] for message in messages}
+    assert roles == {"user", "assistant"}
+    for message in messages:
+        assert message["metadata"]["trace_id"] == trace_id
+
+
 def test_session_socket_emits_distribution_chart_artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()
