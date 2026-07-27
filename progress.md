@@ -1213,3 +1213,12 @@
 - **顺带修可访问性缺口**：tab 的选中状态此前只通过 CSS class 表达，辅助技术无法得知当前在哪个检查器。补 `aria-pressed`，同时让组件测试可以稳定断言选中项。
 - **门禁与浏览器证据**：纯逻辑 6 项 + 组件 3 项（进入训练阶段自动切换、用户接管后不被拽走、深链优先）；前端 Vitest `37 files / 239 tests`、ESLint 0、build + 预算门禁（主包 467.79kB / gzip 134.67kB）、Playwright `9 passed`。自然语言 E2E 刻意去掉 `rightTab` 深链，训练完成后断言"训练"页处于选中态——修复前该断言失败，是真实回归证据。
 - **动态计划**：126 完成。北极星 follow-up 仅剩 128（全链路 provenance 回链）。
+
+## 2026-07-27 P128 全链路 provenance 回链（消息 → 执行链路）
+
+- **审计已有与真缺口**：128 要求"每条可见消息、动作、产物、模型运行、报告与学习规则都能回溯到 provenance 记录"。已具备的部分不少：图谱节点的来源/证据面板、产物路径深链与打开动作、`trace_id` 贯穿整条事件流、日志面板已支持按 trace/task 过滤与事件检查器、实验记录里的产物链接、`InformationValue` 的规范值展开与复制。逐层核对后确认真正断掉的是**消息层**——前端仅 4 个文件出现 `trace_id`，全在事件/日志侧；`AgentMessage.metadata` 里根本没有它。用户看到一句结论，无从查看它背后跑了哪些工具、写了什么产物、有没有报错。
+- **后端单点补齐**：消息此前从 `messaging.py` 与 `stages.py` 的 **11 处** `append_message` 各自写入，逐处添加字段既易漏、将来新增调用更会忘。改为统一经 `_persist_message` 包装写入并附带 `trace_id`，把这条保证收在一个地方。新增后端测试断言同一次执行里事件流只有一个 trace，且 user 与 assistant 消息的 `metadata.trace_id` 都等于它。
+- **前端回溯入口**：assistant 消息下方提供"查看该回复的执行链路"，点击后经新的 `openTrace` 动作切到日志检查器并按该 trace 过滤——沿用既有 `openLogs`/`focusedTaskId` 的模式，`LogPanel` 相应接受外部 trace 聚焦。没有 trace 的旧消息不显示入口，避免给出点了没用的按钮。
+- **一次被并行运行揭穿的脆弱断言**：E2E 最初断言 `.trace-summary[aria-pressed='true']` 恰好 1 个，单独跑通过、全套并行跑失败（实际 0）。原因是该断言盯的是 trace 摘要列表是否包含被过滤的 trace，而非回链本身是否有效。改为断言过滤后日志列表仍有条目——这才直接证明"这条回复真的能追回它的执行链路"。连续两次全量 `9 passed` 确认稳定。
+- **门禁**：后端 ruff + `230 passed, 3 skipped`；前端 Vitest `37 files / 241 tests`、ESLint 0、build + 预算门禁（主包 468.74kB / gzip 134.87kB）、Playwright `9 passed`。
+- **动态计划**：128 完成。至此 `task_plan.md` 的产品北极星 follow-up 全部清空，P0/P1/P2 三条编号主线亦早已关闭；下一步方向需与用户确认。
