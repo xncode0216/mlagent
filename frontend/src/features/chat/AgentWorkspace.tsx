@@ -15,6 +15,7 @@ import {
   buildCockpitComponentCards,
   type CockpitComponentAction,
   type CockpitComponentCard,
+  type CockpitComponentControl,
 } from "./componentRegistry";
 import { deriveWorkflowCompletionFeedback } from "./completionFeedback";
 import { InformationValue } from "./InformationValue";
@@ -64,6 +65,7 @@ type AgentWorkspaceProps = {
   onRetrySklearnTraining?: () => Promise<void>;
   onSelectExperimentRun?: (experimentId: string) => void;
   onSelectFile?: (path: string) => void;
+  onSelectTargetColumn?: (column: string) => void;
   onTrainSklearn?: (targetColumn: string, preprocessingPlanPath?: string | null, datasetPath?: string) => Promise<void>;
   sendMessage: (
     content: string,
@@ -149,6 +151,7 @@ export function AgentWorkspace({
   onRetrySklearnTraining,
   onSelectExperimentRun,
   onSelectFile,
+  onSelectTargetColumn,
   onTrainSklearn,
   sendMessage,
 }: AgentWorkspaceProps) {
@@ -413,6 +416,16 @@ export function AgentWorkspace({
     }
   }
 
+  function runCockpitControl(control: CockpitComponentControl, value: string) {
+    if (!value || value === control.value) return;
+    switch (control.id) {
+      case "target_column":
+        onSelectTargetColumn?.(value);
+        setActionFeedback({ kind: "success", message: `目标列已切换为 ${value}。` });
+        break;
+    }
+  }
+
   function CockpitCard({ card }: { card: CockpitComponentCard }) {
     return (
       <article className={`cockpit-component-card ${card.status}`} data-cockpit-component={card.kind}>
@@ -434,6 +447,40 @@ export function AgentWorkspace({
             </div>
           ))}
         </div>
+        {card.controls && card.controls.length > 0 ? (
+          <div className="cockpit-component-controls">
+            {card.controls.map((control) => {
+              const descriptionId = control.description
+                ? `${card.id}-${control.id}-description`
+                : undefined;
+              return (
+                <div className="cockpit-component-control" key={`${card.id}-${control.id}`}>
+                  <span>{control.label}</span>
+                  <select
+                    aria-describedby={descriptionId}
+                    aria-label={control.label}
+                    disabled={Boolean(control.disabledReason)}
+                    onChange={(event) => runCockpitControl(control, event.target.value)}
+                    title={control.disabledReason ?? control.description ?? control.label}
+                    value={control.value}
+                  >
+                    {control.value ? null : (
+                      <option value="" disabled>
+                        请选择
+                      </option>
+                    )}
+                    {control.options.map((option) => (
+                      <option key={`${card.id}-${control.id}-${option.value}`} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {control.description ? <small id={descriptionId}>{control.description}</small> : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
         <div className="cockpit-component-actions">
           {card.actions.map((action, index) => (
             <button

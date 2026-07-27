@@ -697,6 +697,7 @@ export function AppShell() {
           onRetrySklearnTraining={handleRetrySklearnTraining}
           onSelectExperimentRun={setFocusedExperimentId}
           onSelectFile={handleSelectProjectFile}
+          onSelectTargetColumn={setSuggestedTargetColumn}
           onTrainSklearn={(targetColumn, planPath, datasetPath) =>
             handleTrainModel(targetColumn, "sklearn", false, planPath, datasetPath)
           }

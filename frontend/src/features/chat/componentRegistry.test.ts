@@ -1353,3 +1353,117 @@ describe("cockpit component registry", () => {
     expect(generateProfile?.disabledReason).toContain("打开或创建项目");
   });
 });
+
+describe("cockpit training target selection", () => {
+  function trainingCardFor(input: {
+    events: AgentStreamEvent[];
+    suggestedTargetColumn?: string;
+    activeFile?: string;
+  }) {
+    const activeFile = input.activeFile ?? "data/customer_churn.csv";
+    const result = buildCockpitComponentCards({
+      activeFile,
+      events: input.events,
+      mode: "machine-learning",
+      projectId: "project-1",
+      suggestedTargetColumn: input.suggestedTargetColumn,
+      trainingDatasetPath: activeFile,
+      workflow: deriveWorkflowState(input.events, "machine-learning", activeFile),
+    });
+    return result.find((card) => card.id === "training-config");
+  }
+
+  function profileEvent(targetCandidates: string[]): AgentStreamEvent {
+    return {
+      type: "component_requested",
+      task_id: "session-1",
+      stage: "profile",
+      component: "data_quality",
+      title: "Review data quality profile",
+      artifact_path: "results/session-1/data_quality_profile.json",
+      props: {
+        dataset_path: "data/customer_churn.csv",
+        profile_path: "results/session-1/data_quality_profile.json",
+        row_count: 120,
+        column_count: 8,
+        target_candidates: targetCandidates,
+      },
+    };
+  }
+
+  const trainingEvent: AgentStreamEvent = {
+    type: "component_requested",
+    task_id: "session-1",
+    stage: "train",
+    component: "training_config",
+    title: "Configure sklearn training",
+    artifact_path: "data/customer_churn.csv",
+    props: { dataset_path: "data/customer_churn.csv", engine: "sklearn" },
+  };
+
+  it("offers profiled target candidates as an in-card selection control", () => {
+    const card = trainingCardFor({
+      events: [profileEvent(["churn", "contract_type"]), trainingEvent],
+      suggestedTargetColumn: "churn",
+    });
+
+    const control = card?.controls?.find((item) => item.id === "target_column");
+    expect(control).toMatchObject({ kind: "select", value: "churn" });
+    expect(control?.options.map((option) => option.value)).toEqual(["churn", "contract_type"]);
+    // 控件已经呈现目标列，facts 不应再重复同一信息
+    expect(card?.facts.map((fact) => fact.label)).not.toContain("目标列");
+  });
+
+  it("keeps an already resolved target selectable when profiling did not rank it", () => {
+    const card = trainingCardFor({
+      events: [profileEvent(["contract_type"]), trainingEvent],
+      suggestedTargetColumn: "churn",
+    });
+
+    const control = card?.controls?.find((item) => item.id === "target_column");
+    expect(control?.value).toBe("churn");
+    expect(control?.options.map((option) => option.value)).toContain("churn");
+  });
+
+  it("does not fabricate a target control before a profile produced candidates", () => {
+    const card = trainingCardFor({ events: [trainingEvent] });
+
+    expect(card?.controls ?? []).toHaveLength(0);
+    expect(card?.status).toBe("attention");
+    expect(
+      card?.actions.find((action) => action.id === "start_sklearn_training")?.disabledReason,
+    ).toContain("目标列");
+  });
+
+  // 「生成画像」按钮走的是本地 artifact 事件，候选是带评分的对象数组；
+  // 后端自然语言路径走 component_requested，候选已被降级成列名数组。两条路径都要能选目标列。
+  it("reads scored candidates from a locally generated profile artifact", () => {
+    const card = trainingCardFor({
+      events: [
+        {
+          type: "artifact_created",
+          artifact: {
+            id: "artifact-profile",
+            project_id: "project-1",
+            session_id: "session-1",
+            type: "dataframe",
+            name: "data_quality_profile.json",
+            path: "results/session-1/data_quality_profile.json",
+            metadata: {
+              target_candidates: [
+                { column: "churn", score: 0.92 },
+                { column: "contract_type", score: 0.41 },
+              ],
+            },
+            created_at: "2026-07-27T00:00:00Z",
+          },
+        },
+        trainingEvent,
+      ],
+      suggestedTargetColumn: "churn",
+    });
+
+    const control = card?.controls?.find((item) => item.id === "target_column");
+    expect(control?.options.map((option) => option.value)).toEqual(["churn", "contract_type"]);
+  });
+});

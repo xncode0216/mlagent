@@ -103,6 +103,26 @@ test("用户可从数据画像走到可检查的训练实验", async ({ page, pl
       "质量标记",
     ]);
 
+    // 画像刚产出的目标列候选应当能直接在训练配置卡片里选择，不必离开中心工作台。
+    // 用顶栏切换模式而不是重新导航，保持刚生成的画像事件仍在当前会话流中。
+    await page.getByRole("navigation", { name: "主模式" }).getByRole("button", { name: "机器学习" }).click();
+    const trainingCard = page.locator('[data-cockpit-component="training_config"]');
+    const targetSelect = trainingCard.getByRole("combobox", { name: "目标列" });
+    await expect(targetSelect).toBeVisible();
+    const targetOptions = await targetSelect.locator("option").evaluateAll((options) =>
+      options.map((option) => (option as HTMLOptionElement).value),
+    );
+    expect(targetOptions).toContain("churn");
+    await targetSelect.selectOption("churn");
+    await expect(trainingCard).toContainText("churn");
+    await expect(
+      trainingCard.getByRole("button", { name: "启动 sklearn" }),
+    ).toBeEnabled();
+    if (process.env.E2E_TARGET_SELECT_SCREENSHOT_PATH) {
+      await page.screenshot({ path: process.env.E2E_TARGET_SELECT_SCREENSHOT_PATH, fullPage: true });
+    }
+    await page.getByRole("navigation", { name: "主模式" }).getByRole("button", { name: "数据分析" }).click();
+
     await page.goto(
       `/?mode=analysis&activity=data&rightTab=data&projectId=${project.id}&file=${encodeURIComponent(executed.transformed_data_artifact.path)}`,
     );

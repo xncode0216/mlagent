@@ -45,6 +45,22 @@ export type CockpitComponentAction = {
   tone?: "primary" | "secondary";
 };
 
+export type CockpitControlId = "target_column";
+
+/**
+ * 卡片内的输入控件。facts 只读、actions 只触发，两者都无法表达“用户在卡片里做选择”，
+ * 而训练配置正需要这一步。这里只落地当前真实用到的 select，不预造其他控件类型。
+ */
+export type CockpitComponentControl = {
+  id: CockpitControlId;
+  kind: "select";
+  label: string;
+  description?: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  disabledReason?: string;
+};
+
 export type CockpitComponentCard = {
   id: string;
   kind: AgentComponentKind | "active_dataset" | string;
@@ -54,6 +70,7 @@ export type CockpitComponentCard = {
   artifactPath?: string;
   status: "ready" | "attention" | "blocked" | "complete";
   facts: Array<{ label: string; value: string }>;
+  controls?: CockpitComponentControl[];
   actions: CockpitComponentAction[];
 };
 
@@ -94,6 +111,46 @@ function arrayProp(props: Record<string, unknown> | undefined, key: string) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value ? value : undefined;
+}
+
+/**
+ * 目标列候选有两种真实来源，形状不同：orchestrator 的 component_requested 已把候选
+ * 降级成列名数组，而本地「生成画像」写入的 artifact metadata 仍是带评分的对象数组。
+ * 两者都按后端的评分顺序排列，这里统一取列名。
+ */
+function targetCandidatesFromProps(props: Record<string, unknown> | undefined) {
+  return (arrayProp(props, "target_candidates") ?? [])
+    .map((candidate) => {
+      if (typeof candidate === "string") return stringValue(candidate);
+      if (candidate && typeof candidate === "object") {
+        return stringValue((candidate as Record<string, unknown>).column);
+      }
+      return undefined;
+    })
+    .filter((column): column is string => Boolean(column));
+}
+
+/**
+ * 目标列候选来自 data_quality 画像（后端已按评分降序）。没有画像就没有候选，
+ * 此时不造选择器，让卡片继续引导用户先生成画像。已解析出的目标列即使不在候选里
+ * 也保留为可选项，避免选择器把 agent 或右侧面板定下的值挤掉。
+ */
+function buildTargetColumnControls(
+  candidates: string[],
+  currentTarget: string | undefined,
+): CockpitComponentControl[] {
+  if (candidates.length === 0) return [];
+  const values = [...new Set([...(currentTarget ? [currentTarget] : []), ...candidates])];
+  return [
+    {
+      id: "target_column",
+      kind: "select",
+      label: "目标列",
+      description: "选择本次训练要预测的列。候选来自数据画像的目标列评分。",
+      value: currentTarget ?? "",
+      options: values.map((value) => ({ value, label: value })),
+    },
+  ];
 }
 
 function runCandidateLabel(candidate: Record<string, unknown>) {
@@ -197,7 +254,12 @@ function classifyArtifact(event: Extract<AgentStreamEvent, { type: "artifact_cre
     return { kind: "transformation_report", stage: "transform", artifactPath: event.artifact.path };
   }
   if (text.includes("data_quality") || text.includes("quality profile")) {
-    return { kind: "data_quality", stage: "profile", artifactPath: event.artifact.path };
+    return {
+      kind: "data_quality",
+      stage: "profile",
+      artifactPath: event.artifact.path,
+      props: event.artifact.metadata,
+    };
   }
   if (text.includes("evaluation_report") || text.includes("model_evaluation_report")) {
     return { kind: "evaluation_report", stage: "evaluate", artifactPath: event.artifact.path };
@@ -268,6 +330,7 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
   const effectiveTrainingDatasetPath = requestedTrainingDatasetPath ?? input.trainingDatasetPath;
   const effectiveTargetColumn = requestedTargetColumn ?? input.suggestedTargetColumn;
   const dataProfilePath = signals.get("data_quality")?.artifactPath;
+  const targetCandidateColumns = targetCandidatesFromProps(signals.get("data_quality")?.props);
   const evaluationExperimentId =
     stringProp(evaluationReportSignal?.props, "experiment_id") ?? stringProp(modelComparisonSignal?.props, "experiment_id");
   const evaluationDatasetPath =
@@ -798,6 +861,7 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
 
   if (!missingDatasetCommand && (plannedDatasetPath || input.workflow.currentStage.id === "train" || input.mode === "machine-learning")) {
     const trainingDataset = plannedDatasetPath ?? effectiveTrainingDatasetPath ?? input.activeFile;
+    const targetControls = buildTargetColumnControls(targetCandidateColumns, effectiveTargetColumn);
     cards.push({
       id: "training-config",
       kind: "training_config",
@@ -810,9 +874,13 @@ export function buildCockpitComponentCards(input: BuildCockpitComponentCardsInpu
       status: retryableTrainingFailure ? "attention" : effectiveTargetColumn ? "ready" : "attention",
       facts: [
         { label: "数据集", value: trainingDataset },
-        { label: "目标列", value: effectiveTargetColumn || "缺失" },
+        // 有选择器时目标列由控件自身呈现，不再重复一条只读事实
+        ...(targetControls.length > 0
+          ? []
+          : [{ label: "目标列", value: effectiveTargetColumn || "缺失" }]),
         { label: "计划", value: planPath ?? "无" },
       ],
+      ...(targetControls.length > 0 ? { controls: targetControls } : {}),
       actions: [
         action("open_training", "打开训练", {
           disabledReason: projectDisabled,

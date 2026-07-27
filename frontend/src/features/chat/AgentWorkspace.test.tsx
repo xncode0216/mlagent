@@ -202,3 +202,77 @@ describe("agent command palette and slash commands", () => {
     expect(document.activeElement).toBe(composer);
   });
 });
+
+describe("训练配置卡片的目标列选择", () => {
+  const profileEvent: AgentStreamEvent = {
+    type: "component_requested",
+    task_id: "session-1",
+    stage: "profile",
+    component: "data_quality",
+    title: "Review data quality profile",
+    artifact_path: "results/session-1/data_quality_profile.json",
+    props: {
+      dataset_path: "data/customer_churn.csv",
+      target_candidates: ["churn", "contract_type"],
+    },
+  };
+
+  const trainingEvent: AgentStreamEvent = {
+    type: "component_requested",
+    task_id: "session-1",
+    stage: "train",
+    component: "training_config",
+    title: "Configure sklearn training",
+    artifact_path: "data/customer_churn.csv",
+    props: { dataset_path: "data/customer_churn.csv", engine: "sklearn" },
+  };
+
+  function renderTrainingCockpit(onSelectTargetColumn = vi.fn()) {
+    render(
+      <AgentWorkspace
+        connected
+        events={[profileEvent, trainingEvent]}
+        historyMessages={[]}
+        lastError={null}
+        mode="machine-learning"
+        onSelectFile={vi.fn()}
+        onSelectTargetColumn={onSelectTargetColumn}
+        projectId="project-1"
+        sendMessage={vi.fn()}
+        trainingDatasetPath="data/customer_churn.csv"
+      />,
+    );
+    return { onSelectTargetColumn };
+  }
+
+  it("在卡片内渲染画像候选并把选择结果回传", () => {
+    const { onSelectTargetColumn } = renderTrainingCockpit();
+
+    const select = screen.getByRole("combobox", { name: "目标列" }) as HTMLSelectElement;
+    expect([...select.options].map((option) => option.value)).toEqual(
+      expect.arrayContaining(["churn", "contract_type"]),
+    );
+
+    fireEvent.change(select, { target: { value: "contract_type" } });
+    expect(onSelectTargetColumn).toHaveBeenCalledWith("contract_type");
+  });
+
+  it("未生成画像时不渲染目标列选择器", () => {
+    render(
+      <AgentWorkspace
+        connected
+        events={[trainingEvent]}
+        historyMessages={[]}
+        lastError={null}
+        mode="machine-learning"
+        onSelectFile={vi.fn()}
+        onSelectTargetColumn={vi.fn()}
+        projectId="project-1"
+        sendMessage={vi.fn()}
+        trainingDatasetPath="data/customer_churn.csv"
+      />,
+    );
+
+    expect(screen.queryByRole("combobox", { name: "目标列" })).toBeNull();
+  });
+});
