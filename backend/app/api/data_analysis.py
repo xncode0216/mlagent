@@ -31,7 +31,8 @@ class DataProfileRequest(AnalysisReportRequest):
 
 
 class PreprocessingPlanRequest(AnalysisReportRequest):
-    pass
+    # None 表示沿用自动质量丢弃规则；给定列表则由调用方显式决定参与训练的特征。
+    selected_features: list[str] | None = Field(default=None, max_length=4096)
 
 
 class ExecutePreprocessingPlanRequest(BaseModel):
@@ -239,7 +240,15 @@ def generate_preprocessing_plan(project_id: str, payload: PreprocessingPlanReque
     if not dataset.exists() or not dataset.is_file():
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    plan = preprocessing_plan(dataset, dataset_path=payload.dataset_path)
+    if payload.selected_features is not None and not payload.selected_features:
+        # 训练侧在计划无特征时会回退到“使用全部列”，空选择因此会静默违背用户意图
+        raise HTTPException(status_code=400, detail="At least one feature must be selected")
+
+    plan = preprocessing_plan(
+        dataset,
+        dataset_path=payload.dataset_path,
+        selected_features=payload.selected_features,
+    )
     result_dir = root / "results" / payload.session_id
     result_dir.mkdir(parents=True, exist_ok=True)
     plan_path = result_dir / "preprocessing_plan.json"

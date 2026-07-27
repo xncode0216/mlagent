@@ -121,6 +121,68 @@ def test_generate_preprocessing_plan_writes_plan_and_pipeline_script(tmp_path, m
     assert "customer_churn_preprocessed.csv" in script
 
 
+def test_generate_preprocessing_plan_applies_a_feature_selection(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    dataset_path = Path(project["workspace_path"]) / "data" / "customer_churn.csv"
+    dataset_path.write_text(
+        "age,income,contract,churn\n"
+        "42,86000,Month-to-month,No\n"
+        "37,72000,One year,Yes\n"
+        "55,91000,Two year,No\n"
+        "29,64000,Month-to-month,Yes\n",
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/preprocess-plan",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "session_id": "feature-session",
+            "selected_features": ["age", "contract"],
+        },
+    )
+
+    assert response.status_code == 200
+    plan = response.json()["plan"]
+    assert plan["feature_columns"] == ["age", "contract"]
+    assert plan["drop_columns"] == ["income"]
+    assert plan["drop_reasons"]["income"] == "deselected"
+
+    # 重新生成的脚本必须与计划一致，否则执行与训练会用上不同的特征集
+    script_path = Path(project["workspace_path"]) / "notebooks/feature-session_preprocessing_pipeline.py"
+    script = script_path.read_text(encoding="utf-8")
+    assert "numeric_features = ['age']" in script
+    assert "categorical_features = ['contract']" in script
+
+
+def test_generate_preprocessing_plan_rejects_an_empty_feature_selection(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    dataset_path = Path(project["workspace_path"]) / "data" / "customer_churn.csv"
+    dataset_path.write_text(
+        "age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n",
+        encoding="utf-8",
+    )
+
+    # 空选择会让训练侧的“无计划特征则用全部列”回退悄悄改用全部特征，必须直接拒绝
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/preprocess-plan",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "session_id": "feature-session",
+            "selected_features": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "feature" in response.json()["detail"].lower()
+
+
 def test_generate_preprocessing_plan_keeps_default_sample_features(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()

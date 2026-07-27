@@ -131,7 +131,18 @@ def _render_pipeline_script(
     )
 
 
-def preprocessing_plan(csv_path: Path, dataset_path: str | None = None) -> dict[str, Any]:
+def preprocessing_plan(
+    csv_path: Path,
+    dataset_path: str | None = None,
+    selected_features: list[str] | None = None,
+) -> dict[str, Any]:
+    """构建可复现的预处理计划。
+
+    ``selected_features`` 让调用方显式指定参与训练的特征。给定时，未选中的非目标列
+    以 ``deselected`` 理由进入 drop_columns，自动质量丢弃规则不再适用于选中的列；
+    未给定时保持原有的自动丢弃行为。特征选择必须经由本函数落到计划里，
+    才能让 drop/steps/pipeline_script 等派生字段保持一致。
+    """
     profile = data_quality_profile(csv_path)
     row_count = int(profile.get("row_count") or 0)
     columns = [
@@ -140,11 +151,25 @@ def preprocessing_plan(csv_path: Path, dataset_path: str | None = None) -> dict[
         if isinstance(column, dict) and isinstance(column.get("name"), str)
     ]
     target_column = _best_target(profile)
-    drop_reasons = {
-        column["name"]: reason
-        for column in columns
-        if (reason := _drop_reason(column, target_column, row_count=row_count)) is not None
-    }
+    if selected_features is None:
+        drop_reasons = {
+            column["name"]: reason
+            for column in columns
+            if (reason := _drop_reason(column, target_column, row_count=row_count)) is not None
+        }
+    else:
+        kept = {
+            name
+            for name in selected_features
+            if isinstance(name, str)
+            and name != target_column
+            and any(column["name"] == name for column in columns)
+        }
+        drop_reasons = {
+            column["name"]: "deselected"
+            for column in columns
+            if column["name"] != target_column and column["name"] not in kept
+        }
     excluded = {target_column, *drop_reasons.keys()}
     numeric_features = _column_names(columns, "numeric", exclude=excluded)
     categorical_features = [
