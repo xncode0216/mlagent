@@ -242,7 +242,9 @@ export function useTrainingActions({
       const lesson = await extractLesson(project.id, {
         source_type: "training",
         source_id: result.experiment_id,
-        domain: ["machine_learning", result.engine],
+        // 与抽取器和情境标签使用同一套连字符词汇；写成 machine_learning
+        // 会让这条经验的标签维度永远对不上，从而注定匹配不到。
+        domain: ["machine-learning", result.engine],
         observation: `Dataset ${datasetPath} completed a ${result.engine} training run with best model ${String(
           result.model.strategy ?? result.model.algorithm,
         )} and accuracy ${(result.metrics.accuracy * 100).toFixed(2)}%.`,
