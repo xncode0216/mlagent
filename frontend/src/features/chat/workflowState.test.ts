@@ -672,6 +672,54 @@ describe("workflow state", () => {
   });
 
   /**
+   * `rules_matched` 每次对话都会发（规则注入链路的常态事件），它把 learn 标为 active，
+   * 于是 learn 之前所有未运行的阶段都会被 `markEarlierStagesReady` 波及。此前那些阶段
+   * 被标成 `completed`，阶段条按成功色渲染——用户会看到训练/评估/诊断从未运行却显示
+   * 为已完成。这里固定"未运行的阶段不得报成已完成"。
+   */
+  describe("stages that never ran", () => {
+    const rulesMatched: AgentStreamEvent = {
+      type: "rules_matched",
+      matched_rules: [{ lesson_id: "lesson-1", score: 0.8, recommendation: "用中位数填充", reason: "缺失率低" }],
+      prompt_snippet: "已采纳经验：用中位数填充 age",
+    };
+
+    it("does not report untouched stages as completed", () => {
+      const state = deriveWorkflowState([rulesMatched], "analysis", "data/churn.csv");
+
+      const untouched = ["train", "evaluate", "diagnose", "iterate", "export"];
+      for (const id of untouched) {
+        const stage = state.stages.find((item) => item.id === id);
+        expect(stage?.status, `${id} 从未运行，不应报成 completed`).not.toBe("completed");
+      }
+    });
+
+    it("keeps the real blocked stage as the current one while marking earlier stages ready", () => {
+      // 真实主路径的形状：画像跑完、变换停在审批检查点，同时带着常态的 rules_matched
+      const events: AgentStreamEvent[] = [
+        rulesMatched,
+        { type: "stage_started", task_id: "task-1", stage: "profile" },
+        { type: "stage_completed", task_id: "task-1", stage: "profile" },
+        { type: "stage_started", task_id: "task-1", stage: "transform" },
+        {
+          type: "approval_required",
+          task_id: "task-1",
+          approval_id: "approval-1",
+          stage: "transform",
+          title: "审核预处理计划",
+        },
+      ];
+
+      const state = deriveWorkflowState(events, "analysis", "data/churn.csv");
+
+      expect(state.currentStage).toMatchObject({ id: "transform", status: "blocked" });
+      expect(state.stages.find((item) => item.id === "profile")?.status).toBe("completed");
+      expect(state.stages.find((item) => item.id === "clean")?.status).toBe("ready");
+      expect(state.stages.find((item) => item.id === "train")?.status).not.toBe("completed");
+    });
+  });
+
+  /**
    * 分工：`COMPONENT_LABELS` 的类型 `Record<AgentComponentKind, string>` 由编译器保证
    * 标签完整（漏一个就编译不过）；这里固定的是运行时行为——已声明的 kind 必须拿到中文
    * 标签，而不是静默回退到裸 kind 让用户看见英文标识符。

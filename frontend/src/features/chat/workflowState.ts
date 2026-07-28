@@ -1,6 +1,11 @@
 import type { AgentComponentKind, AgentStreamEvent, Artifact, WorkflowStageId } from "./types";
 
-export type WorkflowStepStatus = "pending" | "active" | "completed" | "blocked" | "failed";
+/**
+ * `ready` 与 `completed` 是两种语义，此前只有后者可用：走到后段阶段时，前面没跑过的
+ * 阶段被标成 `completed`（detail 写"就绪"），于是阶段条把它们渲染成成功绿——用户会看到
+ * 训练/评估/诊断从未运行却显示为已完成。`ready` 表示"前置已过、本阶段未运行"。
+ */
+export type WorkflowStepStatus = "pending" | "ready" | "active" | "completed" | "blocked" | "failed";
 
 export type WorkflowStageState = {
   id: WorkflowStageId;
@@ -206,7 +211,9 @@ function markEarlierStagesReady(stages: WorkflowStageState[], stageId: WorkflowS
   const index = stageIndex(stageId);
   for (let i = 0; i < index; i += 1) {
     if (stages[i].status === "pending") {
-      stages[i] = { ...stages[i], status: "completed", detail: "就绪" };
+      // 用 ready 而非 completed：这些阶段只是被跳过或尚未运行，谎报成已完成会让
+      // 阶段条把它们显示为成功绿。函数名一直是 Ready，此前缺的是这个状态值。
+      stages[i] = { ...stages[i], status: "ready", detail: "就绪" };
     }
   }
 }
@@ -239,6 +246,8 @@ function currentStage(stages: WorkflowStageState[], defaultStage: WorkflowStageI
   const learningStage = stages.find((stage) => stage.status === "active" && stage.id === "learn");
   if (learningStage) return learningStage;
 
+  // 只认真正跑完的阶段。此前 ready 也记作 completed，于是"最后完成的阶段"可能是一个
+  // 从未运行的阶段，指向的下一步也跟着错位。
   let lastCompletedIndex = -1;
   for (let index = stages.length - 1; index >= 0; index -= 1) {
     if (stages[index].status === "completed") {
@@ -248,7 +257,7 @@ function currentStage(stages: WorkflowStageState[], defaultStage: WorkflowStageI
   }
   if (lastCompletedIndex >= stages.length - 1) return stages[lastCompletedIndex];
   const nextStage = stages[lastCompletedIndex + 1] ?? findStage(stages, defaultStage);
-  if (nextStage.status === "pending") {
+  if (nextStage.status === "pending" || nextStage.status === "ready") {
     setStage(stages, nextStage.id, "active", "准备就绪，待下一步");
     return findStage(stages, nextStage.id);
   }
