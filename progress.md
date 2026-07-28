@@ -1329,3 +1329,14 @@
 - **ruff 抓到一处我的分析错误**：我用 grep 统计每个导入符号的归属，把 `recovery.py` 里 `state.get("recovery_policy")` 这个**字典键字符串**误判成对导入函数的调用，于是多给了一个 import。grep 无法区分标识符与字面量——这类错误只能靠工具兜住，`F401` 正好报了出来。反过来说，"少给 import" 不会被 ruff 发现，那是靠 pytest 的 NameError 兜住的；两道门禁各管一头。
 - **验收**：运行时自检确认 `AgentOrchestrator` 的 MRO 为 `StageRunnersMixin → Data → Preprocessing → Model → Diagnosis → Handoff → Recovery → Messaging`，15 个 stage runner 全部正确解析。后端 ruff + `252 passed, 3 skipped`；Playwright `10 passed`——其中 `natural-language.e2e.ts` 真实走完 profile→approval→train→evaluate→diagnose→export→learn，即经过全部被拆开的 runner，不是只验证了 import 能过。
 - **动态计划**：`stages.py` 已从项目最大文件榜消失。P3-5 余下 `componentRegistry.ts` 1,345 行（现为全项目最大）与 `machine_learning.py` 1,228 行。
+
+## 2026-07-28 P3-5 切片 3：componentRegistry.ts 拆分（1,345 → 113 行）
+
+- **这一片不能纯搬移**：`buildCockpitComponentCards` 单个函数约 980 行——86 个派生局部变量后面跟着 18 个卡片块，全部共享同一个作用域。前两片靠"方法/组件彼此独立"就能安全切开，这里不成立。
+- **所以先建依赖图，再动手**：把每个派生变量归属到真正读取它的卡片块，结果是 **86 个中 78 个只属于一组，仅 8 个跨组**（`signals`、两个 missing command、`activeDatasetPath`、`effectiveTargetColumn`、`planPath`、`plannedDatasetPath`、`datasetDisabled`）。这个比例才是拆分可行的前提——如果大部分变量都跨组，拆开只会把一个大作用域换成一堆长参数列表。
+- **分组与后端 `stages.py` 落在同一套边界上**：blocked / recovery / data / preprocessing / model / diagnosis / handoff。两个技术栈、两个文件、独立分析后得出同一组划分，说明这是领域自带的边界，不是我强加的。
+- **context 刻意保持窄**：七个 builder 共享 `CardBuilderContext`，里面**只放真正跨组的值**。把 86 个全塞进去等于用新名字复现原来那个大作用域——那是"看起来拆了"。各组私有派生值留在各自 builder 内部计算。因为 builder 解构 context，**sed 提取的卡片块一行未改**就能复用，引用的还是同名裸标识符。
+- **顺序是产品行为，不是实现细节**：`selectVisibleCockpitCards` 取末尾 N 张卡片，所以调换 builder 顺序会直接改变用户看到哪几张卡。requested-component 兜底留在编排层（它必须看到之前所有卡片）；三个检查"是否已有 task-state-inspector"的重试块全部落在 recovery 组内部，顺序依赖因此不跨组——这一点是分组时特意确认的，否则拆开就会静默改变行为。
+- **两处 grep 假象在成为缺陷前被拦下**：`datasetVersionId` 在 593 行是**对象字面量的键名**、`taskInspection.planPath` 是**属性访问**，两者都不是对局部变量的使用。照 grep 结果归属会把错误的值放进 context。这是切片 2 被 ruff 抓到同类问题后我提前加的核对步骤——上一次靠门禁兜住，这一次自己先查了。
+- **门禁**：tsc 一次通过；前端 `43 files / 307 tests`（含 `componentRegistry.test.ts` 的 32 个用例）、ESLint、build、Playwright `10 passed`。首屏 bundle 增加 0.66kB / gzip 0.03kB——**不像切片 1 那样逐字节一致**，因为这一片确实重组了结构（引入 context 对象与七次函数调用），代价很小但不为零，如实记录。
+- **动态计划**：P3-5 仅剩 `machine_learning.py` 1,228 行（现为全项目最大源文件）。
