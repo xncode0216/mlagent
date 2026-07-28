@@ -284,6 +284,66 @@ def test_train_sklearn_api_records_preprocessing_plan_artifact(tmp_path, monkeyp
     assert detail["preprocessing_plan"]["drop_columns"] == ["customer_id"]
 
 
+def test_kernel_failure_is_recorded_as_a_session_event(tmp_path, monkeypatch):
+    """Kernel 报错必须留下 kernel_output 事件。
+
+    该事件类型的消费方一直都在——日志面板按 stderr 分级渲染，经验抽取器据它
+    沉淀依赖缺失类经验——但全后端没有任何生产方，于是两者都是死代码：
+    kernel 报错既不出现在日志里，也永远无法沉淀成经验。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setenv("MLAGENT_KERNEL_BACKEND", "jupyter")
+    get_settings.cache_clear()
+
+    class FailingKernelService:
+        def execute(self, code: str, timeout_seconds: int = 10) -> KernelExecutionResult:
+            return KernelExecutionResult(
+                status="error",
+                stdout="",
+                stderr="ModuleNotFoundError: No module named 'lightgbm'",
+            )
+
+    monkeypatch.setattr(
+        "app.api.machine_learning.create_kernel_service", lambda **kwargs: FailingKernelService()
+    )
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "kernel_error_project"}).json()
+    project_root = tmp_path / "dev-user" / project["id"]
+    (project_root / "data" / "customer_churn.csv").write_text(
+        "score,churn\n0.1,no\n0.2,no\n0.8,yes\n0.9,yes\n",
+        encoding="utf-8",
+    )
+    session = client.post(
+        f"/api/projects/{project['id']}/sessions",
+        json={"mode": "machine-learning", "title": "训练"},
+    ).json()
+
+    response = client.post(
+        f"/api/projects/{project['id']}/ml/train-sklearn",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "target_column": "churn",
+            "session_id": session["id"],
+            "use_gpu": False,
+        },
+    )
+
+    assert response.status_code == 500
+    events = client.get(f"/api/sessions/{session['id']}/events").json()["items"]
+    kernel_events = [event for event in events if event["type"] == "kernel_output"]
+    assert len(kernel_events) == 1
+    assert kernel_events[0]["stream"] == "stderr"
+    assert "lightgbm" in kernel_events[0]["text"]
+
+    # 事件落地后，依赖缺失这类经验才真正可沉淀
+    lessons = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract-from-session",
+        json={"session_id": session["id"]},
+    ).json()["items"]
+    assert [lesson["domain"] for lesson in lessons] == [["runtime", "kernel-error"]]
+    assert "lightgbm" in lessons[0]["recommendation"]
+
+
 def test_train_sklearn_persists_and_resumes_failed_training_state(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.setenv("MLAGENT_KERNEL_BACKEND", "jupyter")
