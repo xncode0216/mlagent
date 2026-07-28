@@ -221,6 +221,7 @@ export function AppShell() {
     handleAdoptLesson,
     handleRejectLesson,
     handleSetLessonEnabled,
+    handleSetLessonScope,
     handleMarkLessonConflict,
   } = useEvolutionActions({ project, activeSession, setLocalEvents });
   const {
@@ -670,6 +671,8 @@ export function AppShell() {
             onSelectProjectFile={handleSelectProjectFile}
             onReject={handleRejectLesson}
             onSetLessonEnabled={handleSetLessonEnabled}
+            onSetLessonScope={handleSetLessonScope}
+            activeDatasetPath={durableTrainingContext?.trainingDatasetPath ?? trainingDatasetPath}
           />
         </Suspense>
       ) : (

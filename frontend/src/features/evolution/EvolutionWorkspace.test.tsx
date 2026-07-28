@@ -274,4 +274,48 @@ describe("已采纳规则的停用与启用", () => {
 
     expect(screen.queryByRole("button", { name: "停用规则" })).toBeNull();
   });
+
+  it("未限定范围时说明规则全局适用，并可限定到当前数据集", () => {
+    const onSetScope = vi.fn(async () => undefined);
+    renderWorkspace({
+      initialTab: "rules",
+      lessons: [adoptedLesson()],
+      activeDatasetPath: "data/telecom_churn.csv",
+      onSetLessonScope: onSetScope,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /中位数填充/ }));
+
+    expect(screen.getByText(/全部数据集/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "限定到当前数据集" }));
+
+    expect(onSetScope).toHaveBeenCalledWith("lesson-1", {
+      datasets: ["data/telecom_churn.csv"],
+    });
+  });
+
+  it("已限定范围时列出边界并可解除", () => {
+    const onSetScope = vi.fn(async () => undefined);
+    renderWorkspace({
+      initialTab: "rules",
+      lessons: [adoptedLesson({ scope: { datasets: ["data/telecom_churn.csv"], modes: [] } })],
+      onSetLessonScope: onSetScope,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /中位数填充/ }));
+
+    expect(screen.getByText("data/telecom_churn.csv")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "解除范围限定" }));
+
+    expect(onSetScope).toHaveBeenCalledWith("lesson-1", { datasets: [], modes: [] });
+  });
+
+  it("没有活动数据集时不提供限定入口", () => {
+    renderWorkspace({
+      initialTab: "rules",
+      lessons: [adoptedLesson()],
+      onSetLessonScope: vi.fn(async () => undefined),
+    });
+    fireEvent.click(screen.getByRole("button", { name: /中位数填充/ }));
+
+    expect(screen.queryByRole("button", { name: "限定到当前数据集" })).toBeNull();
+  });
 });

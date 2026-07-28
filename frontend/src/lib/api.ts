@@ -140,6 +140,8 @@ export type Lesson = {
   // 与 status 正交：已采纳的规则可以被停用，停用后不再注入但保留采纳记录。
   // 可选是因为升级前写入的记录没有该字段，缺失一律按启用处理。
   enabled?: boolean;
+  // 用户设定的硬边界，空或缺失表示全局适用
+  scope?: { datasets?: string[]; modes?: string[] };
   title?: string;
   conditions?: Record<string, unknown>;
   expected_benefit?: Record<string, unknown>;
@@ -849,6 +851,19 @@ export async function adoptLesson(projectId: string, lessonId: string): Promise<
 export async function rejectLesson(projectId: string, lessonId: string): Promise<Lesson> {
   return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/${lessonId}/reject`, {
     method: "POST",
+  });
+}
+
+/** 限定规则的适用范围；两个列表皆空表示恢复全局适用。 */
+export async function setLessonScope(
+  projectId: string,
+  lessonId: string,
+  scope: { datasets?: string[]; modes?: string[] },
+): Promise<Lesson> {
+  return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/${lessonId}/scope`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ datasets: scope.datasets ?? [], modes: scope.modes ?? [] }),
   });
 }
 

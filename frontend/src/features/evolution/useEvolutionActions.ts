@@ -9,6 +9,7 @@ import {
   markLessonConflict,
   rejectLesson,
   setLessonEnabled,
+  setLessonScope,
   resumeLessonExtraction,
   type AgentSession,
   type Project,
@@ -28,6 +29,7 @@ interface EvolutionActions {
   handleAdoptLesson: (lessonId: string) => Promise<void>;
   handleRejectLesson: (lessonId: string) => Promise<void>;
   handleSetLessonEnabled: (lessonId: string, enabled: boolean) => Promise<void>;
+  handleSetLessonScope: (lessonId: string, scope: { datasets?: string[]; modes?: string[] }) => Promise<void>;
   handleMarkLessonConflict: (lessonId: string, reason: string) => Promise<void>;
 }
 
@@ -173,6 +175,15 @@ export function useEvolutionActions({
     await invalidateEvolutionLists(project.id);
   }
 
+  async function handleSetLessonScope(
+    lessonId: string,
+    scope: { datasets?: string[]; modes?: string[] },
+  ) {
+    if (!project) return;
+    await setLessonScope(project.id, lessonId, scope);
+    await invalidateEvolutionLists(project.id);
+  }
+
   async function handleMarkLessonConflict(lessonId: string, reason: string) {
     if (!project) return;
     await markLessonConflict(project.id, lessonId, reason);
@@ -185,6 +196,7 @@ export function useEvolutionActions({
     handleAdoptLesson,
     handleRejectLesson,
     handleSetLessonEnabled,
+    handleSetLessonScope,
     handleMarkLessonConflict,
   };
 }
