@@ -220,6 +220,7 @@ export function AppShell() {
     handleRetryLearningExtraction,
     handleAdoptLesson,
     handleRejectLesson,
+    handleSetLessonEnabled,
     handleMarkLessonConflict,
   } = useEvolutionActions({ project, activeSession, setLocalEvents });
   const {
@@ -668,6 +669,7 @@ export function AppShell() {
             onSelectExperimentRun={handleSelectExperimentRun}
             onSelectProjectFile={handleSelectProjectFile}
             onReject={handleRejectLesson}
+            onSetLessonEnabled={handleSetLessonEnabled}
           />
         </Suspense>
       ) : (

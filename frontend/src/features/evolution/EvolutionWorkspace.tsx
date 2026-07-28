@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   GitMerge,
   Network,
+  PauseCircle,
+  PlayCircle,
   ShieldCheck,
   SlidersHorizontal,
   XCircle,
@@ -47,6 +49,7 @@ type EvolutionWorkspaceProps = {
   onSelectProjectFile?: (path: string) => void;
   onReject: (lessonId: string) => Promise<void>;
   onMarkConflict: (lessonId: string, reason: string) => Promise<void>;
+  onSetLessonEnabled?: (lessonId: string, enabled: boolean) => Promise<void>;
 };
 
 const statusLabel: Record<LessonStatus, string> = {
@@ -101,6 +104,7 @@ export function EvolutionWorkspace({
   onSelectProjectFile,
   onReject,
   onMarkConflict,
+  onSetLessonEnabled,
 }: EvolutionWorkspaceProps) {
   // Tab control: "rules" | "graph"
   const [activeTab, setActiveTab] = useState<EvolutionTabId>(initialTab ?? "rules");
@@ -421,6 +425,34 @@ export function EvolutionWorkspace({
                         <AlertTriangle size={14} />
                         标记冲突
                       </button>
+                    </div>
+                  ) : null}
+                  {selectedLesson.status === "high_confidence" ? (
+                    <div className="lesson-actions">
+                      {selectedLesson.enabled === false ? (
+                        <>
+                          <span className="lesson-disabled-note">
+                            已停用 · 不再注入后续运行
+                          </span>
+                          <button
+                            disabled={!onSetLessonEnabled}
+                            onClick={() => void onSetLessonEnabled?.(selectedLesson.id, true)}
+                            type="button"
+                          >
+                            <PlayCircle size={14} />
+                            重新启用
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          disabled={!onSetLessonEnabled}
+                          onClick={() => void onSetLessonEnabled?.(selectedLesson.id, false)}
+                          type="button"
+                        >
+                          <PauseCircle size={14} />
+                          停用规则
+                        </button>
+                      )}
                     </div>
                   ) : null}
                 </article>

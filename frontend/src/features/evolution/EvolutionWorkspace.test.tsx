@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getKnowledgeGraph, type KnowledgeGraphResult } from "../../lib/api";
+import { getKnowledgeGraph, type KnowledgeGraphResult, type Lesson } from "../../lib/api";
 import { EvolutionWorkspace } from "./EvolutionWorkspace";
 
 vi.mock("../../lib/api", async (importOriginal) => {
@@ -224,5 +224,54 @@ describe("EvolutionWorkspace knowledge graph async states", () => {
     fireEvent.click(screen.getByRole("button", { name: /年龄字段缺少稳定规则/ }));
     await waitFor(() => expect((locator as HTMLSelectElement).value).toBe("column-age"));
     expect(screen.getByText("数值型 (Numeric)")).toBeTruthy();
+  });
+});
+
+describe("已采纳规则的停用与启用", () => {
+  function adoptedLesson(overrides: Partial<Lesson> = {}): Lesson {
+    return {
+      id: "lesson-1",
+      source_type: "analysis",
+      source_id: "session-1",
+      domain: ["data_analysis"],
+      observation: "低缺失率数值列适合中位数填充。",
+      recommendation: "对偏态数值列优先使用中位数填充。",
+      confidence: 0.82,
+      status: "high_confidence",
+      evidence: {},
+      enabled: true,
+      created_at: "2026-07-27T00:00:00Z",
+      updated_at: "2026-07-27T00:00:00Z",
+      ...overrides,
+    };
+  }
+
+  function openRulesTab(lesson: Lesson, onSetEnabled = vi.fn(async () => undefined)) {
+    renderWorkspace({ initialTab: "rules", lessons: [lesson], onSetLessonEnabled: onSetEnabled });
+    fireEvent.click(screen.getByRole("button", { name: /中位数填充/ }));
+    return onSetEnabled;
+  }
+
+  it("为生效中的规则提供停用入口", () => {
+    const onSetEnabled = openRulesTab(adoptedLesson());
+
+    fireEvent.click(screen.getByRole("button", { name: "停用规则" }));
+
+    expect(onSetEnabled).toHaveBeenCalledWith("lesson-1", false);
+  });
+
+  it("已停用的规则显示为不再注入，并可重新启用", () => {
+    const onSetEnabled = openRulesTab(adoptedLesson({ enabled: false }));
+
+    expect(screen.getByText(/已停用/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "重新启用" }));
+
+    expect(onSetEnabled).toHaveBeenCalledWith("lesson-1", true);
+  });
+
+  it("待审核的经验不提供停用入口", () => {
+    openRulesTab(adoptedLesson({ status: "pending_review" }));
+
+    expect(screen.queryByRole("button", { name: "停用规则" })).toBeNull();
   });
 });

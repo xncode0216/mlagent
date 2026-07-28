@@ -8,6 +8,7 @@ import {
   extractLessonsFromSession,
   markLessonConflict,
   rejectLesson,
+  setLessonEnabled,
   resumeLessonExtraction,
   type AgentSession,
   type Project,
@@ -26,6 +27,7 @@ interface EvolutionActions {
   handleRetryLearningExtraction: () => Promise<void>;
   handleAdoptLesson: (lessonId: string) => Promise<void>;
   handleRejectLesson: (lessonId: string) => Promise<void>;
+  handleSetLessonEnabled: (lessonId: string, enabled: boolean) => Promise<void>;
   handleMarkLessonConflict: (lessonId: string, reason: string) => Promise<void>;
 }
 
@@ -165,6 +167,12 @@ export function useEvolutionActions({
     await invalidateEvolutionLists(project.id);
   }
 
+  async function handleSetLessonEnabled(lessonId: string, enabled: boolean) {
+    if (!project) return;
+    await setLessonEnabled(project.id, lessonId, enabled);
+    await invalidateEvolutionLists(project.id);
+  }
+
   async function handleMarkLessonConflict(lessonId: string, reason: string) {
     if (!project) return;
     await markLessonConflict(project.id, lessonId, reason);
@@ -176,6 +184,7 @@ export function useEvolutionActions({
     handleRetryLearningExtraction,
     handleAdoptLesson,
     handleRejectLesson,
+    handleSetLessonEnabled,
     handleMarkLessonConflict,
   };
 }

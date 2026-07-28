@@ -22,17 +22,24 @@ const FEATURE_STYLE_FILES = [
   ["evolution", "../src/styles/evolution.css"],
   ["responsive", "../src/styles/responsive.css"],
 ];
-const stylesCss = readFileSync(stylesPath, "utf8");
-const tokensCss = existsSync(tokensPath) ? readFileSync(tokensPath, "utf8") : "";
-const foundationCss = existsSync(foundationPath)
-  ? readFileSync(foundationPath, "utf8")
-  : "";
-const themesCss = existsSync(themesPath) ? readFileSync(themesPath, "utf8") : "";
+/**
+ * 读取时统一行尾。这些契约检查的是导入顺序、令牌与选择器，与行尾风格无关；
+ * 而 git 的 autocrlf 会在 Windows 检出时把工作区换成 CRLF，
+ * 若按原始字节比较，任何 Windows 全新克隆都会失败。
+ */
+function readStyle(path) {
+  return existsSync(path) ? readFileSync(path, "utf8").replace(/\r\n/g, "\n") : "";
+}
+
+const stylesCss = readStyle(stylesPath);
+const tokensCss = readStyle(tokensPath);
+const foundationCss = readStyle(foundationPath);
+const themesCss = readStyle(themesPath);
 const featureStyles = Object.fromEntries(
-  FEATURE_STYLE_FILES.map(([domain, relativePath]) => {
-    const path = fileURLToPath(new globalThis.URL(relativePath, import.meta.url));
-    return [domain, existsSync(path) ? readFileSync(path, "utf8") : ""];
-  }),
+  FEATURE_STYLE_FILES.map(([domain, relativePath]) => [
+    domain,
+    readStyle(fileURLToPath(new globalThis.URL(relativePath, import.meta.url))),
+  ]),
 );
 const featureCss = Object.values(featureStyles).join("\n");
 const implementationCss = `${themesCss}\n${foundationCss}\n${featureCss}`;

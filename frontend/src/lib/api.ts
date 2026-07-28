@@ -137,6 +137,9 @@ export type Lesson = {
   confidence: number;
   status: LessonStatus;
   evidence: Record<string, unknown>;
+  // 与 status 正交：已采纳的规则可以被停用，停用后不再注入但保留采纳记录。
+  // 可选是因为升级前写入的记录没有该字段，缺失一律按启用处理。
+  enabled?: boolean;
   title?: string;
   conditions?: Record<string, unknown>;
   expected_benefit?: Record<string, unknown>;
@@ -846,6 +849,21 @@ export async function adoptLesson(projectId: string, lessonId: string): Promise<
 export async function rejectLesson(projectId: string, lessonId: string): Promise<Lesson> {
   return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/${lessonId}/reject`, {
     method: "POST",
+  });
+}
+
+/** 开关已采纳规则的注入。停用保留采纳记录，只是让它不再影响后续运行。 */
+export async function setLessonEnabled(
+  projectId: string,
+  lessonId: string,
+  enabled: boolean,
+  reason = "",
+): Promise<Lesson> {
+  const action = enabled ? "enable" : "disable";
+  return request<Lesson>(`/api/projects/${projectId}/evolution/lessons/${lessonId}/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    ...(enabled ? {} : { body: JSON.stringify({ reason }) }),
   });
 }
 

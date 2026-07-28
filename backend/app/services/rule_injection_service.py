@@ -14,7 +14,7 @@ class RuleInjectionService:
 
     def match_rules(self, session_id: str, context: dict[str, Any]) -> dict[str, Any]:
         matches = []
-        for lesson in self.evolution.list_lessons(status="high_confidence"):
+        for lesson in self.evolution.list_active_rules():
             score = self._score_lesson(
                 lesson.conditions or {},
                 lesson.domain,

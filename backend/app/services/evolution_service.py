@@ -22,6 +22,10 @@ class LessonRecord:
     title: str = ""
     conditions: dict[str, Any] | None = None
     expected_benefit: dict[str, Any] | None = None
+    # 与 status 正交：status 是审核结论（是否认可），enabled 是运行开关（当前是否注入）。
+    # 合并成一种状态会丢失"曾被采纳"这一事实，重新启用时也无从知道该回到哪个状态。
+    # 默认 True，使升级前已有记录保持生效，不会被静默停用。
+    enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -198,6 +202,28 @@ class EvolutionService:
         self._write_rule_index()
         return lesson
 
+    def set_lesson_enabled(
+        self,
+        lesson_id: str,
+        enabled: bool,
+        reason: str = "",
+    ) -> LessonRecord:
+        """Turn an adopted rule's injection on or off.
+
+        Adoption used to be a one-way door: once a lesson reached
+        high_confidence it influenced every later run with no way to stop it.
+        Disabling leaves the review verdict intact — the lesson stays adopted
+        and keeps its evidence — but takes it out of the injected rule set.
+        """
+        lesson = self.get_lesson(lesson_id)
+        lesson.enabled = enabled
+        lesson.updated_at = datetime.now(UTC).isoformat()
+        if not enabled and reason:
+            lesson.evidence = {**lesson.evidence, "disabled_reason": reason}
+        self._write_lesson(lesson)
+        self._write_rule_index()
+        return lesson
+
     def mark_conflict(self, lesson_id: str, reason: str) -> LessonRecord:
         lesson = self.get_lesson(lesson_id)
         lesson.status = "conflicted"
@@ -232,14 +258,24 @@ class EvolutionService:
             encoding="utf-8",
         )
 
+    def list_active_rules(self) -> list[LessonRecord]:
+        """The rules that may be injected: adopted and not disabled.
+
+        Both the persisted rule index and live rule matching read from here so
+        the two cannot drift apart and leave a disabled rule still influencing
+        runs through one of the paths.
+        """
+        return [
+            lesson
+            for lesson in self.list_lessons(status="high_confidence")
+            if lesson.enabled
+        ]
+
     def _write_rule_index(self) -> None:
         self.rules_dir.mkdir(parents=True, exist_ok=True)
-        high_confidence = [
-            asdict(lesson)
-            for lesson in self.list_lessons(status="high_confidence")
-        ]
+        active = [asdict(lesson) for lesson in self.list_active_rules()]
         self.rule_index_path.write_text(
-            json.dumps({"items": high_confidence}, ensure_ascii=False, indent=2),
+            json.dumps({"items": active}, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 

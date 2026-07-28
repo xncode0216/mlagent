@@ -225,6 +225,131 @@ def test_match_rules_api_writes_injection_log(tmp_path, monkeypatch):
     assert log_response.json()["items"]
 
 
+def _adopted_lesson(client, project_id: str) -> dict:
+    lesson = client.post(
+        f"/api/projects/{project_id}/evolution/lessons/extract",
+        json={
+            "source_type": "analysis",
+            "source_id": "session-1",
+            "domain": ["data-analysis", "missing-value"],
+            "observation": "age has low missing ratio",
+            "recommendation": "Use median imputation",
+            "confidence": 0.82,
+            "conditions": {
+                "task_modes": ["analysis"],
+                "feature_type": "numeric",
+                "missing_ratio_range": [0, 0.05],
+            },
+            "evidence": {},
+        },
+    ).json()
+    return client.post(
+        f"/api/projects/{project_id}/evolution/lessons/{lesson['id']}/adopt"
+    ).json()
+
+
+def _match_context(client, project_id: str, session_id: str) -> dict:
+    return client.post(
+        f"/api/projects/{project_id}/evolution/rules/match",
+        json={
+            "session_id": session_id,
+            "context": {
+                "mode": "analysis",
+                "feature_type": "numeric",
+                "missing_ratio": 0.02,
+                "tags": ["missing-value"],
+            },
+        },
+    ).json()
+
+
+def test_disabling_an_adopted_rule_stops_it_being_injected(tmp_path, monkeypatch):
+    # 采纳此前是一扇单向门：一条经验被采纳后会永久影响之后每一次运行，
+    # 即使事后发现它是错的，也没有关闭开关。
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = _adopted_lesson(client, project["id"])
+    assert _match_context(client, project["id"], "session-before")["matched_rules"]
+
+    disabled = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/disable",
+        json={"reason": "在时间序列数据上给出了错误的填充建议"},
+    )
+
+    assert disabled.status_code == 200
+    assert disabled.json()["enabled"] is False
+    # 停用只关闭注入，不推翻"曾经过审核"这一事实
+    assert disabled.json()["status"] == "high_confidence"
+    assert not _match_context(client, project["id"], "session-after")["matched_rules"]
+
+    index = json.loads(
+        (tmp_path / "dev-user" / project["id"] / "evolution" / "rules" / "index.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert index["items"] == []
+
+
+def test_re_enabling_a_rule_restores_injection(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = _adopted_lesson(client, project["id"])
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/disable", json={})
+
+    enabled = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/enable"
+    )
+
+    assert enabled.status_code == 200
+    assert enabled.json()["enabled"] is True
+    assert _match_context(client, project["id"], "session-after")["matched_rules"]
+
+
+def test_disable_records_an_auditable_reason(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = _adopted_lesson(client, project["id"])
+
+    disabled = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/disable",
+        json={"reason": "与新的业务口径冲突"},
+    ).json()
+
+    assert disabled["evidence"]["disabled_reason"] == "与新的业务口径冲突"
+
+
+def test_existing_adopted_lessons_stay_enabled_by_default(tmp_path, monkeypatch):
+    # 已有记录没有 enabled 字段，读取时必须视为启用——否则一次升级会静默停掉所有规则
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = _adopted_lesson(client, project["id"])
+
+    lesson_path = (
+        tmp_path
+        / "dev-user"
+        / project["id"]
+        / "evolution"
+        / "lessons"
+        / "high-confidence"
+        / f"{lesson['id']}.json"
+    )
+    stored = json.loads(lesson_path.read_text(encoding="utf-8"))
+    stored.pop("enabled", None)
+    lesson_path.write_text(json.dumps(stored, ensure_ascii=False), encoding="utf-8")
+
+    listed = client.get(f"/api/projects/{project['id']}/evolution/lessons").json()["items"]
+    assert [item["enabled"] for item in listed] == [True]
+    assert _match_context(client, project["id"], "session-legacy")["matched_rules"]
+
+
 def test_mark_lesson_conflict_api(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()
