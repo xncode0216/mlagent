@@ -15,6 +15,10 @@ class RuleInjectionService:
     def match_rules(self, session_id: str, context: dict[str, Any]) -> dict[str, Any]:
         matches = []
         for lesson in self.evolution.list_active_rules():
+            # scope 先于打分：它是用户设定的边界，越界即完全不考虑，
+            # 否则一条高置信规则仍可能靠 conditions 打分跨过阈值而越界生效。
+            if not self._within_scope(lesson.scope, context):
+                continue
             score = self._score_lesson(
                 lesson.conditions or {},
                 lesson.domain,
@@ -65,6 +69,23 @@ class RuleInjectionService:
         }
         with self.injection_log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def _within_scope(scope: dict[str, Any] | None, context: dict[str, Any]) -> bool:
+        """Whether a rule is allowed to apply at all in this context.
+
+        An empty or absent dimension places no restriction on that dimension,
+        so a lesson saved before scoping existed keeps applying everywhere.
+        """
+        if not scope:
+            return True
+        datasets = scope.get("datasets") or []
+        if datasets and context.get("dataset_path") not in datasets:
+            return False
+        modes = scope.get("modes") or []
+        if modes and context.get("mode") not in modes:
+            return False
+        return True
 
     @staticmethod
     def _score_lesson(

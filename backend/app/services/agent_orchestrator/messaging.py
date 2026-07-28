@@ -259,6 +259,9 @@ class MessagingMixin:
             session_id=self.session_id,
             context={
                 "mode": context.mode,
+                # 规则范围按数据集限定，因此匹配上下文必须带上真实的活动数据集，
+                # 否则限定到当前数据集的规则会被判为越界而完全不生效。
+                "dataset_path": context.active_file,
                 "tags": ["missing-value"],
             },
         )

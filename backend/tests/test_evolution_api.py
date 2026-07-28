@@ -350,6 +350,95 @@ def test_existing_adopted_lessons_stay_enabled_by_default(tmp_path, monkeypatch)
     assert _match_context(client, project["id"], "session-legacy")["matched_rules"]
 
 
+def _match_with(client, project_id: str, context: dict) -> list:
+    return client.post(
+        f"/api/projects/{project_id}/evolution/rules/match",
+        json={"session_id": "scoped-session", "context": context},
+    ).json()["matched_rules"]
+
+
+_BROAD_CONTEXT = {
+    "mode": "analysis",
+    "feature_type": "numeric",
+    "missing_ratio": 0.02,
+    "tags": ["missing-value"],
+}
+
+
+def test_scoping_a_rule_to_datasets_gates_it_outside_them(tmp_path, monkeypatch):
+    # scope 是用户设定的硬边界，必须先于打分生效：否则高置信规则仍会越界跨过阈值
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = _adopted_lesson(client, project["id"])
+
+    scoped = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/scope",
+        json={"datasets": ["data/telecom_churn.csv"]},
+    )
+
+    assert scoped.status_code == 200
+    assert scoped.json()["scope"]["datasets"] == ["data/telecom_churn.csv"]
+
+    inside = _match_with(
+        client, project["id"], {**_BROAD_CONTEXT, "dataset_path": "data/telecom_churn.csv"}
+    )
+    outside = _match_with(
+        client, project["id"], {**_BROAD_CONTEXT, "dataset_path": "data/other.csv"}
+    )
+
+    assert len(inside) == 1
+    assert outside == []
+
+
+def test_scope_gate_beats_a_strong_condition_match(tmp_path, monkeypatch):
+    # 即使 conditions 打分很高，越出 scope 也必须完全不注入
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = _adopted_lesson(client, project["id"])
+    client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/scope",
+        json={"modes": ["machine-learning"]},
+    )
+
+    # 这个上下文让 conditions 满分命中，但模式不在 scope 内
+    assert _match_with(client, project["id"], _BROAD_CONTEXT) == []
+
+
+def test_an_unscoped_rule_still_applies_everywhere(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    _adopted_lesson(client, project["id"])
+
+    assert len(_match_with(client, project["id"], {**_BROAD_CONTEXT, "dataset_path": "data/any.csv"})) == 1
+
+
+def test_clearing_a_scope_restores_unrestricted_matching(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = _adopted_lesson(client, project["id"])
+    client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/scope",
+        json={"datasets": ["data/telecom_churn.csv"]},
+    )
+    assert _match_with(client, project["id"], {**_BROAD_CONTEXT, "dataset_path": "data/x.csv"}) == []
+
+    cleared = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/scope",
+        json={"datasets": [], "modes": []},
+    )
+
+    assert cleared.json()["scope"] == {"datasets": [], "modes": []}
+    assert len(_match_with(client, project["id"], {**_BROAD_CONTEXT, "dataset_path": "data/x.csv"})) == 1
+
+
 def test_mark_lesson_conflict_api(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()
