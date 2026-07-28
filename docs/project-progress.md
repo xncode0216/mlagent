@@ -1,10 +1,10 @@
 # MLAgent 项目进度同步
 
-更新时间：2026-07-24
+更新时间：2026-07-28
 
 ## 当前阶段
 
-项目已完成生产就绪整改的 P0/P1，并按顺序关闭 P2-1 至 P2-7：设计令牌、真实加载/动效、响应式降级、信息设计、命令面板/Slash Commands、Cytoscape 知识图谱升级，以及可访问性审计。当前进入 P2-8 Bundle performance，下一步在现有 Markdown/图表/图谱懒加载基础上做工作区级路由拆分与可量化打包预算。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
+项目已完成生产就绪整改 P0/P1、P2-1 至 P2-8 全部切片，以及 P3-1 至 P3-4 的自进化闭环与工程健康整改。当前进入 P3-5 超大文件拆分：第一片已把 `RightPanel.tsx` 从 2,367 行按状态与职责边界拆到 329 行，并保持首屏 bundle 不变；后续将依次处理 `stages.py`、`componentRegistry.ts` 和 `machine_learning.py`。当前分支具备真实 LLM 路由、认证与多租户、结构化可观测性、文件系统优先持久化、现代前端状态架构、自动 CI 与 Playwright golden path。
 
 ## 已完成
 
@@ -27,22 +27,26 @@
 - P2-2 加载态切片：项目、会话、文件、Artifact Preview、Evolution 图谱、ActiveFilePreview 与 model/auth 顶栏服务状态已接入真实异步语义。选中产物内容由版本化 React Query 缓存托管；图谱使用稳定查询键，并在经验审核/训练变更后显式失效；活动文件复用 current-version 查询键，后台刷新保留缓存内容与未保存草稿，保存后同步写入内容缓存并失效文件树元数据。模型/账户弹层保留最后成功 provider/身份并就地重试，登出失败不丢身份、成功先提交匿名缓存再验证。各区域支持首次加载、后台刷新、错误、局部恢复和 `aria-busy`；无项目时显示明确引导并禁用不安全操作。
 - P2-2 完成反馈：从结构化 `stage_completed`、`step_completed`、`artifact_created` 事件派生最近一次真实完成状态；后续普通进度不会清除它，新的完成事件会替换旧状态。Workflow 摘要通过 `aria-live="polite"` 播报阶段或产物完成，产物提供真实打开动作；不对文件/训练等服务端规范写入预先宣告成功，只在服务端成功后提交缓存，并保留明确 pending/error 状态。
 - P2-7 可访问性审计：`accessibility.e2e.ts` 用 `@axe-core/playwright` 对分析工作区、命令面板、模型/账户对话框、ML 实验详情、Evolution 图谱 6 个关键状态做 WCAG 2 A/AA 零容忍扫描；全局 `:focus-visible` 基线与 muted 文本对比度已达审计阈值；抽取共享 `useDialogFocus` hook，统一命令面板与模型/账户 popover 的焦点移入、Tab 陷阱与关闭后焦点恢复，E2E 追加真实浏览器键盘焦点断言。
+- P2-8 Bundle performance：`EvolutionWorkspace` 已按路由懒加载，首屏 JS 降至 458.95kB / gzip 131.84kB；构建流程加入可量化预算门禁，约束首屏 JS/CSS、chunk 数量与重依赖懒加载状态，P0/P1/P2 主线全部关闭。
+- P3-1 至 P3-3 自进化闭环：现代 `data_quality_profile.json` 已接入经验抽取；训练失败会真实发射 `kernel_output`；未解决 kernel 错误会进入情境标签。数据缺失和运行时错误两类经验均可在真实主路径完成“发现 → 沉淀 → 采纳 → 再次命中”。
+- P3-4 工程测试：为四个领域 action hook 增加 31 项直接契约测试，覆盖文件路径级联、产物交接、训练入参与失败处理、治理操作缓存失效；同时修复训练经验 domain 使用下划线导致规则永远无法命中的词汇不一致问题。
+- P3-5 第一切片：`RightPanel.tsx` 拆为 9 组职责模块，实验详情的局部状态与联动一并下沉；修复“评估策略”乱码与二进制提示双重字面量，新增 29 项 CSV/格式化测试，首屏 bundle 与拆分前逐字节一致。
 
 ## 最近验证
 
-- 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，结果 `222 passed, 3 skipped`。
-- 前端测试：`npm.cmd test`，结果 `33 passed files / 195 tests`（设计契约 15/15）。
+- 后端测试：`backend\.venv\Scripts\python.exe -m pytest -q`，最近完整结果 `252 passed, 3 skipped`。
+- 前端测试：`npm.cmd test`，最近完整结果 `43 passed files / 307 tests`。
 - 前端 lint：`npm.cmd run lint`，通过。
-- 前端构建：`npm.cmd run build`，通过。
-- Playwright E2E：本次 `accessibility.e2e.ts` `2 passed`——axe 对 6 个关键状态 0 违规，并断言命令面板/模型/账户对话框的键盘焦点移入·陷入·恢复；设计系统、数据画像→预处理→训练 golden path、命令面板发送、Cytoscape 图谱与响应式/长路径的 `6 passed` 在 P2-6 验证保持通过。本机已补建 `backend/.venv`（此前缺失），Playwright webServer 现可本地拉起后端执行 E2E。
-- GitHub：`feat/p0-backend-hardening` 已推送并建立草稿 PR #2；backend/frontend/Playwright 三个 CI 闸门全部通过。
-- 后端健康检查：`http://127.0.0.1:8000/health` 返回 `{"status":"ok","service":"mlagent-api"}`。
+- 前端构建：`npm.cmd run build`，TypeScript、Vite 与 bundle 预算门禁通过；P3-5 第一切片首屏 JS 为 469.02kB / gzip 135.02kB。
+- Playwright E2E：真实 FastAPI + Vite 全套 `10 passed`，覆盖自然语言数据/ML golden path、自进化闭环、命令面板、知识图谱、响应式与可访问性状态。
+- GitHub：当前分支 `refactor/right-panel-split` 已推送并建立 PR #10；backend、frontend、Playwright 三个 CI 闸门全部通过。
+- 本地健康检查：当前未启动开发服务，本次未执行在线探测；后端回归状态以完整 pytest 与 GitHub CI 结果为准。
 
 ## 下一步优先级
 
-1. P2-8 Bundle performance：在现有 Markdown、图表和图谱懒加载基础上继续做工作区级拆包与可量化预算。
-2. 继续扩展真实数据/ML 工具、上下文 inspector/provenance，以及原始数据→训练→诊断→导出→learned rule 的完整浏览器/API golden path。
-3. Docker Kernel 部署验证、Redis 多实例验证及 GitHub Actions Node 运行时升级。
+1. P3-5 超大文件拆分：按已勘察边界先把 `stages.py` 的 15 个 `_run_*` 方法拆为 recovery/data/model/governance mixin，再处理 `componentRegistry.ts` 与 `machine_learning.py`。
+2. 每个拆分切片保持外部接口与行为不变，以现有后端 252 项、前端 307 项及 10 条 Playwright E2E 为回归基线，并持续守住 bundle 预算。
+3. P3-5 完成后继续扩展真实数据/ML 工具与全链路 provenance，并推进 Docker Kernel、Redis 多实例和 GitHub Actions Node 运行时升级验证。
 
 ## 当前注意事项
 

@@ -1309,3 +1309,14 @@
 - **两次自身失误**：① `renderFileActions(undefined)` 触发 JS 默认参数回落，"没有项目"分支根本没被测到，改为显式传对象；② 训练结果夹具缺 `runs`/`metrics_artifact`/`model_artifact`，报错是夹具不全而非代码问题。两者都由测试自身暴露并修正。
 - **门禁**：前端 Vitest `41 files / 278 tests`、ESLint、build + 预算门禁；后端 `252 passed, 3 skipped`；Playwright `10 passed`（domain 词汇改动未影响既有断言）。
 - **动态计划**：P3 仅剩 P3-5（超大文件拆分）。该层现在有了直接测试托底，拆分风险显著下降。
+
+## 2026-07-28 P3-5 切片 1：RightPanel 拆分（2,367 → 329 行）
+
+- **先复核证据再动手**：四个待拆文件都比 P3 盘点时记录的更大（`RightPanel.tsx` 2,278→2,367、`stages.py` 1,841→1,950、`componentRegistry.ts` 1,287→1,345、`machine_learning.py` 1,097→1,228）——它们在 P3-1~P3-4 期间仍在膨胀，问题在恶化而非静止。
+- **延续目录里已有的模式，而不是另发明一套**：`right-panel/` 下 `errorSlices`、`transformDiff`、`trainingDiagnostics`、`inspectorContext` 早已是"纯逻辑拆成同目录模块 + 各带测试"，所以剩下的 2,367 行全是组件与展示层。按职责拆成 9 个模块：`panelTabs`、`panelTypes`、`panelFormat`、`csvPreview`、`PanelPrimitives`、`ArtifactPreview`、`ActiveFilePreview`、`ChartsEmptyState`、`TrainingPanel` + `TrainingRunDetail`。
+- **拆分点按状态归属选，不按行数切**：`TrainingPanel` 原有 15 个 `useState`。若只把「实验详情」当模板切走，它需要约 20 个 props——等于没拆。审计后确认预测样本读取、切片筛选、候选模型排序、报告/导出按钮态**只服务于选中实验这一个视图**，于是连状态一起搬进 `TrainingRunDetail`，父组件只保留训练配置、GPU 操作与历史列表选择，接口收窄到 `onFeedback` + `onOpenArtifactPath`。副作用是原先跨 400 行的「点击错误切片 → 过滤预测样本」联动现在收在同一文件内，反而更易读。
+- **揪出一处用户直接可见的缺陷**：实验详情里"评估策略"标签是乱码 `璇勪及绛栫暐`——"评估策略" 的 UTF-8 字节被按 GBK 解读的产物（`E8AF`→璇、`84E4`→勪…）。按 GBK 误读的特征字符全项目扫描后确认**仅此一处**，其余中文完好。
+- **没有在重构里新种一个同类断裂**：搬 `ActiveFilePreview` 时我一度把二进制提示语在判定处（`activeFileReadError`）与消费处（`isBinary` 比较）各写了一遍字面量。这正是本轮反复修的"两侧词汇不一致致链路静默失效"模式——改一处另一处会静默失配，下载入口就再也不出现。已改为从 `panelFormat` 单一导出 `BINARY_PREVIEW_MESSAGE`。
+- **拆分的附带收益是可测性**：`parseCsvPreview` 此前埋在组件文件里无法直接测，而它有真正会坏的逻辑。新增 29 项测试——CSV 的引号包裹逗号、`""` 反转义、引号内换行不分行、CRLF、maxRows 截断、无尾换行；格式化层的"零值不能当缺失值"（`formatMetricCount(0)` 必须是 `"0"` 而非 `"-"`）、415→二进制提示、扩展名路由大小写不敏感。
+- **门禁**：前端 `43 files / 307 tests`（基线 41/278）+ ESLint + build；后端 `252 passed, 3 skipped`；Playwright `10 passed`。**首屏 bundle 与拆分前逐字节一致**（469.02kB / gzip 135.02kB，`HistogramChart` 仍是独立懒加载 chunk）——这是"纯结构改动、未引入新首屏依赖"的直接证据。
+- **动态计划**：P3-5 余下三个文件。`stages.py` 已勘察好边界——单个 `StageRunnersMixin` 内 15 个 `_run_*` 方法，每个 80~200 行，可按 intent 分组为 recovery / data / model / governance 四个 mixin 再继承回来，属机械拆分；`componentRegistry.ts` 与 `machine_learning.py` 待勘察。
