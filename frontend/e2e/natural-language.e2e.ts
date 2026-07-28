@@ -3,20 +3,34 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 const API_BASE_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:8000";
 const DATASET_PATH = "data/nl_churn.csv";
 
+// 24 行、age 缺 1 个（4.2%）：低缺失率数值列，正是经验抽取应当沉淀的情形。
+// 缺失值同时让预处理计划的中位数填充走上真实路径。
 const DATASET_CSV = [
   "age,monthly_spend,support_tickets,churn",
   "22,49,1,no",
+  "24,50,0,no",
   "25,52,0,no",
+  "27,55,1,no",
   "29,58,1,no",
+  "30,60,0,no",
   "31,61,0,no",
+  "33,64,1,no",
   "34,66,2,no",
+  "36,69,1,no",
   "38,72,1,no",
+  "40,76,2,no",
   "42,81,2,yes",
+  "44,85,3,yes",
   "46,88,3,yes",
+  "48,92,3,yes",
   "51,96,4,yes",
+  "54,101,4,yes",
   "57,105,5,yes",
+  "60,112,5,yes",
   "63,118,5,yes",
+  "66,121,6,yes",
   "68,124,6,yes",
+  ",128,6,yes",
 ].join("\n");
 
 type Project = { id: string };
@@ -115,9 +129,20 @@ test("自然语言可驱动从原始数据到经验沉淀的完整工作流", as
     await ask(page, "export the final report and handoff bundle");
     await expect(card(page, "export_bundle")).toBeVisible();
 
-    // 7. 经验沉淀
+    // 7. 经验沉淀：卡片出现还不够，闭环成立的判据是真的产出了可审核的候选。
+    // 抽取器此前只认 legacy 流程的 missing.json，主路径跑完后一个候选也没有。
     await ask(page, "extract lessons and propose learned rules");
     await expect(card(page, "lesson_review")).toBeVisible();
+    const sessions = await api.get(`${API_BASE_URL}/api/projects/${project.id}/sessions`);
+    const analysisSession = ((await sessions.json()).items as Array<{ id: string; mode: string }>)
+      .find((item) => item.mode === "analysis");
+    expect(analysisSession, "分析会话应当存在").toBeTruthy();
+    const candidates = await postJson<{ items: unknown[] }>(
+      api,
+      `/api/projects/${project.id}/evolution/lessons/extract-from-session`,
+      { session_id: analysisSession!.id },
+    );
+    expect(candidates.items.length).toBeGreaterThan(0);
 
     // 8. 回溯：任一回复都能追到产生它的那次执行，日志随即按该 trace 过滤
     await page.getByRole("button", { name: "查看该回复的执行链路" }).last().click();

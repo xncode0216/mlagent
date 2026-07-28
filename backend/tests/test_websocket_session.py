@@ -231,6 +231,53 @@ def test_session_socket_injects_a_real_extracted_lesson(tmp_path, monkeypatch):
     assert lesson["id"] in rules_event["prompt_snippet"]
 
 
+def test_lessons_can_be_extracted_after_the_modern_natural_language_flow(tmp_path, monkeypatch):
+    """自进化闭环的抽取半环必须在产品主路径上成立。
+
+    抽取器此前只认 legacy「分析数据」流程产出的 missing.json；现代自然语言流程
+    产出的是 data_quality_profile.json，因此在主路径跑完后执行"沉淀经验"，
+    一个候选也找不到。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    # 24 行里让 age 缺 1 个 = 4.2%，落在"低缺失率数值列"的 (0, 5%] 区间内
+    rows = "".join(
+        f"{30 + index},{80 + index * 5},{index % 2}\n" for index in range(23)
+    )
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,monthly_spend,churn\n" + rows + ",200,1\n",
+        encoding="utf-8",
+    )
+
+    with client.websocket_connect("/ws/sessions/modern-learn-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "Analyze this dataset and prepare it for modeling",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                },
+            }
+        )
+        for _ in range(60):
+            event = websocket.receive_json()
+            if event["type"] == "task_progress" and event.get("progress") == 1:
+                break
+
+    response = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract-from-session",
+        json={"session_id": "modern-learn-session"},
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert [item["evidence"]["column"] for item in items] == ["age"]
+    assert items[0]["status"] == "pending_review"
+
+
 def test_session_socket_tags_the_run_with_its_real_mode(tmp_path, monkeypatch):
     # 匹配上下文的标签此前写死为 ["missing-value"]，于是按运行领域标注的经验
     # （如 data-analysis）反而对不上，而每次运行都被谎称在处理缺失值。
