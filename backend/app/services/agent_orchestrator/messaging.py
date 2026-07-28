@@ -52,6 +52,24 @@ from app.tools.data_analysis import (
 )
 
 
+# 运行模式到经验领域标签的映射，取值与 LessonExtractor 写入 `domain` 的词汇一致，
+# 否则两侧对不上，标签维度形同虚设。
+_MODE_TAGS = {
+    "analysis": ["data-analysis"],
+    "machine-learning": ["machine-learning", "training"],
+    "evolution": ["evolution"],
+}
+
+
+def _situation_tags(mode: str) -> list[str]:
+    """描述这次运行处于什么情境，用于按领域匹配经验。
+
+    此前这里写死为 ``["missing-value"]``——无论运行在做什么都如此宣称，
+    既让按运行领域标注的经验对不上，也把缺失值经验注入到与之无关的运行里。
+    """
+    return _MODE_TAGS.get(mode, [])
+
+
 class MessagingMixin:
     def _record(self, event: dict[str, Any]) -> dict[str, Any]:
         if self.session_service is None:
@@ -262,7 +280,7 @@ class MessagingMixin:
                 # 规则范围按数据集限定，因此匹配上下文必须带上真实的活动数据集，
                 # 否则限定到当前数据集的规则会被判为越界而完全不生效。
                 "dataset_path": context.active_file,
-                "tags": ["missing-value"],
+                "tags": _situation_tags(context.mode),
             },
         )
         return {

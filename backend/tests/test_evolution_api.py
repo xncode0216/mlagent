@@ -439,6 +439,84 @@ def test_clearing_a_scope_restores_unrestricted_matching(tmp_path, monkeypatch):
     assert len(_match_with(client, project["id"], {**_BROAD_CONTEXT, "dataset_path": "data/x.csv"})) == 1
 
 
+def test_a_lesson_matches_on_what_the_run_actually_knows(tmp_path, monkeypatch):
+    """真实运行开始时只知道模式与数据集，不知道具体列的类型和缺失率。
+
+    打分此前把"上下文没提供这一维"与"这一维不匹配"同等对待，于是抽取器产出的
+    两类经验（missing-value 0.522、kernel-error 0.278）在真实路径下都够不到 0.65
+    阈值——经验被提取、被采纳、被写进规则索引，却从不注入任何一次运行。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract",
+        json={
+            # 与 LessonExtractor 真实产出保持一致
+            "source_type": "analysis_session",
+            "source_id": "session-1",
+            "domain": ["data-analysis", "missing-value"],
+            "observation": "age 缺失率为 2.00%",
+            "recommendation": "优先尝试中位数填充",
+            "confidence": 0.72,
+            "conditions": {
+                "task_modes": ["analysis", "machine-learning"],
+                "feature_type": "numeric",
+                "missing_ratio_range": [0, 0.05],
+            },
+            "evidence": {},
+        },
+    ).json()
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/adopt")
+
+    matched = _match_with(
+        client,
+        project["id"],
+        {"mode": "analysis", "dataset_path": "data/churn.csv", "tags": ["data-analysis"]},
+    )
+
+    assert len(matched) == 1
+
+
+def test_a_lesson_is_not_matched_when_a_known_dimension_disagrees(tmp_path, monkeypatch):
+    # 放宽"未知维度"不能连"已知且不符"也一起放过
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    lesson = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract",
+        json={
+            "source_type": "kernel_error",
+            "source_id": "session-1",
+            "domain": ["runtime", "kernel-error"],
+            "observation": "ModuleNotFoundError",
+            "recommendation": "先确认 Kernel 镜像包含该依赖",
+            "confidence": 0.78,
+            "conditions": {"error_type": "ModuleNotFoundError"},
+            "evidence": {},
+        },
+    ).json()
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/adopt")
+
+    # 一次普通的数据分析运行不该被运行时报错的经验干扰
+    assert _match_with(
+        client,
+        project["id"],
+        {"mode": "analysis", "dataset_path": "data/churn.csv", "tags": ["data-analysis"]},
+    ) == []
+
+    # 真的遇到 kernel 报错时才应命中
+    assert len(
+        _match_with(
+            client,
+            project["id"],
+            {"mode": "analysis", "dataset_path": "data/churn.csv", "tags": ["kernel-error"]},
+        )
+    ) == 1
+
+
 def test_mark_lesson_conflict_api(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()

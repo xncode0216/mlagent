@@ -142,7 +142,8 @@ def _scoped_rule_match(tmp_path, client, project_id: str, scoped_dataset: str, s
         json={
             "source_type": "analysis",
             "source_id": "session-1",
-            "domain": ["missing-value"],
+            # 与 LessonExtractor 及运行情境标签使用同一套词汇
+            "domain": ["data-analysis", "missing-value"],
             "observation": "低缺失率数值列适合中位数填充",
             "recommendation": "对偏态数值列优先使用中位数填充",
             "confidence": 0.95,
@@ -172,6 +173,110 @@ def _scoped_rule_match(tmp_path, client, project_id: str, scoped_dataset: str, s
             if event["type"] == "rules_matched":
                 return event["matched_rules"]
     raise AssertionError("rules_matched event was not emitted")
+
+
+def test_session_socket_injects_a_real_extracted_lesson(tmp_path, monkeypatch):
+    """端到端验证自进化闭环真的闭合：抽取器格式的经验被采纳后应注入真实运行。
+
+    此前匹配上下文把 tags 写死为 ["missing-value"]，无论这次运行在做什么都如此宣称；
+    真实模式反而没有进入标签维度。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,churn\n42,1\n37,0\n",
+        encoding="utf-8",
+    )
+    lesson = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract",
+        json={
+            "source_type": "analysis_session",
+            "source_id": "session-1",
+            "domain": ["data-analysis", "missing-value"],
+            "observation": "age 缺失率为 2.00%",
+            "recommendation": "优先尝试中位数填充",
+            "confidence": 0.72,
+            "conditions": {
+                "task_modes": ["analysis", "machine-learning"],
+                "feature_type": "numeric",
+                "missing_ratio_range": [0, 0.05],
+            },
+            "evidence": {},
+        },
+    ).json()
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/adopt")
+
+    with client.websocket_connect("/ws/sessions/injection-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                },
+            }
+        )
+        rules_event = None
+        for _ in range(12):
+            event = websocket.receive_json()
+            if event["type"] == "rules_matched":
+                rules_event = event
+                break
+
+    assert rules_event is not None
+    assert [item["lesson_id"] for item in rules_event["matched_rules"]] == [lesson["id"]]
+    assert lesson["id"] in rules_event["prompt_snippet"]
+
+
+def test_session_socket_tags_the_run_with_its_real_mode(tmp_path, monkeypatch):
+    # 匹配上下文的标签此前写死为 ["missing-value"]，于是按运行领域标注的经验
+    # （如 data-analysis）反而对不上，而每次运行都被谎称在处理缺失值。
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,churn\n42,1\n37,0\n",
+        encoding="utf-8",
+    )
+    lesson = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract",
+        json={
+            "source_type": "analysis_session",
+            "source_id": "session-1",
+            "domain": ["data-analysis"],
+            "observation": "分析流程中的通用经验",
+            "recommendation": "先画像再决定清洗策略",
+            "confidence": 0.8,
+            "conditions": {"task_modes": ["analysis"]},
+            "evidence": {},
+        },
+    ).json()
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/adopt")
+
+    with client.websocket_connect("/ws/sessions/tagged-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                },
+            }
+        )
+        rules_event = None
+        for _ in range(12):
+            event = websocket.receive_json()
+            if event["type"] == "rules_matched":
+                rules_event = event
+                break
+
+    assert rules_event is not None
+    assert [item["lesson_id"] for item in rules_event["matched_rules"]] == [lesson["id"]]
 
 
 def test_session_socket_applies_a_rule_scoped_to_the_active_dataset(tmp_path, monkeypatch):
