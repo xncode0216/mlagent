@@ -50,7 +50,17 @@ type EvolutionWorkspaceProps = {
   onReject: (lessonId: string) => Promise<void>;
   onMarkConflict: (lessonId: string, reason: string) => Promise<void>;
   onSetLessonEnabled?: (lessonId: string, enabled: boolean) => Promise<void>;
+  onSetLessonScope?: (
+    lessonId: string,
+    scope: { datasets?: string[]; modes?: string[] },
+  ) => Promise<void>;
+  activeDatasetPath?: string;
 };
+
+/** 规则被限定到的边界；为空表示未限定，全局适用。 */
+function scopeBoundaries(lesson: Lesson) {
+  return [...(lesson.scope?.datasets ?? []), ...(lesson.scope?.modes ?? [])];
+}
 
 const statusLabel: Record<LessonStatus, string> = {
   pending_review: "待审核",
@@ -105,6 +115,8 @@ export function EvolutionWorkspace({
   onReject,
   onMarkConflict,
   onSetLessonEnabled,
+  onSetLessonScope,
+  activeDatasetPath,
 }: EvolutionWorkspaceProps) {
   // Tab control: "rules" | "graph"
   const [activeTab, setActiveTab] = useState<EvolutionTabId>(initialTab ?? "rules");
@@ -425,6 +437,45 @@ export function EvolutionWorkspace({
                         <AlertTriangle size={14} />
                         标记冲突
                       </button>
+                    </div>
+                  ) : null}
+                  {selectedLesson.status === "high_confidence" ? (
+                    <div className="lesson-scope">
+                      <span className="lesson-scope-label">适用范围</span>
+                      {scopeBoundaries(selectedLesson).length > 0 ? (
+                        <>
+                          <div className="lesson-scope-values">
+                            {scopeBoundaries(selectedLesson).map((boundary) => (
+                              <code key={boundary}>{boundary}</code>
+                            ))}
+                          </div>
+                          <button
+                            disabled={!onSetLessonScope}
+                            onClick={() =>
+                              void onSetLessonScope?.(selectedLesson.id, { datasets: [], modes: [] })
+                            }
+                            type="button"
+                          >
+                            解除范围限定
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="lesson-scope-values">全部数据集与模式</span>
+                          {activeDatasetPath && onSetLessonScope ? (
+                            <button
+                              onClick={() =>
+                                void onSetLessonScope(selectedLesson.id, {
+                                  datasets: [activeDatasetPath],
+                                })
+                              }
+                              type="button"
+                            >
+                              限定到当前数据集
+                            </button>
+                          ) : null}
+                        </>
+                      )}
                     </div>
                   ) : null}
                   {selectedLesson.status === "high_confidence" ? (

@@ -46,6 +46,12 @@ class DisableRuleRequest(BaseModel):
     reason: str = Field(default="", max_length=2000)
 
 
+class ScopeRuleRequest(BaseModel):
+    # 空列表表示该维度不设限制；两者皆空即恢复为全局适用
+    datasets: list[str] = Field(default_factory=list, max_length=200)
+    modes: list[str] = Field(default_factory=list, max_length=20)
+
+
 class RuleMatchRequest(BaseModel):
     session_id: str = Field(min_length=1)
     context: dict[str, Any] = Field(default_factory=dict)
@@ -231,6 +237,20 @@ def enable_lesson(project_id: str, lesson_id: str) -> LessonRecord:
     service = EvolutionService(_project_root(project_id))
     try:
         return service.set_lesson_enabled(lesson_id, enabled=True)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Lesson not found") from exc
+
+
+@router.post("/lessons/{lesson_id}/scope")
+def scope_lesson(
+    project_id: str,
+    lesson_id: str,
+    payload: ScopeRuleRequest,
+) -> LessonRecord:
+    """限定规则只在指定数据集/模式下生效；两个列表皆空表示恢复全局适用。"""
+    service = EvolutionService(_project_root(project_id))
+    try:
+        return service.set_lesson_scope(lesson_id, payload.datasets, payload.modes)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Lesson not found") from exc
 

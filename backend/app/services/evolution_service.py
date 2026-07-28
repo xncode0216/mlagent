@@ -26,6 +26,10 @@ class LessonRecord:
     # 合并成一种状态会丢失"曾被采纳"这一事实，重新启用时也无从知道该回到哪个状态。
     # 默认 True，使升级前已有记录保持生效，不会被静默停用。
     enabled: bool = True
+    # 用户设定的硬边界，与 agent 推导的 conditions 不同：conditions 是软打分
+    # （"看起来像这类场景"），scope 是"无论多像，只准在这里生效"。
+    # 空表示不限制，因此升级前的记录仍全局适用。
+    scope: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -220,6 +224,27 @@ class EvolutionService:
         lesson.updated_at = datetime.now(UTC).isoformat()
         if not enabled and reason:
             lesson.evidence = {**lesson.evidence, "disabled_reason": reason}
+        self._write_lesson(lesson)
+        self._write_rule_index()
+        return lesson
+
+    def set_lesson_scope(
+        self,
+        lesson_id: str,
+        datasets: list[str],
+        modes: list[str],
+    ) -> LessonRecord:
+        """Restrict where a rule may apply, or clear the restriction.
+
+        Distinct from the agent-derived ``conditions``, which only score how
+        well a situation resembles the one the lesson came from. A scope is a
+        user-imposed boundary: outside it the rule is not considered at all,
+        however strongly its conditions would have scored. Empty lists mean
+        unrestricted.
+        """
+        lesson = self.get_lesson(lesson_id)
+        lesson.scope = {"datasets": list(datasets), "modes": list(modes)}
+        lesson.updated_at = datetime.now(UTC).isoformat()
         self._write_lesson(lesson)
         self._write_rule_index()
         return lesson

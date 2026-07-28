@@ -12,7 +12,12 @@ async function postJson<T>(api: APIRequestContext, path: string, data: unknown):
 }
 
 /** 规则是否会被注入到后续运行——治理生效与否的唯一判据。 */
-async function matchedRuleCount(api: APIRequestContext, projectId: string, sessionId: string) {
+async function matchedRuleCount(
+  api: APIRequestContext,
+  projectId: string,
+  sessionId: string,
+  datasetPath?: string,
+) {
   const result = await postJson<{ matched_rules: unknown[] }>(
     api,
     `/api/projects/${projectId}/evolution/rules/match`,
@@ -23,13 +28,14 @@ async function matchedRuleCount(api: APIRequestContext, projectId: string, sessi
         feature_type: "numeric",
         missing_ratio: 0.02,
         tags: ["missing-value"],
+        ...(datasetPath ? { dataset_path: datasetPath } : {}),
       },
     },
   );
   return result.matched_rules.length;
 }
 
-test("已采纳的规则可以停用，停用后不再影响后续运行", async ({ page, playwright }) => {
+test("已采纳的规则可以停用、重新启用并限定适用范围", async ({ page, playwright }) => {
   const api = await playwright.request.newContext();
 
   try {
@@ -78,6 +84,24 @@ test("已采纳的规则可以停用，停用后不再影响后续运行", async
     await page.getByRole("button", { name: "重新启用" }).click();
     await expect(page.getByRole("button", { name: "停用规则" })).toBeVisible();
     expect(await matchedRuleCount(api, project.id, "after-enable")).toBe(1);
+
+    // 范围限定是比停用更细的边界：规则仍然生效，但只在被限定的数据集上
+    await expect(page.getByText(/全部数据集/)).toBeVisible();
+    await postJson(api, `/api/projects/${project.id}/evolution/lessons/${lesson.id}/scope`, {
+      datasets: ["data/only_here.csv"],
+      modes: [],
+    });
+    await page.reload();
+    await page.getByRole("button", { name: /中位数填充/ }).first().click();
+    await expect(page.getByText("data/only_here.csv")).toBeVisible();
+
+    expect(await matchedRuleCount(api, project.id, "in-scope", "data/only_here.csv")).toBe(1);
+    expect(await matchedRuleCount(api, project.id, "out-of-scope", "data/elsewhere.csv")).toBe(0);
+
+    // 解除限定后恢复全局适用
+    await page.getByRole("button", { name: "解除范围限定" }).click();
+    await expect(page.getByText(/全部数据集/)).toBeVisible();
+    expect(await matchedRuleCount(api, project.id, "unscoped", "data/elsewhere.csv")).toBe(1);
   } finally {
     await api.dispose();
   }

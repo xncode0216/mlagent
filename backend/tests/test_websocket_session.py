@@ -136,6 +136,80 @@ def test_session_socket_links_persisted_messages_to_their_trace(tmp_path, monkey
         assert message["metadata"]["trace_id"] == trace_id
 
 
+def _scoped_rule_match(tmp_path, client, project_id: str, scoped_dataset: str, session_id: str):
+    lesson = client.post(
+        f"/api/projects/{project_id}/evolution/lessons/extract",
+        json={
+            "source_type": "analysis",
+            "source_id": "session-1",
+            "domain": ["missing-value"],
+            "observation": "低缺失率数值列适合中位数填充",
+            "recommendation": "对偏态数值列优先使用中位数填充",
+            "confidence": 0.95,
+            "conditions": {"task_modes": ["analysis"]},
+            "evidence": {},
+        },
+    ).json()
+    client.post(f"/api/projects/{project_id}/evolution/lessons/{lesson['id']}/adopt")
+    client.post(
+        f"/api/projects/{project_id}/evolution/lessons/{lesson['id']}/scope",
+        json={"datasets": [scoped_dataset]},
+    )
+
+    with client.websocket_connect(f"/ws/sessions/{session_id}") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {
+                    "project_id": project_id,
+                    "active_file": "data/customer_churn.csv",
+                },
+            }
+        )
+        for _ in range(12):
+            event = websocket.receive_json()
+            if event["type"] == "rules_matched":
+                return event["matched_rules"]
+    raise AssertionError("rules_matched event was not emitted")
+
+
+def test_session_socket_applies_a_rule_scoped_to_the_active_dataset(tmp_path, monkeypatch):
+    # 规则范围只有在编排器把真实数据集传进匹配上下文时才成立。若不传，
+    # 限定到当前数据集的规则也会被误判为越界而完全不生效。
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,churn\n42,1\n37,0\n",
+        encoding="utf-8",
+    )
+
+    matched = _scoped_rule_match(
+        tmp_path, client, project["id"], "data/customer_churn.csv", "in-scope-session"
+    )
+
+    assert len(matched) == 1
+
+
+def test_session_socket_skips_a_rule_scoped_to_another_dataset(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,churn\n42,1\n37,0\n",
+        encoding="utf-8",
+    )
+
+    matched = _scoped_rule_match(
+        tmp_path, client, project["id"], "data/somewhere_else.csv", "out-of-scope-session"
+    )
+
+    assert matched == []
+
+
 def test_session_socket_emits_distribution_chart_artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()
