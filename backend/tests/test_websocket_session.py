@@ -231,6 +231,117 @@ def test_session_socket_injects_a_real_extracted_lesson(tmp_path, monkeypatch):
     assert lesson["id"] in rules_event["prompt_snippet"]
 
 
+def test_situation_tags_reflect_an_unresolved_kernel_failure(tmp_path, monkeypatch):
+    """有未解决的失败时，运行情境应当带上对应的错误标签。
+
+    情境标签此前只由运行模式派生，因此 `["runtime", "kernel-error"]` 这类经验
+    即使沉淀下来也永远匹配不到——恰恰在最需要它的时候（真的报了同类错误）缺席。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    root = tmp_path / "dev-user" / project["id"]
+    (root / "data" / "customer_churn.csv").write_text("age,churn\n42,1\n37,0\n", encoding="utf-8")
+    lesson = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract",
+        json={
+            "source_type": "kernel_error",
+            "source_id": "session-1",
+            "domain": ["runtime", "kernel-error"],
+            "observation": "ModuleNotFoundError",
+            "recommendation": "先确认 Kernel 镜像包含该依赖",
+            "confidence": 0.78,
+            "conditions": {"error_type": "ModuleNotFoundError"},
+            "evidence": {},
+        },
+    ).json()
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/adopt")
+
+    # 该会话留有一次未解决的训练失败
+    state_dir = root / "sessions" / "failing-session" / "task_state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / "train.json").write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "stage": "train",
+                "last_error": "ModuleNotFoundError: No module named 'lightgbm'",
+                "updated_at": "2026-07-28T00:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with client.websocket_connect("/ws/sessions/failing-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                },
+            }
+        )
+        rules_event = None
+        for _ in range(12):
+            event = websocket.receive_json()
+            if event["type"] == "rules_matched":
+                rules_event = event
+                break
+
+    assert rules_event is not None
+    assert [item["lesson_id"] for item in rules_event["matched_rules"]] == [lesson["id"]]
+
+
+def test_situation_tags_stay_clean_when_nothing_has_failed(tmp_path, monkeypatch):
+    # 没有未解决的失败时不该谎称运行处于错误情境
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (tmp_path / "dev-user" / project["id"] / "data" / "customer_churn.csv").write_text(
+        "age,churn\n42,1\n37,0\n",
+        encoding="utf-8",
+    )
+    lesson = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract",
+        json={
+            "source_type": "kernel_error",
+            "source_id": "session-1",
+            "domain": ["runtime", "kernel-error"],
+            "observation": "ModuleNotFoundError",
+            "recommendation": "先确认 Kernel 镜像包含该依赖",
+            "confidence": 0.78,
+            "conditions": {"error_type": "ModuleNotFoundError"},
+            "evidence": {},
+        },
+    ).json()
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lesson['id']}/adopt")
+
+    with client.websocket_connect("/ws/sessions/healthy-session") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "分析数据",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/customer_churn.csv",
+                },
+            }
+        )
+        rules_event = None
+        for _ in range(12):
+            event = websocket.receive_json()
+            if event["type"] == "rules_matched":
+                rules_event = event
+                break
+
+    assert rules_event is not None
+    assert rules_event["matched_rules"] == []
+
+
 def test_lessons_can_be_extracted_after_the_modern_natural_language_flow(tmp_path, monkeypatch):
     """自进化闭环的抽取半环必须在产品主路径上成立。
 
