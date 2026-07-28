@@ -1340,3 +1340,14 @@
 - **两处 grep 假象在成为缺陷前被拦下**：`datasetVersionId` 在 593 行是**对象字面量的键名**、`taskInspection.planPath` 是**属性访问**，两者都不是对局部变量的使用。照 grep 结果归属会把错误的值放进 context。这是切片 2 被 ruff 抓到同类问题后我提前加的核对步骤——上一次靠门禁兜住，这一次自己先查了。
 - **门禁**：tsc 一次通过；前端 `43 files / 307 tests`（含 `componentRegistry.test.ts` 的 32 个用例）、ESLint、build、Playwright `10 passed`。首屏 bundle 增加 0.66kB / gzip 0.03kB——**不像切片 1 那样逐字节一致**，因为这一片确实重组了结构（引入 context 对象与七次函数调用），代价很小但不为零，如实记录。
 - **动态计划**：P3-5 仅剩 `machine_learning.py` 1,228 行（现为全项目最大源文件）。
+
+## 2026-07-28 P3-5 切片 4：machine_learning.py 拆分（1,228 行 → machine_learning/ 包）与 P3 收口
+
+- **调用图严格单向，分组自然浮现**：`support` → `report` / `bundle` / `failure_state` → `runs` / `training` → 包根。路由前缀与路径不变，`app.main` 的导入方式也不变。最大子模块 `training.py` 400 行。
+- **两个 helper 按"谁在用"归位，而非"原来在哪"**：`_record_kernel_stderr` 原在通用 helper 区，但只被失败路径触达（它正是 P3-2 补的 `kernel_output` 生产方），归入 `failure_state`；`_require_artifact_file` 只被运行查询路由调用，归入 `runs`。
+- **拆分对测试有不可避免的连带影响，而两类 patch 性质不同**——这是本片最需要想清楚的地方。八处 monkeypatch 指向这个模块：`gpu_scheduler` 是**单例对象**，patch 的是对象方法，对所有持有引用的模块生效，因此包根 re-export 后那 2 处无需改动；`create_kernel_service` 是**普通函数**，patch 的是模块属性，只影响被 patch 的那个模块，调用点搬到 `training.py` 后那 6 处必须改指向。**改后的路径也更正确**：patch 本就该指向真正使用该符号的模块，而不是历史上恰好定义它的地方。
+- **ruff 抓到我自己归属阶段的 3 个 F821**：两个 `train_*_classifier` 是纯遗漏（分析里有、写 header 时漏了）；`_resolve_project_file` 是因为我的调用图脚本按行号归类，把 `_require_artifact_file` 算进了 support，而我后来把它划给了 runs——**分析与最终划分不一致**。这也**修正了我在切片 2 的说法**：我当时写"少给 import 不会被 ruff 发现，靠 pytest 的 NameError 兜住"，实际上 F821 静态就能发现，ruff 双向都管。
+- **grep 假象连续第三片被拦下**：`Field` 在 `report.py` 里是 Markdown 表头字符串 `["Field", "Value"]`，不是 pydantic 的 `Field`。前两次分别是字典键 `"recovery_policy"` 和对象键 `datasetVersionId:`。
+- **一次自检方法的失误**：我先写了个枚举 `app.routes` 的脚本判断路由是否注册，它报 0 条 ML 路由——差点据此认为拆坏了。实际原因是这个 FastAPI 版本把 included router 包成 `_IncludedRouter`（`path` 为 `None`）、不展平到 `app.routes`，**是脚本方法不适用，不是回归**。改用直接打端点后拿到决定性证据：请求不存在的项目返回处理函数自己的 `Project not found` 而非 FastAPI 默认的 `Not Found`（证明路由匹配并执行了处理函数），OpenAPI 列出全部 **9 条 ML 路径**、与拆分前一条不差。教训是自检脚本本身也需要证伪——pytest 全绿时就该怀疑脚本而不是代码。
+- **门禁**：后端 ruff + `252 passed, 3 skipped`（含 13 个打真实端点的 ML API 测试）；Playwright `10 passed`。
+- **P3-5 完成，P3 整体收口**。四个文件累计 6,890 行，拆后最大单文件 400 行。四片难度并不相同：切片 1/2 是搬移（成员彼此独立），切片 3 必须先建 86 个变量的依赖图才敢动，切片 4 的难点在测试 patch 的语义差异。**一个跨栈的观察**：`stages.py`（后端 Python）与 `componentRegistry.ts`（前端 TypeScript）在独立分析后落在同一套分组边界上——recovery / data / preprocessing / model / diagnosis / handoff。同一套边界在两个技术栈、两个互不相关的文件里各自浮现，说明它是产品领域自带的结构，不是谁强加的划分。
