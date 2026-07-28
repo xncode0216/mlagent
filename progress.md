@@ -1232,3 +1232,16 @@
 - **③ scikit-learn 从未被声明为依赖**：sklearn 训练在 kernel 子进程里执行生成的代码，用的是后端解释器，因此 sklearn 必须是后端运行依赖，但 `dependencies` 里根本没有它。本地 venv 恰好装过（1.9.0）所以一直能训练，**任何全新环境——包括 CI——的核心训练功能都是坏的**。后端测试抓不到：sklearn 相关用例全部驱动 mock kernel，从不真正 import sklearn；被 skip 的 3 个是 Docker 相关，与此无关。只有真实端到端执行才能暴露。
 - **最终验证**：PR #2 合并前三项闸门全绿——后端 ruff + pytest（1m2s）、前端 eslint + tsc + vitest + build（47s）、Playwright 9 条真实 FastAPI + Vite 端到端路径（2m13s，首次完整通过）。
 - **动态计划**：`task_plan.md` 已无未完成项。已知可做的小改进：CI 中 e2e job 名为「Playwright golden path」，实际执行的是全部 9 条 E2E（`npm run test:e2e`），属早期只有一条时的遗留命名。
+
+## 2026-07-28 自进化治理（已采纳规则的停用与重新启用）
+
+- **缺口来自产品目标本身**：`docs/final-product-goal.md` 的完成定义要求用户能回答"How can learned behavior be reviewed, scoped, **disabled, or rolled back**?"。逐层核对后确认只有 review 侧完整（列表/提取/采纳/拒绝/标记冲突 + injection-log），**disabled / rolled back / scoped 三项均无实现**。
+- **这是一个安全问题，不只是功能缺失**：`evolution_service._write_rule_index` 与 `rule_injection_service.match_rules` 都直接读取全部 `high_confidence` 经验。采纳因此是一扇**单向门**——一条经验一旦采纳就永久影响之后每一次 Agent 运行，即使事后发现它有害也没有关闭开关。自进化系统只能累积、无法收回。
+- **设计决策：`enabled` 与 `status` 正交**。`status` 是审核结论（这条规则是否可信），`enabled` 是运行开关（当前是否注入）。曾考虑加第五种状态 `disabled`，但那会把"从未被认可"（rejected）与"曾被采纳后关闭"混为一谈，丢失采纳事实，重新启用时也无从知道该回到哪个状态。
+- **单一真相源防止两条注入路径漂移**：新增 `list_active_rules()`（已采纳且未停用），持久化规则索引与实时规则匹配都改读它，避免停用的规则仍从其中一条路径泄漏进运行。
+- **默认值即迁移策略**：`enabled` 默认 `True`，使升级前写入的记录保持生效——否则一次升级会静默停掉用户所有已采纳规则。前端类型同样设为可选，缺失一律按启用处理。专门补测试固定该行为（删除已存记录的 `enabled` 字段后仍应命中）。
+- **停用可审计**：停用接受可选理由并写入经验证据，使"决定不再信任某条规则"这一决策本身留痕。
+- **TDD 红→绿**：后端 4 项（停用后不再注入、重新启用恢复注入、理由写入证据、旧记录默认启用）先观察全红；前端 3 项（生效中提供停用入口、已停用显示不再注入并可重启、待审核不提供该入口）观察 2 项预期失败。
+- **顺带修一个潜伏的测试脆弱性**：`design-tokens.test.mjs` 把文件原始字节与 LF 拼接串比较，而 git autocrlf 在 Windows 检出时会写入 CRLF——合并后切分支重新检出即触发失败。该契约检查的是导入顺序与令牌，与行尾风格无关，读取时改为统一行尾。**任何 Windows 全新克隆此前都会踩到这个失败**。
+- **门禁与浏览器证据**：后端 ruff + `234 passed, 3 skipped`；前端 Vitest `37 files / 244 tests`、ESLint 0、build + 预算门禁（主包 469.09kB / gzip 134.98kB）；Playwright `10 passed`。新增 `rule-governance.e2e.ts` 断言真正重要的事——界面停用后 `rules/match` 对同一上下文由命中 1 条变为 0 条，重新启用后恢复为 1 条。1440×900 截图确认状态仍为「已采纳」、同时显示「已停用 · 不再注入后续运行」与重新启用入口，下方注入审计保留停用前的命中历史。
+- **动态计划**：治理三项中的 disable/rollback 已闭环（对规则而言，停用即是实际意义上的回滚——历史运行的产物是不可变记录，不存在"撤销已发生的影响"）。**scoped（限定规则适用范围）仍未实现**，是该方向的下一片。
