@@ -14,6 +14,11 @@ export type WorkflowStageId =
   | "export"
   | "learn";
 
+/**
+ * cockpit 卡片路由的键。**必须与后端实际发射的 component 值保持一致**——拼错或漏一个
+ * 都表现为卡片静默不出现。新增一种时 `COMPONENT_LABELS` 会因类型不完整而编译失败，
+ * 那是有意的护栏。
+ */
 export type AgentComponentKind =
   | "dataset_summary"
   | "data_quality"
@@ -27,7 +32,7 @@ export type AgentComponentKind =
   | "prediction_samples"
   | "iteration_proposal"
   | "export_bundle"
-  | "provenance_graph"
+  | "task_state_inspector"
   | "lesson_review";
 
 export type AgentCommandPayload = {

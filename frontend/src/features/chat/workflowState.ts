@@ -56,7 +56,9 @@ const STAGES: Array<{ id: WorkflowStageId; label: string }> = [
   { id: "learn", label: "沉淀" },
 ];
 
-const COMPONENT_LABELS: Record<string, string> = {
+// 类型收紧为 Record<AgentComponentKind, …>：漏一个 kind 就编译不过。此前是
+// Record<string, string>，新增 kind 时不强制补标签，缺标签会静默回退到裸 kind。
+const COMPONENT_LABELS: Record<AgentComponentKind, string> = {
   dataset_summary: "数据集摘要",
   data_quality: "数据质量检查",
   preprocessing_plan: "预处理计划",
@@ -69,7 +71,7 @@ const COMPONENT_LABELS: Record<string, string> = {
   prediction_samples: "预测样本",
   iteration_proposal: "迭代建议",
   export_bundle: "导出包",
-  provenance_graph: "溯源图谱",
+  task_state_inspector: "任务状态检查",
   lesson_review: "经验审核",
 };
 
@@ -188,8 +190,12 @@ function classifyArtifact(artifact: Artifact): {
   return { stage: inferStageFromText(text) };
 }
 
-function componentTitle(kind: AgentComponentKind | string) {
-  return COMPONENT_LABELS[kind] ?? kind;
+/**
+ * 已声明的 kind 一定有中文标签（由 `COMPONENT_LABELS` 的类型保证）；这里的断言只为
+ * 查表，运行时仍可能收到后端新增的未知 kind，那时回退到 kind 本身而不是崩掉。
+ */
+function componentTitle(kind: AgentComponentKind | string): string {
+  return COMPONENT_LABELS[kind as AgentComponentKind] ?? kind;
 }
 
 function findStage(stages: WorkflowStageState[], stageId: WorkflowStageId) {

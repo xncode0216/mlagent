@@ -1351,3 +1351,15 @@
 - **一次自检方法的失误**：我先写了个枚举 `app.routes` 的脚本判断路由是否注册，它报 0 条 ML 路由——差点据此认为拆坏了。实际原因是这个 FastAPI 版本把 included router 包成 `_IncludedRouter`（`path` 为 `None`）、不展平到 `app.routes`，**是脚本方法不适用，不是回归**。改用直接打端点后拿到决定性证据：请求不存在的项目返回处理函数自己的 `Project not found` 而非 FastAPI 默认的 `Not Found`（证明路由匹配并执行了处理函数），OpenAPI 列出全部 **9 条 ML 路径**、与拆分前一条不差。教训是自检脚本本身也需要证伪——pytest 全绿时就该怀疑脚本而不是代码。
 - **门禁**：后端 ruff + `252 passed, 3 skipped`（含 13 个打真实端点的 ML API 测试）；Playwright `10 passed`。
 - **P3-5 完成，P3 整体收口**。四个文件累计 6,890 行，拆后最大单文件 400 行。四片难度并不相同：切片 1/2 是搬移（成员彼此独立），切片 3 必须先建 86 个变量的依赖图才敢动，切片 4 的难点在测试 patch 的语义差异。**一个跨栈的观察**：`stages.py`（后端 Python）与 `componentRegistry.ts`（前端 TypeScript）在独立分析后落在同一套分组边界上——recovery / data / preprocessing / model / diagnosis / handoff。同一套边界在两个技术栈、两个互不相关的文件里各自浮现，说明它是产品领域自带的结构，不是谁强加的划分。
+
+## 2026-07-28 P4 跨栈契约盘点与 P4-1 类型契约收口
+
+- **这轮盘点的目的是验证 P3 是否真的闭合了链路**，而不是靠印象。沿用 P3 的手法（"找有消费方无生产方、或反之"），但**六个方向都做双向比对**——P3 那次只查了事件类型一个方向。
+- **结论先行：没有找到已在生产路径上失效的缺陷。** 这个"没找到"本身是有价值的结果：事件类型 20 种双向一致（`kernel_output` 自 P3-2 起有生产方）、图谱洞察 2 种前端完整消费、21 个 cockpit action 的声明/handler/回调三层齐备、53 条 API 端点双向一致、10 个 stage id 完全一致、6 种 artifact_role 都有识别路径。
+- **过程中排除了 5 处假象**，都记进了 `task_plan.md` 以免后来者重复劳动：`stage_started`/`stage_completed` 经变量发射；`tool_result`/`tool_use` 属 Anthropic API 消息块；`lessons/{id}/disable|enable` 是前端三元表达式拼接；`transformation_report` 经 artifact 文件名而非事件识别；`POST /rules/match` 只有测试调用，但运行时的规则命中由 `rules_matched` 事件在日志面板完整呈现，功能没断。
+- **唯一的真实发现是类型防线不完整**（P4-1）：`AgentComponentKind` 声明 14 种、后端发射 13 种，两边各有出入——后端发射的 `task_state_inspector` 不在声明里，声明里的 `provenance_graph` 后端从不产出也没有卡片 builder；而 `COMPONENT_LABELS` 是 `Record<string, string>`，新增 kind 时**编译器不强制补中文标签**。component kind 是 cockpit 卡片路由的键，拼错即卡片静默不出现，正是 P3 反复修的那类缺陷的温床，而防线本该由类型系统提供。
+- **一次被我自己推翻的推测**：我一度认为 `task_state_inspector` 缺标签会让用户在中文界面看到英文标识符，正要写成"用户可见缺陷"时去查了后端——它发射时总带 `title`，而 `componentTitle` 只在 `event.title ?? …` 的兜底位置调用，所以这个后果并不成立。如实记下：**这是温床，不是已发生的失效。**
+- **修复的三处与保留的一处**：补 `task_state_inspector`、删死声明 `provenance_graph`（含标签）、`COMPONENT_LABELS` 收紧为 `Record<AgentComponentKind, string>`。事件字段的 `component: AgentComponentKind | string` **有意保留**——它表达"来自网络的数据可能是未知 kind"，对边界数据是合理容忍；收紧它只会把运行时问题换成假的编译期安全感。
+- **护栏做了负向验证**：临时删掉一个标签后 tsc 确实报 `TS2741 Property 'task_state_inspector' is missing`。不做这一步，"编译器强制标签完整"就只是未经验证的断言——而本轮反复出现的教训正是"声称 ≠ 验证"。
+- **门禁**：前端 `43 files / 322 tests`（新增 15 项：14 个已声明 kind 都拿到中文标签、不回退到裸 kind，外加未知 kind 回退到自身）、tsc、ESLint、build + 预算门禁、Playwright `10 passed`。未触碰后端。
+- **动态计划**：P3 与 P4-1 均已收口，`task_plan.md` 无未勾选项。roadmap 里仍标 Planned 的较大项为：typed/inspectable 的工具调用事件（P0 级但一直未动）、诊断可行动化、provenance inspector（删掉的 `provenance_graph` 声明就属于它）。另一个可选方向是 `componentRegistry.test.ts` 1,662 行——它现在是最大的测试文件，可按新的 cockpit 模块边界切开。
