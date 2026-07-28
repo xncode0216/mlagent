@@ -344,6 +344,70 @@ def test_kernel_failure_is_recorded_as_a_session_event(tmp_path, monkeypatch):
     assert "lightgbm" in lessons[0]["recommendation"]
 
 
+def test_a_kernel_error_becomes_a_lesson_that_reaches_the_next_run(tmp_path, monkeypatch):
+    """自进化闭环在错误这条线上的完整往返：报错 → 沉淀 → 采纳 → 下次运行被注入。
+
+    三处缺口曾各自切断这条链路：kernel 报错没有生产方（无从沉淀）、规则打分把
+    未知维度当成不符（沉淀了也匹配不到）、情境标签只反映模式（错误经验永远对不上）。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setenv("MLAGENT_KERNEL_BACKEND", "jupyter")
+    get_settings.cache_clear()
+
+    class FailingKernelService:
+        def execute(self, code: str, timeout_seconds: int = 10) -> KernelExecutionResult:
+            return KernelExecutionResult(
+                status="error",
+                stdout="",
+                stderr="ModuleNotFoundError: No module named 'lightgbm'",
+            )
+
+    monkeypatch.setattr(
+        "app.api.machine_learning.create_kernel_service", lambda **kwargs: FailingKernelService()
+    )
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "kernel_loop_project"}).json()
+    root = tmp_path / "dev-user" / project["id"]
+    (root / "data" / "customer_churn.csv").write_text(
+        "score,churn\n0.1,no\n0.2,no\n0.8,yes\n0.9,yes\n",
+        encoding="utf-8",
+    )
+    session = client.post(
+        f"/api/projects/{project['id']}/sessions",
+        json={"mode": "machine-learning", "title": "训练"},
+    ).json()
+
+    # 1. 训练撞上依赖缺失
+    client.post(
+        f"/api/projects/{project['id']}/ml/train-sklearn",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "target_column": "churn",
+            "session_id": session["id"],
+            "use_gpu": False,
+        },
+    )
+
+    # 2. 从这次失败沉淀经验并采纳
+    lessons = client.post(
+        f"/api/projects/{project['id']}/evolution/lessons/extract-from-session",
+        json={"session_id": session["id"]},
+    ).json()["items"]
+    assert len(lessons) == 1
+    client.post(f"/api/projects/{project['id']}/evolution/lessons/{lessons[0]['id']}/adopt")
+
+    # 3. 失败仍未解决，因此下一次运行应当带上错误情境并命中该经验
+    matched = client.post(
+        f"/api/projects/{project['id']}/evolution/rules/match",
+        json={
+            "session_id": session["id"],
+            "context": {"mode": "machine-learning", "tags": ["runtime", "kernel-error"]},
+        },
+    ).json()["matched_rules"]
+
+    assert [item["lesson_id"] for item in matched] == [lessons[0]["id"]]
+
+
 def test_train_sklearn_persists_and_resumes_failed_training_state(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     monkeypatch.setenv("MLAGENT_KERNEL_BACKEND", "jupyter")

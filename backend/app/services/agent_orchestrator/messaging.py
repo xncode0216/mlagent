@@ -45,6 +45,7 @@ from app.services.llm_agent import (
     run_tool_phase,
 )
 from app.services.rule_injection_service import RuleInjectionService
+from app.services.task_state_service import list_task_states
 from app.tools.data_analysis import (
     data_quality_profile,
     execute_preprocessing_plan,
@@ -61,13 +62,44 @@ _MODE_TAGS = {
 }
 
 
-def _situation_tags(mode: str) -> list[str]:
+# 未解决失败的错误文本 → 情境标签，取值同样与 LessonExtractor 的 `domain` 对齐。
+_ERROR_TAGS = (
+    ("ModuleNotFoundError", ["runtime", "kernel-error"]),
+    ("ImportError", ["runtime", "kernel-error"]),
+    ("Kernel", ["runtime", "kernel-error"]),
+)
+
+
+def _failure_tags(project_root: Path, session_id: str) -> list[str]:
+    """从会话中尚未解决的失败派生错误情境标签。
+
+    用任务状态而不是翻事件历史：失败被重试或放弃后状态即被删除，因此它表达的是
+    "现在还有没有这个问题"，而不是"历史上曾经出现过"。后者会让一次早已修好的
+    报错永远把会话标记为错误情境。
+    """
+    tags: list[str] = []
+    for state in list_task_states(project_root=project_root, session_id=session_id):
+        if state.get("status") != "failed":
+            continue
+        error = str(state.get("last_error") or "")
+        for marker, marker_tags in _ERROR_TAGS:
+            if marker in error:
+                tags.extend(tag for tag in marker_tags if tag not in tags)
+    return tags
+
+
+def _situation_tags(mode: str, project_root: Path | None = None, session_id: str = "") -> list[str]:
     """描述这次运行处于什么情境，用于按领域匹配经验。
 
     此前这里写死为 ``["missing-value"]``——无论运行在做什么都如此宣称，
     既让按运行领域标注的经验对不上，也把缺失值经验注入到与之无关的运行里。
+    改为按模式派生后仍不够：错误类经验（``["runtime", "kernel-error"]``）恰恰
+    在最需要它的时候——真的报了同类错误时——匹配不到，因为标签里没有错误情境。
     """
-    return _MODE_TAGS.get(mode, [])
+    tags = list(_MODE_TAGS.get(mode, []))
+    if project_root is not None and session_id:
+        tags.extend(tag for tag in _failure_tags(project_root, session_id) if tag not in tags)
+    return tags
 
 
 class MessagingMixin:
@@ -280,7 +312,7 @@ class MessagingMixin:
                 # 规则范围按数据集限定，因此匹配上下文必须带上真实的活动数据集，
                 # 否则限定到当前数据集的规则会被判为越界而完全不生效。
                 "dataset_path": context.active_file,
-                "tags": _situation_tags(context.mode),
+                "tags": _situation_tags(context.mode, context.project_root, self.session_id),
             },
         )
         return {
