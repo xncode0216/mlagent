@@ -41,6 +41,11 @@ class ConflictRequest(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class DisableRuleRequest(BaseModel):
+    # 停用理由可选，但填写后会写入证据，使停用决策本身可审计
+    reason: str = Field(default="", max_length=2000)
+
+
 class RuleMatchRequest(BaseModel):
     session_id: str = Field(min_length=1)
     context: dict[str, Any] = Field(default_factory=dict)
@@ -203,6 +208,29 @@ def mark_lesson_conflict(
     service = EvolutionService(_project_root(project_id))
     try:
         return service.mark_conflict(lesson_id, payload.reason)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Lesson not found") from exc
+
+
+@router.post("/lessons/{lesson_id}/disable")
+def disable_lesson(
+    project_id: str,
+    lesson_id: str,
+    payload: DisableRuleRequest,
+) -> LessonRecord:
+    """停止注入某条已采纳规则，但保留其采纳记录与证据。"""
+    service = EvolutionService(_project_root(project_id))
+    try:
+        return service.set_lesson_enabled(lesson_id, enabled=False, reason=payload.reason)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Lesson not found") from exc
+
+
+@router.post("/lessons/{lesson_id}/enable")
+def enable_lesson(project_id: str, lesson_id: str) -> LessonRecord:
+    service = EvolutionService(_project_root(project_id))
+    try:
+        return service.set_lesson_enabled(lesson_id, enabled=True)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Lesson not found") from exc
 
