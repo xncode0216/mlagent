@@ -1282,3 +1282,12 @@
 - **一次夹具错误**：首版端到端用例用 12 行数据缺 1 个 = 8.3%，超出 `(0, 5%]` 边界，测试红了但**是我的数据算错而非代码问题**——扩大样本量后通过。
 - **门禁**：后端 ruff + `248 passed, 3 skipped`；前端 Vitest `37 files / 247 tests` + ESLint；Playwright `10 passed`（扩数据集未破坏任何既有断言）。
 - **动态计划**：自进化闭环的抽取与注入两个半环至此都在主路径上成立。P3-2（`kernel_output` 无生产方）是下一项，它决定抽取器另一类经验能否触发。
+
+## 2026-07-28 P3-2 kernel 报错补上生产方
+
+- **缺陷复述**：`kernel_output` 两端的消费方一直都在——日志面板按 stderr 分级渲染、抽取器据它沉淀依赖缺失类经验——但全后端没有任何生产方。两者因此都是死代码：kernel 报错既不出现在日志里，也永远无法沉淀成经验，而这正是抽取器仅会的两类经验之一。
+- **发射位置的选择**：训练在 REST 路径执行，那里只写任务状态与产物、**不写会话事件**（`machine_learning.py` 此前根本没有引入 `SessionService`）。而抽取器读的是持久化会话事件，日志面板也从持久化事件取数。因此在训练失败已经收敛的唯一位置 `_write_training_failure_state` 补发事件——三处 `except` 分支都经由它，不会漏。
+- **失败处理的边界**：会话不存在时（例如默认的 `manual-training`）静默跳过而非抛错。训练失败本身已由任务状态与 HTTP 响应如实报告，**不该因为记事件失败而把它变成另一种错误**。
+- **端到端验收**：用例断言 kernel 报 `ModuleNotFoundError` 后，事件确实出现在 `/api/sessions/{id}/events` 且 `stream=stderr`；随后调用 `extract-from-session`，确实沉淀出 `["runtime", "kernel-error"]` 经验且建议里含缺失的包名——即这类经验从"永不可能"变为真实可沉淀。
+- **门禁**：后端 ruff + `249 passed, 3 skipped`；前端 Vitest `37 files / 247 tests` + ESLint；Playwright `10 passed`。
+- **动态计划**：抽取器的两类经验至此都能在真实路径上触发。P3-3（情境标签只反映模式、不反映运行中的错误）现在有了现实意义——kernel-error 经验虽可沉淀，但其 `domain: ["runtime", "kernel-error"]` 仍需上下文带同名标签才会被注入。
