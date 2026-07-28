@@ -143,7 +143,7 @@ def test_train_sklearn_api_writes_metrics_and_model_reference(tmp_path, monkeypa
         assert kwargs["use_gpu"] is False
         return FakeKernelService()
 
-    monkeypatch.setattr("app.api.machine_learning.create_kernel_service", fake_create_kernel_service)
+    monkeypatch.setattr("app.api.machine_learning.training.create_kernel_service", fake_create_kernel_service)
     client = TestClient(app)
     project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
     project_root = tmp_path / "dev-user" / project["id"]
@@ -237,7 +237,7 @@ def test_train_sklearn_api_records_preprocessing_plan_artifact(tmp_path, monkeyp
                 stderr="",
             )
 
-    monkeypatch.setattr("app.api.machine_learning.create_kernel_service", lambda **kwargs: FakeKernelService())
+    monkeypatch.setattr("app.api.machine_learning.training.create_kernel_service", lambda **kwargs: FakeKernelService())
     client = TestClient(app)
     project = client.post("/api/projects", json={"name": "planned_training"}).json()
     project_root = tmp_path / "dev-user" / project["id"]
@@ -304,7 +304,7 @@ def test_kernel_failure_is_recorded_as_a_session_event(tmp_path, monkeypatch):
             )
 
     monkeypatch.setattr(
-        "app.api.machine_learning.create_kernel_service", lambda **kwargs: FailingKernelService()
+        "app.api.machine_learning.training.create_kernel_service", lambda **kwargs: FailingKernelService()
     )
     client = TestClient(app)
     project = client.post("/api/projects", json={"name": "kernel_error_project"}).json()
@@ -363,7 +363,7 @@ def test_a_kernel_error_becomes_a_lesson_that_reaches_the_next_run(tmp_path, mon
             )
 
     monkeypatch.setattr(
-        "app.api.machine_learning.create_kernel_service", lambda **kwargs: FailingKernelService()
+        "app.api.machine_learning.training.create_kernel_service", lambda **kwargs: FailingKernelService()
     )
     client = TestClient(app)
     project = client.post("/api/projects", json={"name": "kernel_loop_project"}).json()
@@ -436,7 +436,7 @@ def test_train_sklearn_persists_and_resumes_failed_training_state(tmp_path, monk
                 stderr="",
             )
 
-    monkeypatch.setattr("app.api.machine_learning.create_kernel_service", lambda **kwargs: FakeKernelService())
+    monkeypatch.setattr("app.api.machine_learning.training.create_kernel_service", lambda **kwargs: FakeKernelService())
     client = TestClient(app)
     project = client.post("/api/projects", json={"name": "retry_training"}).json()
     project_root = tmp_path / "dev-user" / project["id"]
@@ -489,7 +489,7 @@ def test_train_sklearn_persists_execution_os_errors_as_retry_state(tmp_path, mon
         def execute(self, code: str, timeout_seconds: int = 10) -> KernelExecutionResult:
             raise PermissionError("Kernel process launch denied")
 
-    monkeypatch.setattr("app.api.machine_learning.create_kernel_service", lambda **kwargs: FakeKernelService())
+    monkeypatch.setattr("app.api.machine_learning.training.create_kernel_service", lambda **kwargs: FakeKernelService())
     client = TestClient(app)
     project = client.post("/api/projects", json={"name": "retry_training_os_error"}).json()
     project_root = tmp_path / "dev-user" / project["id"]
