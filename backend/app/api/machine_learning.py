@@ -18,6 +18,7 @@ from app.services.gpu_scheduler_service import (
     gpu_scheduler,
 )
 from app.services.kernel_service import create_kernel_service
+from app.services.session_service import SessionService
 from app.services.task_state_service import delete_task_state, load_task_state, recovery_policy, write_task_state
 from app.tools.machine_learning import train_baseline_classifier, train_sklearn_classifier
 
@@ -113,6 +114,28 @@ def _existing_file_artifact(
     }
 
 
+def _record_kernel_stderr(root: Path, session_id: str, text: str) -> None:
+    """把 Kernel 的错误输出记进会话事件流。
+
+    ``kernel_output`` 的消费方一直都在——日志面板按 stderr 分级渲染，经验抽取器
+    据它沉淀依赖缺失类经验——但此前没有任何生产方，两者因此都是死代码。训练在
+    REST 路径执行，那里不写会话事件，所以这里显式补上。
+
+    会话可能不存在（例如默认的 manual-training），此时静默跳过：训练失败本身
+    已由任务状态与 HTTP 响应如实报告，不该因为记事件失败而把它变成另一种错误。
+    """
+    if not text.strip():
+        return
+    try:
+        SessionService(root).append_event(
+            session_id=session_id,
+            event_type="kernel_output",
+            payload={"type": "kernel_output", "stream": "stderr", "text": text},
+        )
+    except KeyError:
+        return
+
+
 def _write_training_failure_state(
     *,
     root: Path,
@@ -121,6 +144,7 @@ def _write_training_failure_state(
     error: str,
     retry_count: int = 0,
 ) -> None:
+    _record_kernel_stderr(root, payload.session_id, error)
     write_task_state(
         project_root=root,
         session_id=payload.session_id,
