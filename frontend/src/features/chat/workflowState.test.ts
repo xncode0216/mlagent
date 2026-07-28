@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AgentStreamEvent, Artifact } from "./types";
+import type { AgentComponentKind, AgentStreamEvent, Artifact } from "./types";
 import { deriveWorkflowState } from "./workflowState";
 
 function artifact(partial: Partial<Artifact> & Pick<Artifact, "name" | "path">): Artifact {
@@ -668,6 +668,59 @@ describe("workflow state", () => {
       id: "learn",
       status: "active",
       detail: "命令：learn",
+    });
+  });
+
+  /**
+   * 分工：`COMPONENT_LABELS` 的类型 `Record<AgentComponentKind, string>` 由编译器保证
+   * 标签完整（漏一个就编译不过）；这里固定的是运行时行为——已声明的 kind 必须拿到中文
+   * 标签，而不是静默回退到裸 kind 让用户看见英文标识符。
+   */
+  describe("component labels", () => {
+    const declaredKinds: AgentComponentKind[] = [
+      "dataset_summary",
+      "data_quality",
+      "preprocessing_plan",
+      "planned_dataset",
+      "transformation_report",
+      "training_config",
+      "model_comparison",
+      "evaluation_report",
+      "error_analysis",
+      "prediction_samples",
+      "iteration_proposal",
+      "export_bundle",
+      "task_state_inspector",
+      "lesson_review",
+    ];
+
+    it.each(declaredKinds)("labels %s without falling back to the raw kind", (kind) => {
+      const state = deriveWorkflowState(
+        [{ type: "component_requested", task_id: "task-1", stage: "profile", component: kind }],
+        "analysis",
+        "data/churn.csv",
+      );
+
+      expect(state.component?.kind).toBe(kind);
+      expect(state.component?.title).not.toBe(kind);
+      expect(state.component?.title).toBeTruthy();
+    });
+
+    it("falls back to the raw kind for a component the frontend does not know yet", () => {
+      const state = deriveWorkflowState(
+        [
+          {
+            type: "component_requested",
+            task_id: "task-1",
+            stage: "profile",
+            component: "some_future_component",
+          },
+        ],
+        "analysis",
+        "data/churn.csv",
+      );
+
+      expect(state.component?.title).toBe("some_future_component");
     });
   });
 });
