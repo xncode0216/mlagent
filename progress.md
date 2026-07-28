@@ -1320,3 +1320,12 @@
 - **拆分的附带收益是可测性**：`parseCsvPreview` 此前埋在组件文件里无法直接测，而它有真正会坏的逻辑。新增 29 项测试——CSV 的引号包裹逗号、`""` 反转义、引号内换行不分行、CRLF、maxRows 截断、无尾换行；格式化层的"零值不能当缺失值"（`formatMetricCount(0)` 必须是 `"0"` 而非 `"-"`）、415→二进制提示、扩展名路由大小写不敏感。
 - **门禁**：前端 `43 files / 307 tests`（基线 41/278）+ ESLint + build；后端 `252 passed, 3 skipped`；Playwright `10 passed`。**首屏 bundle 与拆分前逐字节一致**（469.02kB / gzip 135.02kB，`HistogramChart` 仍是独立懒加载 chunk）——这是"纯结构改动、未引入新首屏依赖"的直接证据。
 - **动态计划**：P3-5 余下三个文件。`stages.py` 已勘察好边界——单个 `StageRunnersMixin` 内 15 个 `_run_*` 方法，每个 80~200 行，可按 intent 分组为 recovery / data / model / governance 四个 mixin 再继承回来，属机械拆分；`componentRegistry.ts` 与 `machine_learning.py` 待勘察。
+
+## 2026-07-28 P3-5 切片 2：stages.py 拆分（1,950 行 → stages/ 包，最大 378 行）
+
+- **先证明这是纯归属划分，再动手**：15 个 `_run_*` 方法**彼此不互相调用**（`grep self._run_` 只命中一处 `_run_agentic_answer`，而它不在此文件内），且 `StageRunnersMixin` 全项目仅被 `agent_orchestrator_service.py` 引用一次。这两点决定了拆分不会改变任何调用关系——是搬家，不是改结构。
+- **按 intent 分六组，每组都有语义理由**：`data`（概览/摄取/画像/清洗）、`preprocessing`（变换/建模准备/已批准执行——三者共享同一个审批检查点语义，都在写或删 pending approval）、`model`（训练/评估）、`diagnosis`（诊断/迭代——诊断产出的错误切片正是迭代提案的输入，同一条因果链）、`handoff`（导出/学习）、`recovery`（继续/放弃上次失败）。`stages/__init__.py` 把六个 mixin 聚合回 `StageRunnersMixin`，因此 **`AgentOrchestrator` 零改动**——导入路径 `from .stages import StageRunnersMixin` 与组合方式都不变。
+- **方法体不手抄**：用 `sed` 按行范围逐字节提取。这是上一片的经验反过来用——切片 1 我手抄了 2,000 行，虽然测试通过，但手抄本身是无谓风险。提取后对账：1,911 行方法体 + 39 行 header = 原文件 1,950 行，且 15 个方法名全部到位、每段都以 `async def _run_*` 开头。
+- **ruff 抓到一处我的分析错误**：我用 grep 统计每个导入符号的归属，把 `recovery.py` 里 `state.get("recovery_policy")` 这个**字典键字符串**误判成对导入函数的调用，于是多给了一个 import。grep 无法区分标识符与字面量——这类错误只能靠工具兜住，`F401` 正好报了出来。反过来说，"少给 import" 不会被 ruff 发现，那是靠 pytest 的 NameError 兜住的；两道门禁各管一头。
+- **验收**：运行时自检确认 `AgentOrchestrator` 的 MRO 为 `StageRunnersMixin → Data → Preprocessing → Model → Diagnosis → Handoff → Recovery → Messaging`，15 个 stage runner 全部正确解析。后端 ruff + `252 passed, 3 skipped`；Playwright `10 passed`——其中 `natural-language.e2e.ts` 真实走完 profile→approval→train→evaluate→diagnose→export→learn，即经过全部被拆开的 runner，不是只验证了 import 能过。
+- **动态计划**：`stages.py` 已从项目最大文件榜消失。P3-5 余下 `componentRegistry.ts` 1,345 行（现为全项目最大）与 `machine_learning.py` 1,228 行。
