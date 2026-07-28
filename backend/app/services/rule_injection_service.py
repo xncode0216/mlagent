@@ -94,15 +94,49 @@ class RuleInjectionService:
         confidence: float,
         context: dict[str, Any],
     ) -> float:
-        score = 0.0
-        if context.get("mode") in conditions.get("task_modes", []):
-            score += 0.25
-        if context.get("feature_type") == conditions.get("feature_type"):
-            score += 0.2
+        """Score a lesson over the dimensions this run can actually judge.
+
+        A run only knows a few things when rules are matched — mode, dataset,
+        situation tags — while a lesson's conditions may mention column-level
+        details nobody has determined yet. Treating "the context did not say"
+        the same as "it disagrees" penalised every lesson for facts that were
+        merely unknown, and both lesson kinds the extractor produces scored
+        below the threshold in real runs: they were adopted and then never
+        injected.
+
+        So each dimension counts only when both sides have something to say.
+        A dimension that disagrees still counts against the lesson; one nobody
+        can evaluate is simply not evidence either way. With no evaluable
+        dimension at all a lesson does not match — being unopinionated is not
+        grounds for injecting it everywhere.
+        """
+        evaluable = 0.0
+        matched = 0.0
+
+        task_modes = conditions.get("task_modes")
+        if task_modes and context.get("mode") is not None:
+            evaluable += 0.25
+            if context["mode"] in task_modes:
+                matched += 0.25
+
+        feature_type = conditions.get("feature_type")
+        if feature_type and context.get("feature_type") is not None:
+            evaluable += 0.2
+            if context["feature_type"] == feature_type:
+                matched += 0.2
+
         ratio_range = conditions.get("missing_ratio_range")
-        if ratio_range and ratio_range[0] <= float(context.get("missing_ratio", 1)) <= ratio_range[1]:
-            score += 0.25
-        if set(context.get("tags", [])) & set(domain):
-            score += 0.2
-        score += min(confidence, 1.0) * 0.1
-        return score
+        if ratio_range and context.get("missing_ratio") is not None:
+            evaluable += 0.25
+            if ratio_range[0] <= float(context["missing_ratio"]) <= ratio_range[1]:
+                matched += 0.25
+
+        context_tags = set(context.get("tags") or [])
+        if domain and context_tags:
+            evaluable += 0.2
+            if context_tags & set(domain):
+                matched += 0.2
+
+        if evaluable == 0:
+            return 0.0
+        return (matched / evaluable) * 0.9 + min(confidence, 1.0) * 0.1
