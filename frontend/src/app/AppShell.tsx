@@ -707,6 +707,9 @@ export function AppShell() {
           // 目标列变了就重算整份计划；特征选择刻意不带上——它是上一版计划里的选择，
           // 新目标列下未必仍然成立（原目标列会变成一个普通特征）。
           onSelectPlanTargetColumn={(column) => handleGeneratePreprocessingPlan(undefined, column)}
+          onSelectPlanStrategies={(strategies) =>
+            handleGeneratePreprocessingPlan(undefined, undefined, strategies)
+          }
           onSelectExperimentRun={setFocusedExperimentId}
           onSelectFile={handleSelectProjectFile}
           onSelectTargetColumn={setSuggestedTargetColumn}

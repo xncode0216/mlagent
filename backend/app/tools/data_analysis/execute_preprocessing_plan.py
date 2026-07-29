@@ -5,6 +5,11 @@ from typing import Any
 
 import pandas as pd
 
+from app.tools.data_analysis.preprocessing_strategies import (
+    CATEGORICAL_FILL_VALUE,
+    strategies_from_steps,
+)
+
 
 def _ordered_existing_columns(df: pd.DataFrame, columns: list[Any], *, exclude: set[str]) -> list[str]:
     result: list[str] = []
@@ -27,35 +32,49 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def _numeric_transform(series: pd.Series, *, scale: bool) -> tuple[pd.Series, dict[str, Any]]:
+def _numeric_fill_value(numeric: pd.Series, imputer: str) -> float:
+    if imputer == "zero":
+        return 0.0
+    value = numeric.mean() if imputer == "mean" else numeric.median()
+    return 0.0 if pd.isna(value) else float(value)
+
+
+def _numeric_transform(series: pd.Series, *, imputer: str, scaler: str) -> tuple[pd.Series, dict[str, Any]]:
     numeric = pd.to_numeric(series, errors="coerce")
-    median = numeric.median()
-    if pd.isna(median):
-        median = 0.0
-    filled = numeric.fillna(float(median))
+    fill_value = _numeric_fill_value(numeric, imputer)
+    filled = numeric.fillna(fill_value)
     mean = float(filled.mean()) if len(filled) else 0.0
     std = float(filled.std(ddof=0)) if len(filled) else 0.0
-    if scale and std > 0:
-        transformed = (filled - mean) / std
-    elif scale:
-        transformed = filled * 0
+    minimum = float(filled.min()) if len(filled) else 0.0
+    maximum = float(filled.max()) if len(filled) else 0.0
+    if scaler == "standard":
+        # 常量列的标准差为 0，按定义整列归零；除以 0 会得到 NaN 并污染下游训练。
+        transformed = (filled - mean) / std if std > 0 else filled * 0
+    elif scaler == "minmax":
+        span = maximum - minimum
+        transformed = (filled - minimum) / span if span > 0 else filled * 0
     else:
         transformed = filled
     return transformed, {
-        "imputer": "median",
-        "fill_value": float(median),
-        "scaler": "standard" if scale else "none",
+        "imputer": imputer,
+        "fill_value": fill_value,
+        "scaler": scaler,
         "mean": mean,
         "std": std,
+        **({"min": minimum, "max": maximum} if scaler == "minmax" else {}),
     }
 
 
-def _categorical_transform(series: pd.Series) -> tuple[pd.Series, dict[str, Any]]:
-    mode = series.mode(dropna=True)
-    fill_value = str(mode.iloc[0]) if not mode.empty else "__missing__"
+def _categorical_transform(series: pd.Series, *, imputer: str) -> tuple[pd.Series, dict[str, Any]]:
+    if imputer == "constant":
+        fill_value = CATEGORICAL_FILL_VALUE
+    else:
+        mode = series.mode(dropna=True)
+        # 整列皆空时没有众数可用，退回占位值——否则 fillna 会拿到 NaN 而什么都没填上
+        fill_value = str(mode.iloc[0]) if not mode.empty else CATEGORICAL_FILL_VALUE
     transformed = series.fillna(fill_value).astype(str)
     return transformed, {
-        "imputer": "most_frequent",
+        "imputer": imputer,
         "fill_value": fill_value,
         "encoder": "one_hot_ignore_unknown",
     }
@@ -110,16 +129,21 @@ def execute_preprocessing_plan(
         "categorical": {},
     }
 
-    numeric_step = plan.get("steps", {}).get("numeric", {}) if isinstance(plan.get("steps"), dict) else {}
-    scale_numeric = numeric_step.get("scaler") == "standard"
+    # 策略从计划里取，取值非法直接抛错。此前只有 scaler 被读取，imputer/encoder 是
+    # 有声明无消费方——改计划里的 imputer 不会改变任何行为，而变换报告仍回报硬编码值。
+    strategies = strategies_from_steps(plan.get("steps"))
     for column in numeric_features:
-        transformed, summary = _numeric_transform(df[column], scale=scale_numeric)
+        transformed, summary = _numeric_transform(
+            df[column],
+            imputer=strategies.numeric_imputer,
+            scaler=strategies.numeric_scaler,
+        )
         output[column] = transformed
         transformations["numeric"][column] = summary
 
     categorical_frame = pd.DataFrame(index=df.index)
     for column in categorical_features:
-        transformed, summary = _categorical_transform(df[column])
+        transformed, summary = _categorical_transform(df[column], imputer=strategies.categorical_imputer)
         transformations["categorical"][column] = summary
         categorical_frame[column] = transformed
     if not categorical_frame.empty:

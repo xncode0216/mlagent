@@ -1,5 +1,7 @@
+import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
@@ -279,6 +281,120 @@ def test_generate_preprocessing_plan_keeps_default_sample_features(tmp_path, mon
     assert plan_response.json()["plan"]["feature_columns"] == ["age", "income"]
     assert execute_response.status_code == 200
     assert execute_response.json()["summary"]["encoded_feature_columns"] == ["age", "income"]
+
+
+def test_planned_strategies_actually_change_the_transformed_dataset(tmp_path, monkeypatch):
+    """策略必须真的被执行器消费，而不只是写在计划里。
+
+    此前 `steps` 四个策略字段只有 `scaler` 有消费方：改 `imputer` 不会改变任何行为，
+    而变换报告仍回报硬编码的 `median`——计划在说谎。这里用同一份数据跑两种策略，
+    断言产出的数值确实不同。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    root = Path(project["workspace_path"])
+    # age 的中位数 30、均值 40：两种填充策略给出的结果必然不同
+    (root / "data" / "customer_churn.csv").write_text(
+        "age,contract,churn\n10,a,No\n30,b,Yes\n80,a,No\n,b,Yes\n",
+        encoding="utf-8",
+    )
+
+    def plan_and_execute(session: str, **strategies: str) -> list[str]:
+        plan = client.post(
+            f"/api/projects/{project['id']}/analysis/preprocess-plan",
+            json={"dataset_path": "data/customer_churn.csv", "session_id": session, **strategies},
+        )
+        assert plan.status_code == 200, plan.text
+        executed = client.post(
+            f"/api/projects/{project['id']}/analysis/execute-preprocess-plan",
+            json={
+                "dataset_path": "data/customer_churn.csv",
+                "preprocessing_plan_path": plan.json()["plan_artifact"]["path"],
+                "session_id": session,
+            },
+        )
+        assert executed.status_code == 200, executed.text
+        transformed = (root / executed.json()["transformed_data_artifact"]["path"]).read_text(encoding="utf-8")
+        header, *rows = transformed.splitlines()
+        age_index = header.split(",").index("age")
+        return [row.split(",")[age_index] for row in rows]
+
+    # 均值填充 + 不缩放：缺失的 age 被填成 40，其余原样保留
+    unscaled = plan_and_execute("mean-session", numeric_imputer="mean", numeric_scaler="none")
+    assert unscaled == ["10.0", "30.0", "80.0", "40.0"]
+
+    # 中位数填充 + minmax：缺失填 30，再线性压到 [0, 1]
+    scaled = plan_and_execute("minmax-session", numeric_imputer="median", numeric_scaler="minmax")
+    assert scaled[0] == "0.0" and scaled[2] == "1.0"
+    assert scaled != unscaled
+
+    # 报告回报的必须是真正用上的策略，而不是常量
+    report = json.loads(
+        (root / "results" / "mean-session" / "preprocessing_transform_report.json").read_text(encoding="utf-8")
+    )
+    assert report["transformations"]["numeric"]["age"] == {
+        "imputer": "mean",
+        "fill_value": 40.0,
+        "scaler": "none",
+        "mean": 40.0,
+        "std": pytest.approx(25.495, rel=1e-3),
+    }
+
+
+def test_generate_preprocessing_plan_rejects_an_unsupported_strategy(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (Path(project["workspace_path"]) / "data" / "customer_churn.csv").write_text(
+        "age,churn\n42,1\n37,0\n55,0\n", encoding="utf-8"
+    )
+
+    # 静默忽略不认识的策略会让计划与实际行为不一致，这正是本轮要消灭的谎报
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/preprocess-plan",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "session_id": "bad-strategy",
+            "numeric_imputer": "magic",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "magic" in response.json()["detail"]
+
+
+def test_pipeline_script_follows_the_planned_strategies(tmp_path, monkeypatch):
+    """脚本是"可复现"的凭据，它必须与计划一致，否则用户拿到的脚本跑出来是另一回事。"""
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    (Path(project["workspace_path"]) / "data" / "customer_churn.csv").write_text(
+        "age,contract,churn\n42,a,1\n37,b,0\n55,a,0\n", encoding="utf-8"
+    )
+
+    client.post(
+        f"/api/projects/{project['id']}/analysis/preprocess-plan",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "session_id": "script-session",
+            "numeric_imputer": "zero",
+            "numeric_scaler": "none",
+            "categorical_imputer": "constant",
+        },
+    )
+
+    script = (
+        Path(project["workspace_path"]) / "notebooks" / "script-session_preprocessing_pipeline.py"
+    ).read_text(encoding="utf-8")
+    assert "SimpleImputer(strategy='constant', fill_value=0)" in script
+    assert "SimpleImputer(strategy='constant', fill_value='__missing__')" in script
+    # scaler 选 none 时不该留下一个空转的缩放步骤
+    assert "StandardScaler()" not in script
+    assert "MinMaxScaler()" not in script
 
 
 def test_execute_preprocessing_plan_writes_dataset_summary_and_report(tmp_path, monkeypatch):

@@ -1,5 +1,10 @@
 import { compactInformationIdentifier, friendlyPathName } from "../informationDisplay";
-import type { CockpitActionId, CockpitComponentAction, CockpitComponentControl } from "./types";
+import type {
+  CockpitActionId,
+  CockpitComponentAction,
+  CockpitComponentControl,
+  PlanStrategyControlId,
+} from "./types";
 
 export function stringProp(props: Record<string, unknown> | undefined, key: string) {
   const value = props?.[key];
@@ -90,6 +95,64 @@ export function buildTargetColumnControls(
       options: values.map((value) => ({ value, label: value })),
     },
   ];
+}
+
+/**
+ * 预处理策略选择器。取值词表必须与后端 `preprocessing_strategies.py` 一致——那边会
+ * 拒绝不认识的取值，所以这里多给一个选项只会换来一个 400，而不是静默走成别的行为。
+ */
+const PLAN_STRATEGY_CONTROLS: Array<{
+  id: PlanStrategyControlId;
+  label: string;
+  description: string;
+  fallback: string;
+  options: Array<{ value: string; label: string }>;
+}> = [
+  {
+    id: "numeric_imputer",
+    label: "数值列缺失填充",
+    description: "偏态数据用中位数更稳，计数类列常直接填 0。",
+    fallback: "median",
+    options: [
+      { value: "median", label: "中位数" },
+      { value: "mean", label: "均值" },
+      { value: "zero", label: "填 0" },
+    ],
+  },
+  {
+    id: "numeric_scaler",
+    label: "数值列缩放",
+    description: "线性模型通常需要缩放；树模型不需要，且不缩放更利于解读。",
+    fallback: "standard",
+    options: [
+      { value: "standard", label: "标准化" },
+      { value: "minmax", label: "归一化到 [0,1]" },
+      { value: "none", label: "不缩放" },
+    ],
+  },
+  {
+    id: "categorical_imputer",
+    label: "类别列缺失填充",
+    description: "用众数填会放大多数类；填成独立取值可以把「缺失」本身留给模型判断。",
+    fallback: "most_frequent",
+    options: [
+      { value: "most_frequent", label: "众数" },
+      { value: "constant", label: "独立取值 __missing__" },
+    ],
+  },
+];
+
+export function buildPlanStrategyControls(
+  props: Record<string, unknown> | undefined,
+): CockpitComponentControl[] {
+  return PLAN_STRATEGY_CONTROLS.map((control) => ({
+    id: control.id,
+    kind: "select" as const,
+    label: control.label,
+    description: control.description,
+    value: stringProp(props, control.id) ?? control.fallback,
+    options: control.options,
+  }));
 }
 
 export function runCandidateLabel(candidate: Record<string, unknown>) {

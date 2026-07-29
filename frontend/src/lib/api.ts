@@ -588,6 +588,8 @@ export async function generatePreprocessingPlan(
   selectedFeatures?: string[],
   // 省略时沿用后端的自动推断；给定则整份计划围绕该目标列重算。
   targetColumn?: string,
+  // 填充/缩放/编码策略。取值词表由后端 preprocessing_strategies 定义并校验。
+  strategies?: Record<string, string>,
 ): Promise<PreprocessingPlanResult> {
   return request<PreprocessingPlanResult>(`/api/projects/${projectId}/analysis/preprocess-plan`, {
     method: "POST",
@@ -597,6 +599,7 @@ export async function generatePreprocessingPlan(
       session_id: sessionId,
       ...(selectedFeatures ? { selected_features: selectedFeatures } : {}),
       ...(targetColumn ? { target_column: targetColumn } : {}),
+      ...(strategies ?? {}),
     }),
   });
 }

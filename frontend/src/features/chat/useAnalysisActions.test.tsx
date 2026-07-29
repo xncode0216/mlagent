@@ -112,6 +112,7 @@ describe("生成预处理计划", () => {
       "session-1",
       ["age", "income"],
       undefined,
+      undefined,
     );
   });
 
@@ -132,6 +133,7 @@ describe("生成预处理计划", () => {
       "session-1",
       undefined,
       "converted",
+      undefined,
     );
   });
 });
