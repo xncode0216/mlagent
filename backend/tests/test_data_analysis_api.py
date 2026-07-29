@@ -158,6 +158,77 @@ def test_generate_preprocessing_plan_applies_a_feature_selection(tmp_path, monke
     assert "categorical_features = ['contract']" in script
 
 
+def test_generate_preprocessing_plan_applies_an_explicit_target_column(tmp_path, monkeypatch):
+    """推断只是启发式，猜错时用户要能纠正——而纠正必须重算整份计划。
+
+    `churn` 名字命中目标提示又在末列，推断必然选它；这里改选 `contract`，
+    于是 churn 反过来变成一个普通特征，drop/feature/steps 全部跟着重算。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    dataset_path = Path(project["workspace_path"]) / "data" / "customer_churn.csv"
+    dataset_path.write_text(
+        "age,income,contract,churn\n"
+        "42,86000,Month-to-month,No\n"
+        "37,72000,One year,Yes\n"
+        "55,91000,Two year,No\n"
+        "29,64000,Month-to-month,Yes\n",
+        encoding="utf-8",
+    )
+
+    inferred = client.post(
+        f"/api/projects/{project['id']}/analysis/preprocess-plan",
+        json={"dataset_path": "data/customer_churn.csv", "session_id": "inferred-session"},
+    )
+    assert inferred.json()["plan"]["target_column"] == "churn"
+
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/preprocess-plan",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "session_id": "target-session",
+            "target_column": "contract",
+        },
+    )
+
+    assert response.status_code == 200
+    plan = response.json()["plan"]
+    assert plan["target_column"] == "contract"
+    assert plan["steps"]["target"]["column"] == "contract"
+    assert "churn" in plan["feature_columns"]
+    assert "contract" not in plan["feature_columns"]
+
+    # 派生产物必须跟着走，否则执行与训练会用上和计划不一致的目标列
+    script = (Path(project["workspace_path"]) / "notebooks/target-session_preprocessing_pipeline.py").read_text(
+        encoding="utf-8"
+    )
+    assert "target_column = 'contract'" in script
+
+
+def test_generate_preprocessing_plan_rejects_a_target_column_the_dataset_lacks(tmp_path, monkeypatch):
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    dataset_path = Path(project["workspace_path"]) / "data" / "customer_churn.csv"
+    dataset_path.write_text("age,income,churn\n42,86000,1\n37,72000,0\n55,91000,0\n", encoding="utf-8")
+
+    # 放行只会把失败推迟到训练时，那里的报错离用户更远
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/preprocess-plan",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "session_id": "target-session",
+            "target_column": "not_a_column",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "not_a_column" in response.json()["detail"]
+
+
 def test_generate_preprocessing_plan_rejects_an_empty_feature_selection(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()

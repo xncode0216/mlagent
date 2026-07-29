@@ -61,7 +61,10 @@ type CockpitControlBase = {
  * 而训练目标列与预处理特征都需要这一步。只落地当前真实用到的两种控件形态。
  */
 export type CockpitComponentControl =
-  | (CockpitControlBase & { id: "target_column"; kind: "select"; value: string })
+  // `target_column` 切换本次训练的目标列；`plan_target_column` 会按新目标列重算整份
+  // 预处理计划。两者后果差别很大，因此各占一个 id——`runCockpitControl` 靠它分派，
+  // 共用一个 id 会让计划卡片上的选择静默走成训练卡片的行为。
+  | (CockpitControlBase & { id: "target_column" | "plan_target_column"; kind: "select"; value: string })
   | (CockpitControlBase & { id: "feature_columns"; kind: "multi_select"; values: string[] });
 
 export type CockpitComponentCard = {

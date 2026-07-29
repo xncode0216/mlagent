@@ -1421,7 +1421,8 @@ describe("cockpit training target selection", () => {
     });
 
     const control = card?.controls?.find((item) => item.id === "target_column");
-    expect(control?.value).toBe("churn");
+    // 与上一条用例同样的写法：select 变体的 id 现在是联合类型，find 不再把它收窄到单一变体
+    expect(control).toMatchObject({ value: "churn" });
     expect(control?.options.map((option) => option.value)).toContain("churn");
   });
 
@@ -1660,3 +1661,90 @@ describe("cockpit transformation report card", () => {
   });
 });
 
+
+/**
+ * 计划卡片的目标列选择器。目标列决定了哪些列进 drop、哪些进特征、pipeline_script
+ * 怎么写，所以纠正它必须在审批检查点这里并重算整份计划——放到训练卡片上改已经太晚，
+ * 那时计划早已按错的目标列算完，而计划才是训练目标列的权威来源。
+ */
+describe("cockpit preprocessing plan target selection", () => {
+  const planApproval: AgentStreamEvent[] = [
+    {
+      type: "component_requested",
+      task_id: "session-1",
+      stage: "profile",
+      component: "data_quality",
+      title: "Review data quality profile",
+      artifact_path: "results/session-1/data_quality_profile.json",
+      props: { target_candidates: ["converted", "contract_type"] },
+    },
+    {
+      type: "component_requested",
+      task_id: "session-1",
+      stage: "transform",
+      component: "preprocessing_plan",
+      title: "Review preprocessing plan",
+      artifact_path: "results/session-1/preprocessing_plan.json",
+      props: { target_column: "converted", feature_columns: ["age"], drop_columns: ["note"] },
+    },
+    {
+      type: "approval_required",
+      task_id: "session-1",
+      approval_id: "session-1-preprocessing-plan",
+      stage: "transform",
+      title: "Approve preprocessing transform",
+      artifact_path: "results/session-1/preprocessing_plan.json",
+    },
+  ];
+
+  function planCardFor(events: AgentStreamEvent[]) {
+    const activeFile = "data/customer_churn.csv";
+    return buildCockpitComponentCards({
+      activeFile,
+      events,
+      mode: "analysis",
+      projectId: "project-1",
+      workflow: deriveWorkflowState(events, "analysis", activeFile),
+    }).find((card) => card.id === "preprocessing-plan");
+  }
+
+  it("offers a target column selector at the approval checkpoint", () => {
+    const card = planCardFor(planApproval);
+
+    const control = card?.controls?.find((item) => item.id === "plan_target_column");
+    expect(control).toMatchObject({ kind: "select", value: "converted" });
+    expect(control?.options.map((option) => option.value)).toEqual(["converted", "contract_type"]);
+    // 先定预测什么，再定用哪些列去预测
+    expect(card?.controls?.map((item) => item.id)).toEqual(["plan_target_column", "feature_columns"]);
+  });
+
+  it("keeps the plan selector distinct from the training one", () => {
+    // 两者后果不同：一个重算整份计划，一个只切换本次训练的目标列。共用 id 会让
+    // 计划卡片上的选择静默走成训练卡片的行为。
+    const card = planCardFor(planApproval);
+
+    expect(card?.controls?.map((item) => item.id)).not.toContain("target_column");
+  });
+
+  it("does not offer the selector once the checkpoint is resolved", () => {
+    // 变换已执行后再改目标列毫无意义：这份计划已经产出了数据集，改它不会回头重算
+    const card = planCardFor([
+      ...planApproval,
+      {
+        type: "artifact_created",
+        artifact: {
+          id: "artifact-planned",
+          project_id: "project-1",
+          session_id: "session-1",
+          type: "dataframe",
+          name: "customer_churn_planned.csv",
+          path: "results/session-1/customer_churn_planned.csv",
+          metadata: {},
+          created_at: "2026-07-29T00:00:00Z",
+        },
+      },
+    ]);
+
+    expect(card?.controls?.map((item) => item.id) ?? []).not.toContain("plan_target_column");
+  });
+});

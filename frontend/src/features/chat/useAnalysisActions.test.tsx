@@ -111,6 +111,27 @@ describe("生成预处理计划", () => {
       "data/churn.csv",
       "session-1",
       ["age", "income"],
+      undefined,
+    );
+  });
+
+  it("重算计划时把显式目标列透传给后端", async () => {
+    vi.mocked(generatePreprocessingPlan).mockResolvedValue({
+      plan: {},
+      plan_artifact: artifact("results/s1/preprocessing_plan.json"),
+      pipeline_artifact: artifact("notebooks/s1_pipeline.py"),
+    } as never);
+    const { result } = renderAnalysisActions();
+
+    await act(() => result.current.handleGeneratePreprocessingPlan(undefined, "converted"));
+
+    // 不带特征选择：那是上一版计划里的选择，换目标列后未必仍然成立
+    expect(generatePreprocessingPlan).toHaveBeenCalledWith(
+      "project-1",
+      "data/churn.csv",
+      "session-1",
+      undefined,
+      "converted",
     );
   });
 });

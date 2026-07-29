@@ -50,7 +50,7 @@ interface AnalysisActionsParams {
 interface AnalysisActions {
   handleGenerateReport: () => Promise<void>;
   handleGenerateProfile: () => Promise<void>;
-  handleGeneratePreprocessingPlan: (selectedFeatures?: string[]) => Promise<void>;
+  handleGeneratePreprocessingPlan: (selectedFeatures?: string[], targetColumn?: string) => Promise<void>;
   handleExecutePreprocessingPlan: (preprocessingPlanPathOverride?: string | null) => Promise<void>;
   handleRespondToApproval: (
     approvalId: string,
@@ -174,11 +174,11 @@ export function useAnalysisActions({
     setActiveFile(result.artifact.path);
   }
 
-  async function handleGeneratePreprocessingPlan(selectedFeatures?: string[]) {
+  async function handleGeneratePreprocessingPlan(selectedFeatures?: string[], targetColumn?: string) {
     if (!project) return;
     const sessionId = activeSession?.id ?? "manual-analysis";
     const datasetPath = isLikelyDatasetPath(activeFile) ? activeFile : trainingDatasetPath;
-    const result = await generatePreprocessingPlan(project.id, datasetPath, sessionId, selectedFeatures);
+    const result = await generatePreprocessingPlan(project.id, datasetPath, sessionId, selectedFeatures, targetColumn);
     const planFolder = parentPath(result.plan_artifact.path);
     const nextFolders = Array.from(
       new Set([...expandedFolders, "results", planFolder, "notebooks"].filter(Boolean)),

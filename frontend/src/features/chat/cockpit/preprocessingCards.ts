@@ -1,8 +1,10 @@
 import {
   action,
   buildFeatureSelectionControls,
+  buildTargetColumnControls,
   stringListFromProps,
   stringProp,
+  targetCandidatesFromProps,
 } from "./primitives";
 import type { CardBuilderContext, CockpitComponentCard } from "./types";
 
@@ -31,6 +33,19 @@ export function buildPreprocessingCards(ctx: CardBuilderContext): CockpitCompone
       stringListFromProps(planSignalProps, "feature_columns"),
       stringListFromProps(planSignalProps, "drop_columns"),
     );
+    // 目标列决定了哪些列进 drop、哪些进特征、pipeline_script 怎么写，所以纠正它要在
+    // 审批检查点这里、并重算整份计划。放到训练卡片上改已经太晚：那时计划早已按错的
+    // 目标列算完了，而计划才是训练目标列的权威来源。
+    const planTargetControls = isPendingApproval
+      ? buildTargetColumnControls(
+          targetCandidatesFromProps(signals.get("data_quality")?.props),
+          stringProp(planSignalProps, "target_column") ?? effectiveTargetColumn,
+          {
+            id: "plan_target_column",
+            description: "切换后会按新目标列重算整份计划：丢弃列、特征列与管道脚本都会更新。",
+          },
+        )
+      : [];
     cards.push({
       id: "preprocessing-plan",
       kind: "preprocessing_plan",
@@ -53,7 +68,10 @@ export function buildPreprocessingCards(ctx: CardBuilderContext): CockpitCompone
         { label: "计划", value: planPath ?? "未选择计划" },
         { label: "输出", value: plannedDatasetPath ?? "等待执行" },
       ],
-      ...(featureControls.length > 0 ? { controls: featureControls } : {}),
+      // 目标列在前：先定预测什么，再定用哪些列去预测
+      ...(planTargetControls.length + featureControls.length > 0
+        ? { controls: [...planTargetControls, ...featureControls] }
+        : {}),
       actions: [
         action("open_artifact", "打开计划", {
           disabledReason: planPath ? undefined : "没有可用的预处理计划产物。",
