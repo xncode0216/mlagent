@@ -71,6 +71,7 @@ type AgentWorkspaceProps = {
   onSelectFile?: (path: string) => void;
   onSelectTargetColumn?: (column: string) => void;
   onSelectPlanTargetColumn?: (column: string) => Promise<void> | void;
+  onSelectPlanStrategies?: (strategies: Record<string, string>) => Promise<void> | void;
   onTrainSklearn?: (targetColumn: string, preprocessingPlanPath?: string | null, datasetPath?: string) => Promise<void>;
   sendMessage: (
     content: string,
@@ -131,6 +132,23 @@ type ActionFeedback = {
   kind: "info" | "success" | "warning" | "error";
   message: string;
 };
+
+const PLAN_STRATEGY_IDS = ["numeric_imputer", "numeric_scaler", "categorical_imputer"] as const;
+
+/**
+ * 从已渲染的计划卡片上读回当前策略。后端每次都是按**完整**策略重算整份计划，
+ * 只送改动的那一项会让另外两项悄悄回到默认值。
+ */
+function planStrategiesFromCards(cards: CockpitComponentCard[]): Record<string, string> {
+  const controls = cards.find((card) => card.kind === "preprocessing_plan")?.controls ?? [];
+  const strategies: Record<string, string> = {};
+  for (const control of controls) {
+    if (control.kind === "select" && (PLAN_STRATEGY_IDS as readonly string[]).includes(control.id)) {
+      strategies[control.id] = control.value;
+    }
+  }
+  return strategies;
+}
 
 /** 后端把产生该消息的 trace 写进 metadata；旧消息可能没有，此时不提供入口。 */
 function messageTraceId(message: AgentMessage) {
@@ -294,6 +312,7 @@ export function AgentWorkspace({
   onSelectFile,
   onSelectTargetColumn,
   onSelectPlanTargetColumn,
+  onSelectPlanStrategies,
   onTrainSklearn,
   sendMessage,
 }: AgentWorkspaceProps) {
@@ -594,6 +613,21 @@ export function AgentWorkspace({
           setActionFeedback({
             kind: "error",
             message: error instanceof Error ? error.message : `按目标列 ${value} 重新生成计划失败。`,
+          });
+        }
+        break;
+      case "numeric_imputer":
+      case "numeric_scaler":
+      case "categorical_imputer":
+        // 三项策略一起送：后端每次都是按完整策略重算整份计划，只送改动的那一项
+        // 会让另外两项悄悄回到默认值。当前值从同一张卡片的其余控件上读。
+        try {
+          await onSelectPlanStrategies?.({ ...planStrategiesFromCards(cockpitCards), [control.id]: value });
+          setActionFeedback({ kind: "success", message: `已按新的${control.label}重新生成计划。` });
+        } catch (error) {
+          setActionFeedback({
+            kind: "error",
+            message: error instanceof Error ? error.message : `按新的${control.label}重新生成计划失败。`,
           });
         }
         break;

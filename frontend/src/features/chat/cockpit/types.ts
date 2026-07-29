@@ -60,11 +60,18 @@ type CockpitControlBase = {
  * 卡片内的输入控件。facts 只读、actions 只触发，两者都无法表达“用户在卡片里做选择”，
  * 而训练目标列与预处理特征都需要这一步。只落地当前真实用到的两种控件形态。
  */
+/** 预处理策略控件。与后端 `preprocessing_strategies` 的字段一一对应，改名要两边同步。 */
+export type PlanStrategyControlId = "numeric_imputer" | "numeric_scaler" | "categorical_imputer";
+
 export type CockpitComponentControl =
   // `target_column` 切换本次训练的目标列；`plan_target_column` 会按新目标列重算整份
   // 预处理计划。两者后果差别很大，因此各占一个 id——`runCockpitControl` 靠它分派，
   // 共用一个 id 会让计划卡片上的选择静默走成训练卡片的行为。
-  | (CockpitControlBase & { id: "target_column" | "plan_target_column"; kind: "select"; value: string })
+  | (CockpitControlBase & {
+      id: "target_column" | "plan_target_column" | PlanStrategyControlId;
+      kind: "select";
+      value: string;
+    })
   | (CockpitControlBase & { id: "feature_columns"; kind: "multi_select"; values: string[] });
 
 export type CockpitComponentCard = {

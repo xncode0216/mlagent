@@ -17,6 +17,10 @@ from app.tools.data_analysis import (
     preprocessing_plan,
     profile_dataset,
 )
+from app.tools.data_analysis.preprocessing_strategies import (
+    PreprocessingStrategies,
+    strategy_metadata,
+)
 
 router = APIRouter(prefix="/api/projects/{project_id}/analysis", tags=["analysis"])
 
@@ -35,6 +39,10 @@ class PreprocessingPlanRequest(AnalysisReportRequest):
     selected_features: list[str] | None = Field(default=None, max_length=4096)
     # None 表示沿用自动推断；给定则由调用方指定目标列，整份计划围绕它重算。
     target_column: str | None = Field(default=None, min_length=1, max_length=512)
+    # 填充/缩放/编码策略。取值词表在 preprocessing_strategies 里，非法值由该模块拒绝。
+    numeric_imputer: str | None = Field(default=None, min_length=1, max_length=64)
+    numeric_scaler: str | None = Field(default=None, min_length=1, max_length=64)
+    categorical_imputer: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class ExecutePreprocessingPlanRequest(BaseModel):
@@ -246,15 +254,22 @@ def generate_preprocessing_plan(project_id: str, payload: PreprocessingPlanReque
         # 训练侧在计划无特征时会回退到“使用全部列”，空选择因此会静默违背用户意图
         raise HTTPException(status_code=400, detail="At least one feature must be selected")
 
+    defaults = PreprocessingStrategies()
     try:
         plan = preprocessing_plan(
             dataset,
             dataset_path=payload.dataset_path,
             selected_features=payload.selected_features,
             target_column=payload.target_column,
+            strategies=PreprocessingStrategies(
+                numeric_imputer=payload.numeric_imputer or defaults.numeric_imputer,
+                numeric_scaler=payload.numeric_scaler or defaults.numeric_scaler,
+                categorical_imputer=payload.categorical_imputer or defaults.categorical_imputer,
+            ),
         )
     except ValueError as error:
-        # 目标列不在数据集里。放行只会把失败推迟到训练时，那里的报错还离用户更远。
+        # 目标列不在数据集里，或策略取值不受支持。放行只会把失败推迟到执行/训练时，
+        # 那里的报错离用户更远。
         raise HTTPException(status_code=400, detail=str(error)) from error
     result_dir = root / "results" / payload.session_id
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -287,6 +302,7 @@ def generate_preprocessing_plan(project_id: str, payload: PreprocessingPlanReque
                 "dataset_path": payload.dataset_path,
                 "target_column": plan["target_column"],
                 "artifact_role": "preprocessing_plan",
+                **strategy_metadata(plan.get("steps")),
             },
         ),
         "pipeline_artifact": _artifact_payload(

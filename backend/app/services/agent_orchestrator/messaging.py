@@ -51,6 +51,7 @@ from app.tools.data_analysis import (
     execute_preprocessing_plan,
     preprocessing_plan,
 )
+from app.tools.data_analysis.preprocessing_strategies import strategy_metadata
 
 
 # 运行模式到经验领域标签的映射，取值与 LessonExtractor 写入 `domain` 的词汇一致，
@@ -532,6 +533,7 @@ class MessagingMixin:
                 "output_dataset_path": plan["output_dataset_path"],
                 "feature_columns": plan["feature_columns"],
                 "drop_columns": plan["drop_columns"],
+                **strategy_metadata(plan.get("steps")),
             },
         )
         script_path = context.project_root / "notebooks" / f"{self.session_id}_preprocessing_pipeline.py"

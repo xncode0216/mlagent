@@ -1,6 +1,7 @@
 import {
   action,
   buildFeatureSelectionControls,
+  buildPlanStrategyControls,
   buildTargetColumnControls,
   stringListFromProps,
   stringProp,
@@ -46,6 +47,9 @@ export function buildPreprocessingCards(ctx: CardBuilderContext): CockpitCompone
           },
         )
       : [];
+    // 策略选择器与目标列一样只在审批检查点提供：变换执行后计划已经产出数据集，
+    // 改策略不会回头重算。
+    const strategyControls = isPendingApproval ? buildPlanStrategyControls(planSignalProps) : [];
     cards.push({
       id: "preprocessing-plan",
       kind: "preprocessing_plan",
@@ -68,9 +72,9 @@ export function buildPreprocessingCards(ctx: CardBuilderContext): CockpitCompone
         { label: "计划", value: planPath ?? "未选择计划" },
         { label: "输出", value: plannedDatasetPath ?? "等待执行" },
       ],
-      // 目标列在前：先定预测什么，再定用哪些列去预测
-      ...(planTargetControls.length + featureControls.length > 0
-        ? { controls: [...planTargetControls, ...featureControls] }
+      // 顺序即阅读顺序：先定预测什么，再定用哪些列，最后才是这些列怎么处理
+      ...(planTargetControls.length + featureControls.length + strategyControls.length > 0
+        ? { controls: [...planTargetControls, ...featureControls, ...strategyControls] }
         : {}),
       actions: [
         action("open_artifact", "打开计划", {

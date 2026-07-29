@@ -2,6 +2,10 @@ from pathlib import Path
 from typing import Any
 
 from app.tools.data_analysis.data_quality_profile import data_quality_profile
+from app.tools.data_analysis.preprocessing_strategies import (
+    CATEGORICAL_FILL_VALUE,
+    PreprocessingStrategies,
+)
 
 
 def _is_identifier_name(name: str) -> bool:
@@ -72,6 +76,24 @@ def _drop_reason(column: dict[str, Any], target_column: str, *, row_count: int) 
     return None
 
 
+# 策略 -> sklearn 片段。脚本是"可复现"的凭据，必须与计划里的策略一致，否则用户拿到的
+# 脚本跑出来的结果和产品里的变换结果不是一回事。
+_NUMERIC_IMPUTER_SNIPPETS = {
+    "median": "SimpleImputer(strategy='median')",
+    "mean": "SimpleImputer(strategy='mean')",
+    "zero": "SimpleImputer(strategy='constant', fill_value=0)",
+}
+_NUMERIC_SCALER_SNIPPETS: dict[str, str | None] = {
+    "standard": "StandardScaler()",
+    "minmax": "MinMaxScaler()",
+    "none": None,
+}
+_CATEGORICAL_IMPUTER_SNIPPETS = {
+    "most_frequent": "SimpleImputer(strategy='most_frequent')",
+    "constant": f"SimpleImputer(strategy='constant', fill_value={CATEGORICAL_FILL_VALUE!r})",
+}
+
+
 def _render_pipeline_script(
     *,
     dataset_path: str,
@@ -80,14 +102,19 @@ def _render_pipeline_script(
     numeric_features: list[str],
     categorical_features: list[str],
     drop_columns: list[str],
+    strategies: PreprocessingStrategies,
 ) -> str:
+    scaler_snippet = _NUMERIC_SCALER_SNIPPETS[strategies.numeric_scaler]
+    numeric_steps = [f"        ('imputer', {_NUMERIC_IMPUTER_SNIPPETS[strategies.numeric_imputer]}),"]
+    if scaler_snippet is not None:
+        numeric_steps.append(f"        ('scaler', {scaler_snippet}),")
     return "\n".join(
         [
             "import pandas as pd",
             "from sklearn.compose import ColumnTransformer",
             "from sklearn.impute import SimpleImputer",
             "from sklearn.pipeline import Pipeline",
-            "from sklearn.preprocessing import OneHotEncoder, StandardScaler",
+            "from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler",
             "",
             f"dataset_path = {dataset_path!r}",
             f"output_path = {output_path!r}",
@@ -102,13 +129,12 @@ def _render_pipeline_script(
             "",
             "numeric_pipeline = Pipeline(",
             "    steps=[",
-            "        ('imputer', SimpleImputer(strategy='median')),",
-            "        ('scaler', StandardScaler()),",
+            *numeric_steps,
             "    ]",
             ")",
             "categorical_pipeline = Pipeline(",
             "    steps=[",
-            "        ('imputer', SimpleImputer(strategy='most_frequent')),",
+            f"        ('imputer', {_CATEGORICAL_IMPUTER_SNIPPETS[strategies.categorical_imputer]}),",
             "        ('encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False)),",
             "    ]",
             ")",
@@ -136,6 +162,7 @@ def preprocessing_plan(
     dataset_path: str | None = None,
     selected_features: list[str] | None = None,
     target_column: str | None = None,
+    strategies: PreprocessingStrategies | None = None,
 ) -> dict[str, Any]:
     """构建可复现的预处理计划。
 
@@ -148,7 +175,12 @@ def preprocessing_plan(
     怎么写，所以纠正它必须重算整份计划，不能在计划外面改一个字段。省略时沿用
     ``_best_target`` 的推断——那只是启发式（名称提示 + 基数 + 末列位置），猜错时
     调用方需要有纠正手段。
+
+    ``strategies`` 决定填充/缩放/编码方式，同时写进 ``steps`` 与 ``pipeline_script``。
+    省略时用默认值，即此前硬编码的那一组，行为不变。
     """
+    resolved_strategies = strategies or PreprocessingStrategies()
+    strategy_fields = resolved_strategies.as_steps_fields()
     profile = data_quality_profile(csv_path)
     row_count = int(profile.get("row_count") or 0)
     columns = [
@@ -202,16 +234,8 @@ def preprocessing_plan(
         "numeric_features": numeric_features,
         "categorical_features": categorical_features,
         "steps": {
-            "numeric": {
-                "selector": numeric_features,
-                "imputer": "median",
-                "scaler": "standard",
-            },
-            "categorical": {
-                "selector": categorical_features,
-                "imputer": "most_frequent",
-                "encoder": "one_hot_ignore_unknown",
-            },
+            "numeric": {"selector": numeric_features, **strategy_fields["numeric"]},
+            "categorical": {"selector": categorical_features, **strategy_fields["categorical"]},
             "target": {
                 "column": target_column,
                 "mode": "passthrough",
@@ -223,7 +247,10 @@ def preprocessing_plan(
             "missing_cells": profile.get("missing_cells", 0),
             "duplicate_rows": profile.get("duplicate_rows", 0),
         },
-        "sklearn_pipeline": "ColumnTransformer(numeric=median+standard, categorical=most_frequent+one_hot_ignore_unknown)",
+        "sklearn_pipeline": (
+            f"ColumnTransformer(numeric={resolved_strategies.numeric_imputer}+{resolved_strategies.numeric_scaler}, "
+            f"categorical={resolved_strategies.categorical_imputer}+{resolved_strategies.categorical_encoder})"
+        ),
         "pipeline_script": _render_pipeline_script(
             dataset_path=source_path,
             output_path=output_path,
@@ -231,5 +258,6 @@ def preprocessing_plan(
             numeric_features=numeric_features,
             categorical_features=categorical_features,
             drop_columns=sorted(drop_reasons),
+            strategies=resolved_strategies,
         ),
     }

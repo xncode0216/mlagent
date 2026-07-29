@@ -1532,7 +1532,8 @@ describe("cockpit preprocessing feature selection", () => {
   it("does not offer feature editing before a plan reported its columns", () => {
     const card = planCardFor([planArtifactEvent({ target_column: "churn" })]);
 
-    expect(card?.controls ?? []).toHaveLength(0);
+    // 断言范围收在特征控件上：策略选择器与列信息无关，检查点上一直提供
+    expect(card?.controls?.map((control) => control.id) ?? []).not.toContain("feature_columns");
     expect(card?.actions.map((action) => action.id)).not.toContain("apply_feature_selection");
   });
 });
@@ -1668,6 +1669,18 @@ describe("cockpit transformation report card", () => {
  * 那时计划早已按错的目标列算完，而计划才是训练目标列的权威来源。
  */
 describe("cockpit preprocessing plan target selection", () => {
+  function planComponentEvent(props: Record<string, unknown>): AgentStreamEvent {
+    return {
+      type: "component_requested",
+      task_id: "session-1",
+      stage: "transform",
+      component: "preprocessing_plan",
+      title: "Review preprocessing plan",
+      artifact_path: "results/session-1/preprocessing_plan.json",
+      props,
+    };
+  }
+
   const planApproval: AgentStreamEvent[] = [
     {
       type: "component_requested",
@@ -1714,8 +1727,14 @@ describe("cockpit preprocessing plan target selection", () => {
     const control = card?.controls?.find((item) => item.id === "plan_target_column");
     expect(control).toMatchObject({ kind: "select", value: "converted" });
     expect(control?.options.map((option) => option.value)).toEqual(["converted", "contract_type"]);
-    // 先定预测什么，再定用哪些列去预测
-    expect(card?.controls?.map((item) => item.id)).toEqual(["plan_target_column", "feature_columns"]);
+    // 顺序即阅读顺序：先定预测什么，再定用哪些列，最后才是这些列怎么处理
+    expect(card?.controls?.map((item) => item.id)).toEqual([
+      "plan_target_column",
+      "feature_columns",
+      "numeric_imputer",
+      "numeric_scaler",
+      "categorical_imputer",
+    ]);
   });
 
   it("keeps the plan selector distinct from the training one", () => {
@@ -1724,6 +1743,34 @@ describe("cockpit preprocessing plan target selection", () => {
     const card = planCardFor(planApproval);
 
     expect(card?.controls?.map((item) => item.id)).not.toContain("target_column");
+  });
+
+  it("shows the strategies the plan actually recorded, not the defaults", () => {
+    // 卡片只拿得到事件 props（来自产物 metadata）。不显示计划真实取值的话，用户改一项
+    // 时另外两项会被当成默认值一起送回后端，等于悄悄改掉了没碰过的设置。
+    const card = planCardFor([
+      planApproval[0],
+      planComponentEvent({
+        target_column: "converted",
+        feature_columns: ["age"],
+        drop_columns: ["note"],
+        numeric_imputer: "zero",
+        numeric_scaler: "none",
+        categorical_imputer: "constant",
+      }),
+      planApproval[2],
+    ]);
+
+    const values = Object.fromEntries(
+      (card?.controls ?? [])
+        .filter((control) => control.kind === "select")
+        .map((control) => [control.id, control.value]),
+    );
+    expect(values).toMatchObject({
+      numeric_imputer: "zero",
+      numeric_scaler: "none",
+      categorical_imputer: "constant",
+    });
   });
 
   it("does not offer the selector once the checkpoint is resolved", () => {
