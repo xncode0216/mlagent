@@ -1375,3 +1375,14 @@
 - **一次自身失误**：测试夹具漏了 `rules_matched` 的必需字段 `prompt_snippet`，vitest 用 esbuild 不做类型检查所以照样绿，是 tsc 报出来的。**vitest 全绿不能替代 tsc**——这两道门禁各管一头。
 - **门禁**：前端 `43 files / 324 tests`、tsc、ESLint、build + 预算门禁（CSS +0.02kB，来自新增的 ready 样式）、Playwright `10 passed`；未触碰后端。
 - **动态计划**：调查中另外确认了一项独立问题并记为 P4-3——`tool_call_started` 不带 stage，而 14 个发射点里 13 个的 `tool` 都是 `"agent_orchestrator"`，它匹配不到前端 `STAGE_TOOL_PATTERNS` 的任何正则，阶段归属必然回退到默认值。实测 `currentStage` 仍被后续 `stage_started` 修正，故后果是阶段条多一个错误 active 标记，严重性低于 P4-2，单独处理。
+
+## 2026-07-29 P4-3 阶段归属不再靠猜
+
+- **我记 P4-3 时低估了它的严重性，实测把结论推翻了**。原记录写的是"后果是阶段条多一个错误 active 标记，严重性低于 P4-2"。真实后果是 **P4-2 那个缺陷的另一条活路**：包裹事件的 `tool_call_finished` 会把猜出来的阶段直接标成 `completed`，而 P4-2 修的是 `markEarlierStagesReady` 那条路径，管不到这里。**低估的原因是我只看了 started 分支没看 finished 分支**。
+- **实测方法**：跑六段真实会话（概览、经验、清洗、画像、变换、训练），取持久化事件喂给 `deriveWorkflowState`，两种模式各算一遍。结果——ML 模式下 learn / clean / profile / transform / overview **五段都把「训练」显示成已完成**；分析模式下 clean / profile / transform 把「接入」显示成已完成。修复后两种模式的输出**完全一致**，这本身就是判据：`defaultStage` 不再泄漏成假的完成标记。
+- **一处修复带出两处同类缺陷，都是同一次实测里现形的**：① `task_progress` 的收尾标签 `Complete` 不指向任何阶段，兜底到 defaultStage 后被读成"该阶段完成"；② 阶段词表漏词——`learn` 根本不在表里，`evaluate` / `diagnose` 只有动词形式，而后端发的是 "Learning context ready" / "Evaluation context ready" / "Diagnosis context ready"，三条都漏过前面所有行，最后被 ingest 行的 `read` 捞走——**`ready` 含子串 `read`**。经验/评估/诊断的进度被记到「接入」上。
+- **改法收敛成一条规则**：阶段归属只认事件自带的 stage，认不出就不动阶段条。`tool_started` 带准确 stage，照旧驱动；包裹事件仍进日志面板与工具活动条，只是不再驱动阶段条；失败仍由随后带 stage 的 `error` / `step_failed` 呈现——这一点特意核对过 `_emit_resolution_error` 与各 runner 的错误分支，两者都成对发射，不会把失败吞掉。
+- **E2E 抓到了一处真实回归，也暴露了一个坏断言**。"没有保存的失败状态"这条消息**没有卡片**，用户此前唯一能在阶段条上看到它的原因是：那条进度不带 stage，被兜底写进了「接入」的 detail。E2E 断言的正是这个巧合。判据改到助手回复本身（"did not find a saved failed task state"），并加断言不得出现恢复卡片——这比断言一个不相关阶段的 detail 更贴近那条测试自己写的意图（"必须如实说明，而不是假装恢复了什么"）。
+- **测试守整类而不是逐个单词**：`learn` 是踩到才发现的，`Evaluation` / `Diagnosis` 是随后从后端字面量里翻出来的——照这个补法只能补到下一次踩雷为止。所以新增 16 项表驱动用例，逐条照抄后端实际发射的 `task_progress` 标签并固定它落到哪个阶段（含三条"不该落到任何阶段"的）。四处修复各自做过负向验证：撤回包裹事件修复挂 2 项、撤回 `Complete` 修复挂 1 项、撤回 `learn` 挂 1 项、撤回词干挂 2 项。
+- **门禁**：前端 `43 files / 343 tests`（新增 19 项）、tsc、ESLint、build + 预算门禁（gzip 135.04kB 未变）、Playwright `10 passed`；未触碰后端，ruff 复核通过。
+- **动态计划**：另记一项已实测但不在本片修的问题——`"Waiting for dataset selection"` 由训练阶段发出，却因含 `dataset` 归到「接入」。它不是词表漏洞（标签确实在说数据集），要修得让 `task_progress` 带上 stage，属后端契约变更，另开一片。
