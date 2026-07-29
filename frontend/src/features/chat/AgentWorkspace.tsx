@@ -51,6 +51,7 @@ type AgentWorkspaceProps = {
   taskStateInspection?: TaskStateInspection | null;
   trainingDatasetPath?: string;
   onExecutePreprocessingPlan?: (preprocessingPlanPath?: string | null) => Promise<void>;
+  onPreviewPreprocessingPlan?: (preprocessingPlanPath?: string | null) => Promise<void>;
   onAbandonTaskState?: (stage: WorkflowStageId) => Promise<void>;
   onExportRunBundle?: (experimentId: string) => Promise<void>;
   onExtractLessons?: (sourceSessionId?: string) => Promise<void>;
@@ -292,6 +293,7 @@ export function AgentWorkspace({
   taskStateInspection,
   trainingDatasetPath,
   onExecutePreprocessingPlan,
+  onPreviewPreprocessingPlan,
   onAbandonTaskState,
   onExportRunBundle,
   onExtractLessons,
@@ -498,6 +500,9 @@ export function AgentWorkspace({
           break;
         case "execute_preprocessing_plan":
           await onExecutePreprocessingPlan?.(action.payload?.preprocessingPlanPath);
+          break;
+        case "preview_preprocessing_plan":
+          await onPreviewPreprocessingPlan?.(action.payload?.preprocessingPlanPath);
           break;
         case "retry_transform":
           onResumeStep?.(action.payload?.stage ?? "transform");

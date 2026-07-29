@@ -556,3 +556,85 @@ def test_handoff_dataset_to_ml_rejects_path_escape(tmp_path, monkeypatch):
     )
 
     assert response.status_code == 400
+
+
+def test_preview_preprocessing_plan_matches_execution_without_writing_the_dataset(tmp_path, monkeypatch):
+    """预览的全部价值是「批准前如实知道会发生什么」，所以它必须与执行说同一套话。
+
+    两者共用同一段变换计算；一旦分成两份实现，预览就会开始说谎，而那时说谎比没有预览
+    更糟——用户是照着预览做的批准决定。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    root = Path(project["workspace_path"])
+    (root / "data" / "customer_churn.csv").write_text(
+        "customer_id,age,contract,churn\nc1,42,Month-to-month,No\nc2,,One year,Yes\nc3,55,,No\n",
+        encoding="utf-8",
+    )
+    plan_path = client.post(
+        f"/api/projects/{project['id']}/analysis/preprocess-plan",
+        json={"dataset_path": "data/customer_churn.csv", "session_id": "preview-session"},
+    ).json()["plan_artifact"]["path"]
+
+    previewed = client.post(
+        f"/api/projects/{project['id']}/analysis/preview-preprocess-plan",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "preprocessing_plan_path": plan_path,
+            "session_id": "preview-session",
+        },
+    )
+    assert previewed.status_code == 200, previewed.text
+    preview = previewed.json()["preview"]
+
+    # 预览不产出数据集；写上 output_dataset_path 就是谎报
+    assert preview["preview"] is True
+    assert "output_dataset_path" not in preview
+    assert not (root / "results" / "preview-session" / "customer_churn_planned.csv").exists()
+
+    executed = client.post(
+        f"/api/projects/{project['id']}/analysis/execute-preprocess-plan",
+        json={
+            "dataset_path": "data/customer_churn.csv",
+            "preprocessing_plan_path": plan_path,
+            "session_id": "preview-session",
+        },
+    )
+    assert executed.status_code == 200, executed.text
+    summary = executed.json()["summary"]
+
+    # 逐字段比对：预览说的每一件事，执行都要照做
+    for field in (
+        "target_column",
+        "input_shape",
+        "output_shape",
+        "drop_columns",
+        "numeric_features",
+        "categorical_features",
+        "encoded_feature_columns",
+        "transformations",
+    ):
+        assert preview[field] == summary[field], f"预览与执行在 {field} 上不一致"
+
+
+def test_preview_preprocessing_plan_reports_a_plan_it_cannot_apply(tmp_path, monkeypatch):
+    """计划不可执行时预览必须当场说清楚——这正是它该拦住的情形。"""
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "sales_churn_analysis"}).json()
+    root = Path(project["workspace_path"])
+    (root / "data" / "customer_churn.csv").write_text("age,churn\n42,1\n37,0\n", encoding="utf-8")
+    plan_file = root / "results" / "broken" / "preprocessing_plan.json"
+    plan_file.parent.mkdir(parents=True, exist_ok=True)
+    plan_file.write_text(json.dumps({"dataset_path": "data/customer_churn.csv"}), encoding="utf-8")
+
+    response = client.post(
+        f"/api/projects/{project['id']}/analysis/preview-preprocess-plan",
+        json={"preprocessing_plan_path": "results/broken/preprocessing_plan.json", "session_id": "broken"},
+    )
+
+    assert response.status_code == 400
+    assert "target column" in response.json()["detail"].lower()

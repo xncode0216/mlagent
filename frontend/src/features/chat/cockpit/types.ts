@@ -9,6 +9,7 @@ export type CockpitActionId =
   | "approve_preprocessing_plan"
   | "revise_preprocessing_plan"
   | "execute_preprocessing_plan"
+  | "preview_preprocessing_plan"
   | "retry_transform"
   | "inspect_logs"
   | "open_training"

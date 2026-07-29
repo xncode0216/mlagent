@@ -580,6 +580,43 @@ export async function generateDataQualityProfile(
   });
 }
 
+export type PreprocessingPreviewResult = {
+  // 与执行摘要同形状（少一个 output_dataset_path，因为预览不写数据集），
+  // 右侧面板的 `isTransformationReport` 是按形状判定的，因此不用改渲染层。
+  preview: Record<string, unknown>;
+  preview_artifact: {
+    id: string;
+    project_id: string;
+    session_id: string;
+    type: "dataframe";
+    name: string;
+    path: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+  };
+};
+
+/** 只算不写：返回与执行摘要同形状的结果，因此右侧面板的列对照视图可以直接渲染它。 */
+export async function previewPreprocessingPlan(
+  projectId: string,
+  preprocessingPlanPath: string,
+  sessionId = "manual-analysis",
+  datasetPath?: string,
+): Promise<PreprocessingPreviewResult> {
+  return request<PreprocessingPreviewResult>(
+    `/api/projects/${projectId}/analysis/preview-preprocess-plan`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        preprocessing_plan_path: preprocessingPlanPath,
+        session_id: sessionId,
+        ...(datasetPath ? { dataset_path: datasetPath } : {}),
+      }),
+    },
+  );
+}
+
 export async function generatePreprocessingPlan(
   projectId: string,
   datasetPath: string,

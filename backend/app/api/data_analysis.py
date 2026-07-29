@@ -15,6 +15,7 @@ from app.tools.data_analysis import (
     detect_missing,
     execute_preprocessing_plan,
     preprocessing_plan,
+    preview_preprocessing_plan,
     profile_dataset,
 )
 from app.tools.data_analysis.preprocessing_strategies import (
@@ -461,6 +462,62 @@ def execute_preprocessing_plan_endpoint(project_id: str, payload: ExecutePreproc
                 "preprocessing_plan_path": payload.preprocessing_plan_path,
                 "output_dataset_path": output_project_path,
                 "artifact_role": "preprocessing_transform_report",
+            },
+        ),
+    }
+
+
+@router.post("/preview-preprocess-plan")
+def preview_preprocessing_plan_endpoint(project_id: str, payload: ExecutePreprocessingPlanRequest) -> dict:
+    """算出计划会把数据变成什么样，但不写变换后的数据集。
+
+    与执行端点共用同一段变换计算，所以预览不会和实际执行说两套话。请求体也复用执行的
+    模型：预览和执行要针对**同一份**计划与数据集，两个形状不同的请求体反而容易漏字段。
+    """
+    root = _get_project_root(project_id)
+    dataset_project_path = payload.dataset_path
+    plan_file = _resolve_project_path(root, payload.preprocessing_plan_path)
+    if not plan_file.exists() or not plan_file.is_file():
+        raise HTTPException(status_code=404, detail="Preprocessing plan not found")
+    if dataset_project_path is None:
+        try:
+            plan_payload = json.loads(plan_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        dataset_project_path = plan_payload.get("dataset_path")
+        if not isinstance(dataset_project_path, str) or not dataset_project_path:
+            raise HTTPException(status_code=400, detail="Dataset path is required")
+    dataset = _resolve_project_path(root, dataset_project_path)
+    if not dataset.exists() or not dataset.is_file():
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    try:
+        preview = preview_preprocessing_plan(
+            csv_path=dataset,
+            plan_path=plan_file,
+            dataset_path=dataset_project_path,
+            plan_project_path=payload.preprocessing_plan_path,
+        )
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    result_dir = root / "results" / payload.session_id
+    result_dir.mkdir(parents=True, exist_ok=True)
+    preview_path = result_dir / "preprocessing_transform_preview.json"
+    preview_path.write_text(json.dumps(preview, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return {
+        "preview": preview,
+        "preview_artifact": _artifact_payload(
+            project_id,
+            payload.session_id,
+            "dataframe",
+            preview_path.name,
+            _relative_path(root, preview_path),
+            {
+                "dataset_path": dataset_project_path,
+                "preprocessing_plan_path": payload.preprocessing_plan_path,
+                "artifact_role": "preprocessing_transform_preview",
             },
         ),
     }

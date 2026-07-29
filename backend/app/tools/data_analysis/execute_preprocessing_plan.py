@@ -80,16 +80,12 @@ def _categorical_transform(series: pd.Series, *, imputer: str) -> tuple[pd.Serie
     }
 
 
-def execute_preprocessing_plan(
-    *,
-    csv_path: Path,
-    plan_path: Path,
-    output_path: Path,
-    dataset_path: str | None = None,
-    plan_project_path: str | None = None,
-    output_project_path: str | None = None,
-) -> dict[str, Any]:
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+def _apply_preprocessing_plan(csv_path: Path, plan: dict[str, Any]) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """把计划套到数据集上，返回变换后的表与列级摘要。
+
+    **预览与执行共用这一段**。分成两份实现的话预览就会开始说谎，而预览的全部价值
+    恰恰是"批准前如实知道会发生什么"——那时说谎比没有预览更糟。
+    """
     df = pd.read_csv(csv_path)
 
     target_column = str(plan.get("target_column") or "")
@@ -154,13 +150,8 @@ def execute_preprocessing_plan(
         raise ValueError("Preprocessing plan produced no feature columns")
 
     output[target_column] = df[target_column].reset_index(drop=True)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output.to_csv(output_path, index=False)
 
-    return {
-        "source_dataset_path": dataset_path or str(csv_path),
-        "preprocessing_plan_path": plan_project_path or str(plan_path),
-        "output_dataset_path": output_project_path or str(output_path),
+    return output, {
         "target_column": target_column,
         "input_shape": {"rows": int(df.shape[0]), "columns": int(df.shape[1])},
         "output_shape": {"rows": int(output.shape[0]), "columns": int(output.shape[1])},
@@ -169,5 +160,53 @@ def execute_preprocessing_plan(
         "categorical_features": categorical_features,
         "encoded_feature_columns": [column for column in output.columns if column != target_column],
         "transformations": _json_safe(transformations),
+    }
+
+
+def execute_preprocessing_plan(
+    *,
+    csv_path: Path,
+    plan_path: Path,
+    output_path: Path,
+    dataset_path: str | None = None,
+    plan_project_path: str | None = None,
+    output_project_path: str | None = None,
+) -> dict[str, Any]:
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    output, fields = _apply_preprocessing_plan(csv_path, plan)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output.to_csv(output_path, index=False)
+
+    return {
+        "source_dataset_path": dataset_path or str(csv_path),
+        "preprocessing_plan_path": plan_project_path or str(plan_path),
+        "output_dataset_path": output_project_path or str(output_path),
+        **fields,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+
+def preview_preprocessing_plan(
+    *,
+    csv_path: Path,
+    plan_path: Path,
+    dataset_path: str | None = None,
+    plan_project_path: str | None = None,
+) -> dict[str, Any]:
+    """算出这份计划会把数据变成什么样，但**不写任何数据集**。
+
+    审批检查点的意义在于"批准前先看清楚"，而此前要看清楚只能先批准再执行。
+    输出结构与执行摘要一致，因此右侧面板的列对照视图不用改就能渲染它；
+    刻意不带 ``output_dataset_path``——预览没有产出数据集，写上就是谎报。
+    """
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    _, fields = _apply_preprocessing_plan(csv_path, plan)
+
+    return {
+        "source_dataset_path": dataset_path or str(csv_path),
+        "preprocessing_plan_path": plan_project_path or str(plan_path),
+        "preview": True,
+        **fields,
         "created_at": datetime.now(UTC).isoformat(),
     }
