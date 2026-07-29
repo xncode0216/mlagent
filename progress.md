@@ -1429,3 +1429,15 @@
 - **一处类型代价如实记下**：`CockpitComponentControl` 的 select 变体 id 变成联合类型后，`find(item => item.id === "target_column")` 不再被 TS 收窄到单一变体，一处既有测试改用 `toMatchObject`（与相邻用例同风格），断言内容不变。
 - **门禁**：后端 `259 passed, 3 skipped` + ruff；前端 `43 files / 347 tests`、tsc、ESLint、build + 预算门禁（gzip 135.21kB）、Playwright `10 passed`。
 - **M5 剩下的部分**：填充策略、缩放、编码、变换前后 diff 预览仍是硬编码/缺失（`preprocessing_plan.py` 的 `steps` 里 imputer/scaler/encoder 都是常量）。目标列是其中后果最大的一个，先做它。
+
+## 2026-07-29 M5 第二片：预处理策略从"写着"变成"算数"
+
+- **动手前先查了一件事，结果改变了这一片的形状**：`steps` 里四个策略字段只有 `scaler` 有消费方。`imputer` 与 `encoder` 是**有声明无消费方**——执行器 `_numeric_transform` / `_categorical_transform` 自己硬编码 median / most_frequent / one-hot，管道脚本模板里又写死一遍。**改计划里的 imputer 不会改变任何行为，而变换报告仍回报硬编码的那个值**。当前默认值恰好与硬编码一致，所以这个谎报还没暴露；一旦让用户能改，第一次改就会撞上。
+- **所以这一片不是"加几个选择器"，而是先让策略真的生效**。顺序反过来就是在做纯装饰。
+- **新增 `preprocessing_strategies` 作为唯一词表**：计划生成、计划执行、管道脚本三处都从这里取。此前同一组常量在三个地方各写一遍，正是"两侧词汇不一致致链路静默失效"的标准配方。
+- **每个字段要么被消费、要么被拒绝**：取值不受支持直接 400。`encoder` 目前只实现 one-hot，仍然校验它——否则"计划里写了别的编码器"会被当成 one-hot 执行，正是本片要消灭的那类谎报。
+- **产物 metadata 必须携带策略**，否则卡片只拿得到事件 props，显示不出计划的真实取值；用户改一项时另外两项会被当成默认值一起送回后端，等于悄悄改掉没碰过的设置。这一条有测试固定并做了负向验证。
+- **负向验证三处**：执行器改回硬编码 median → 端到端用例失败（`30.0 != 40.0`，即均值填充没生效）；卡片只显示默认值 → 回显用例失败；不支持的取值 → 必须 400。
+- **一次自身失误**：测试夹具用扩展运算符复制联合类型事件再加 `props`，vitest 照样绿，是 tsc 报出来的。**vitest 全绿不能替代 tsc**——这一条本轮第二次应验。
+- **门禁**：后端 `262 passed, 3 skipped` + ruff；前端 `43 files / 348 tests`、tsc、ESLint、build + 预算门禁（gzip 135.90kB）、Playwright `10 passed`。
+- **M5 还剩**：变换前后的 diff 预览（roadmap M5 里的 "transform preview/diff"）。编码器只有 one-hot 一种实现，ordinal 会改变输出列形状并牵动训练，另开片。
