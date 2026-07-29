@@ -1386,3 +1386,15 @@
 - **测试守整类而不是逐个单词**：`learn` 是踩到才发现的，`Evaluation` / `Diagnosis` 是随后从后端字面量里翻出来的——照这个补法只能补到下一次踩雷为止。所以新增 16 项表驱动用例，逐条照抄后端实际发射的 `task_progress` 标签并固定它落到哪个阶段（含三条"不该落到任何阶段"的）。四处修复各自做过负向验证：撤回包裹事件修复挂 2 项、撤回 `Complete` 修复挂 1 项、撤回 `learn` 挂 1 项、撤回词干挂 2 项。
 - **门禁**：前端 `43 files / 343 tests`（新增 19 项）、tsc、ESLint、build + 预算门禁（gzip 135.04kB 未变）、Playwright `10 passed`；未触碰后端，ruff 复核通过。
 - **动态计划**：另记一项已实测但不在本片修的问题——`"Waiting for dataset selection"` 由训练阶段发出，却因含 `dataset` 归到「接入」。它不是词表漏洞（标签确实在说数据集），要修得让 `task_progress` 带上 stage，属后端契约变更，另开一片。
+
+## 2026-07-29 不带预处理计划的 sklearn 训练必然失败
+
+- **本来在开 M5 的头，读现状时撞上的**。计划里 M5 第一步是"让目标列可由用户在计划阶段确认"，为此去核实目标列怎么流到训练——顺手发现更早的一环是断的。
+- **缺陷**：`preprocessing_plan_path` 可空，却经 `json.dumps` 变成字面量拼进 Python 源码（`train_sklearn.py:42`）。None 写成 JSON 的 `null`，Python 里没有这个名字。**任何不带预处理计划的 sklearn 训练都必然 HTTP 500**，报错 `NameError: name 'null' is not defined`，且原始 traceback 直接回给客户端。同一个 NameError 还先于脚本自己的目标列校验抛出，所以目标列写错时用户看到的也是这句无关的话。
+- **实测确认**：同一数据集、同一目标列，带计划 200、不带计划 500。
+- **为什么全绿的测试套件没发现**：所有单测都用 `FakeKernelService`——它只记录代码、从不执行，于是"生成的脚本是不是合法 Python"完全没人管；唯一会跑真实内核的用例（`..._runs_in_docker_kernel`）需要 Docker，本机与 CI 上恒被跳过。**这是"测试通过 ≠ 链路接通"的又一例，而且是最彻底的一种：被测对象根本没运行过。**
+- **修法**：可空的那个字面量单独处理（`"None"`），其余仍用 `json.dumps`——它顺带把非 ASCII 转义掉，路径含中文时更安全，所以不是一律换成 `repr`。
+- **新增 `LocalExecKernelService`**：真的把生成的代码跑起来。两个分支（有/无预处理计划）各跑一次——只测其中一个等于没测，而坏掉的恰恰是可空的那支。另加一项固定"目标列不存在时报错必须说的是目标列"。
+- **负向验证**：回退修复后，「无预处理计划」用例报 `null` 的 NameError；「目标列不存在」用例报的也是同一个 NameError 而不是 `Target column was not found`——后者正好证明了"报错与真实原因无关"这一条。
+- **门禁**：后端 `255 passed, 3 skipped`、ruff 通过；未触碰前端。
+- **同一轮实测里另外确认的两件事，都另开片**：① 前端把偏好里的默认目标列（`appPreferences.ts` 写死 `"churn"`）当作每回合的显式选择随消息发出，而编排器把它排在计划推断之上（`agent_orchestrator_service.py:545`）——实测：数据集列为 `age/monthly_spend/support_tickets/converted`，计划正确推断出 `converted`，训练配置卡片拿到的却是 `churn`；② 训练接口把原始 traceback 泄漏给客户端，且不校验目标列是否存在。
