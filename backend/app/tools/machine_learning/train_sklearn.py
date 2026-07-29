@@ -39,7 +39,10 @@ def _training_code(
     dataset_literal = json.dumps(dataset_path)
     target_literal = json.dumps(target_column)
     model_path_literal = json.dumps(model_output_path)
-    preprocessing_plan_literal = json.dumps(preprocessing_plan_path)
+    # 这些字面量会被拼进 Python 源码执行。`json.dumps` 处理字符串没问题（顺带把非 ASCII
+    # 转义掉，路径含中文也安全），但 None 会变成 JSON 的 `null`——Python 里没有这个名字，
+    # 脚本在赋值那一行就 NameError，且报错内容与真实原因毫不相干。可空的这个单独处理。
+    preprocessing_plan_literal = "None" if preprocessing_plan_path is None else json.dumps(preprocessing_plan_path)
     marker_literal = json.dumps(RESULT_MARKER)
     return f"""
 import json
