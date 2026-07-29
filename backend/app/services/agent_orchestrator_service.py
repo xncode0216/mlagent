@@ -35,6 +35,7 @@ from app.services.agent_orchestrator.messaging import MessagingMixin
 from app.services.agent_orchestrator.runs import (
     artifact_path_from_run,
     candidate_dataset_summaries,
+    dataset_column_names,
     diagnosis_summary,
     infer_target_column,
     match_run_by_active_file,
@@ -541,15 +542,7 @@ class AgentOrchestrator(StageRunnersMixin, MessagingMixin):
                 "message": resolution.message or "Training dataset could not be resolved",
             }
 
-        target_column = (
-            context.get("target_column")
-            if isinstance(context.get("target_column"), str) and context.get("target_column")
-            else None
-        )
-        if target_column is None and plan_payload is not None and isinstance(plan_payload.get("target_column"), str):
-            target_column = plan_payload["target_column"]
-        if target_column is None:
-            target_column = self._infer_target_column(resolution.csv_path)
+        target_column = self._resolve_target_column(context, plan_payload, resolution.csv_path)
 
         return (
             TrainingConfigurationContext(
@@ -669,6 +662,33 @@ class AgentOrchestrator(StageRunnersMixin, MessagingMixin):
 
     def _infer_target_column(self, csv_path: Path) -> str:
         return infer_target_column(csv_path)
+
+    def _resolve_target_column(
+        self,
+        context: dict[str, Any],
+        plan_payload: dict[str, Any] | None,
+        csv_path: Path,
+    ) -> str:
+        """决定这次训练用哪一列作目标列。
+
+        **预处理计划是权威来源**：它的 drop_columns / feature_columns / steps 全都是围绕
+        自己那个目标列算出来的，换一个目标列这份计划就自相矛盾——训练脚本本来就会以
+        "Preprocessing plan target column does not match the requested target" 拒绝。
+
+        `context["target_column"]` 只是兜底，因为前端把设置面板里的「默认目标列」当作
+        每条消息的固定载荷发出来（默认值写死为 `churn`），它表达的是偏好而不是本回合的
+        选择。此前它排在计划之上，于是数据集只要不叫 churn，训练配置就会拿到一个数据集里
+        根本不存在的列。用它之前还要确认那一列真的存在——训练必然失败的输入不该被接受。
+        """
+        plan_target = plan_payload.get("target_column") if plan_payload is not None else None
+        if isinstance(plan_target, str) and plan_target:
+            return plan_target
+
+        requested = context.get("target_column")
+        if isinstance(requested, str) and requested and requested in dataset_column_names(csv_path):
+            return requested
+
+        return self._infer_target_column(csv_path)
 
     def _profile_props(self, context: AgentContext, profile_artifact: dict[str, Any]) -> dict[str, Any]:
         return profile_props(context, profile_artifact)

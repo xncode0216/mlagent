@@ -160,12 +160,18 @@ def diagnosis_summary(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def infer_target_column(csv_path: Path) -> str:
+def dataset_column_names(csv_path: Path) -> list[str]:
+    """只读表头。判断"某列是否存在"用不着把整个数据集读进来。"""
     with csv_path.open(newline="", encoding="utf-8") as handle:
         reader = csv.reader(handle)
         columns = next(reader, [])
-    normalized = {column.strip().lower(): column for column in columns if column.strip()}
+    return [column.strip() for column in columns if column.strip()]
+
+
+def infer_target_column(csv_path: Path) -> str:
+    columns = dataset_column_names(csv_path)
+    normalized = {column.lower(): column for column in columns}
     for candidate in TARGET_COLUMN_FALLBACKS:
         if candidate in normalized:
             return normalized[candidate]
-    return columns[-1].strip() if columns else "target"
+    return columns[-1] if columns else "target"

@@ -1330,6 +1330,107 @@ def test_session_socket_train_intent_uses_preprocessing_plan_context(tmp_path, m
     assert training_request["props"]["preprocessing_plan_path"] == "results/train-plan-session/preprocessing_plan.json"
 
 
+def test_session_socket_train_intent_keeps_the_plan_target_over_the_client_default(tmp_path, monkeypatch):
+    """前端把设置面板里的「默认目标列」当作每条消息的固定载荷发出来（默认写死 `churn`）。
+
+    它表达的是偏好而不是本回合的选择，因此不能压过计划自己算出来的目标列——数据集只要
+    不叫 churn，训练配置就会拿到一个数据集里根本不存在的列。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "train_target_authority"}).json()
+    project_root = tmp_path / "dev-user" / project["id"]
+    (project_root / "data" / "signups.csv").write_text(
+        "age,monthly_spend,converted\n42,70.7,yes\n37,56.95,no\n",
+        encoding="utf-8",
+    )
+    plan_path = project_root / "results" / "target-authority" / "preprocessing_plan.json"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(
+        json.dumps(
+            {
+                "dataset_path": "data/signups.csv",
+                "target_column": "converted",
+                "feature_columns": ["age", "monthly_spend"],
+                "drop_columns": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with client.websocket_connect("/ws/sessions/target-authority") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "start sklearn training from this plan",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "results/target-authority/preprocessing_plan.json",
+                    "mode": "machine-learning",
+                    # 前端每条消息都带上它，值来自 appPreferences 的默认项
+                    "target_column": "churn",
+                },
+            }
+        )
+        events = []
+        while True:
+            event = websocket.receive_json()
+            events.append(event)
+            if event["type"] == "task_progress":
+                break
+
+    training_request = next(
+        event
+        for event in events
+        if event["type"] == "component_requested" and event["component"] == "training_config"
+    )
+    assert training_request["props"]["target_column"] == "converted", "计划的目标列才是权威"
+
+
+def test_session_socket_train_intent_ignores_a_target_column_the_dataset_lacks(tmp_path, monkeypatch):
+    """没有计划时才轮到 context 的目标列，但它必须真的是数据集里的一列。
+
+    用一个不存在的列训练必然失败，接受这种输入只是把失败推迟到内核里。
+    """
+    monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    client = TestClient(app)
+    project = client.post("/api/projects", json={"name": "train_target_missing"}).json()
+    project_root = tmp_path / "dev-user" / project["id"]
+    (project_root / "data" / "signups.csv").write_text(
+        "age,monthly_spend,converted\n42,70.7,yes\n37,56.95,no\n",
+        encoding="utf-8",
+    )
+
+    with client.websocket_connect("/ws/sessions/target-missing") as websocket:
+        websocket.send_json(
+            {
+                "type": "user_message",
+                "content": "train sklearn on this dataset",
+                "context": {
+                    "project_id": project["id"],
+                    "active_file": "data/signups.csv",
+                    "mode": "machine-learning",
+                    "target_column": "churn",
+                },
+            }
+        )
+        events = []
+        while True:
+            event = websocket.receive_json()
+            events.append(event)
+            if event["type"] in {"task_progress", "error"}:
+                break
+
+    training_request = next(
+        event
+        for event in events
+        if event["type"] == "component_requested" and event["component"] == "training_config"
+    )
+    assert training_request["props"]["target_column"] == "converted", "churn 不在数据集里，应退回推断"
+
+
 def test_session_socket_routes_profile_intent_to_data_quality_component(tmp_path, monkeypatch):
     monkeypatch.setenv("MLAGENT_WORKSPACE_ROOT", str(tmp_path))
     get_settings.cache_clear()
