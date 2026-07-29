@@ -293,6 +293,15 @@
   word-break: normal;
 }
 
+/* 前置已过但本阶段未运行。刻意不用成功色——那会把"没跑"显示成"已完成"。 */
+.workflow-stage.ready {
+  border-color: var(--color-border-strong);
+}
+
+.workflow-stage.ready .workflow-stage-index {
+  color: var(--color-text-muted);
+}
+
 .workflow-stage.completed {
   border-color: rgb(var(--rgb-success) / 0.28);
 }

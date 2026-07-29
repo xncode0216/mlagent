@@ -1363,3 +1363,15 @@
 - **护栏做了负向验证**：临时删掉一个标签后 tsc 确实报 `TS2741 Property 'task_state_inspector' is missing`。不做这一步，"编译器强制标签完整"就只是未经验证的断言——而本轮反复出现的教训正是"声称 ≠ 验证"。
 - **门禁**：前端 `43 files / 322 tests`（新增 15 项：14 个已声明 kind 都拿到中文标签、不回退到裸 kind，外加未知 kind 回退到自身）、tsc、ESLint、build + 预算门禁、Playwright `10 passed`。未触碰后端。
 - **动态计划**：P3 与 P4-1 均已收口，`task_plan.md` 无未勾选项。roadmap 里仍标 Planned 的较大项为：typed/inspectable 的工具调用事件（P0 级但一直未动）、诊断可行动化、provenance inspector（删掉的 `provenance_graph` 声明就属于它）。另一个可选方向是 `componentRegistry.test.ts` 1,662 行——它现在是最大的测试文件，可按新的 cockpit 模块边界切开。
+
+## 2026-07-28 P4-2 未运行的阶段不再谎报为已完成
+
+- **起点是核查 roadmap 里唯一还标 P0 的 Planned 项**（"Make tool invocation typed and inspectable"）。实测结论是**它大部分已经实现**——工具的 start/finish 通过两个 helper 成对发射（真实主路径 3 开始 / 3 结束、零孤立），载荷统一，前后端类型对齐。roadmap 的状态是过时的，真实差距在别处。
+- **调查中我犯了两次错误，都由实测纠正**：① 第一版探针只统计 `tool_call_started`、漏了 `tool_started`，于是"2 个 finished 无对应 started"的假象让我以为找到了大缺陷——补上后配对完好；② 由此我一度认为这两种事件类型语义重复，直到看清事件顺序才明白 `tool_call_started tool=agent_orchestrator` 是**跨阶段的外层包裹**（最后才 finish），`tool_started` 才是具体工具，两者是有意区分。**"名字相似"这一坑本轮踩了四次**（`recovery_policy` 字典键、`datasetVersionId` 对象键、`Field` 表头字符串、这次的两种 tool 事件）。
+- **真正的缺陷在阶段状态语义上**：`markEarlierStagesReady` 的函数名与它写入的 detail 都是"就绪"，但 status 赋的是 `"completed"`——`WorkflowStepStatus` 当时没有"就绪"这一档。阶段条直接用 status 作 CSS class，而 `.workflow-stage.completed` 用的是 **success 绿**。
+- **触发条件是每次对话**：`rules_matched` 是规则注入链路的常态事件，`workflowState.ts:462` 收到它就把 learn 设为 active，于是 learn 之前的 train / evaluate / diagnose / iterate / export 全被标成已完成。
+- **用真实数据实测，而不是读代码推断**：跑一次自然语言主路径（只跑完画像、停在变换审批），把导出的持久化事件喂给 `deriveWorkflowState`，得到 `train=completed evaluate=completed diagnose=completed iterate=completed export=completed`——**五个从未运行的阶段显示为成功色**。`currentStage` 本身正确（`transform blocked`），所以这是"阶段条谎报进度"，不是"当前阶段错"。
+- **现有 322 个测试对此零覆盖**——这正是它长期存在的原因。修复后新增 2 项测试，并做了**负向验证**：把 status 改回 `completed`，这 2 项确实失败（`train 从未运行，不应报成 completed`）。不做这一步就无法确认测试真的能捕获缺陷。
+- **一次自身失误**：测试夹具漏了 `rules_matched` 的必需字段 `prompt_snippet`，vitest 用 esbuild 不做类型检查所以照样绿，是 tsc 报出来的。**vitest 全绿不能替代 tsc**——这两道门禁各管一头。
+- **门禁**：前端 `43 files / 324 tests`、tsc、ESLint、build + 预算门禁（CSS +0.02kB，来自新增的 ready 样式）、Playwright `10 passed`；未触碰后端。
+- **动态计划**：调查中另外确认了一项独立问题并记为 P4-3——`tool_call_started` 不带 stage，而 14 个发射点里 13 个的 `tool` 都是 `"agent_orchestrator"`，它匹配不到前端 `STAGE_TOOL_PATTERNS` 的任何正则，阶段归属必然回退到默认值。实测 `currentStage` 仍被后续 `stage_started` 修正，故后果是阶段条多一个错误 active 标记，严重性低于 P4-2，单独处理。
