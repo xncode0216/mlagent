@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AgentComponentKind, AgentStreamEvent, Artifact } from "./types";
+import type { AgentComponentKind, AgentStreamEvent, Artifact, WorkflowStageId } from "./types";
 import { deriveWorkflowState } from "./workflowState";
 
 function artifact(partial: Partial<Artifact> & Pick<Artifact, "name" | "path">): Artifact {
@@ -716,6 +716,111 @@ describe("workflow state", () => {
       expect(state.stages.find((item) => item.id === "profile")?.status).toBe("completed");
       expect(state.stages.find((item) => item.id === "clean")?.status).toBe("ready");
       expect(state.stages.find((item) => item.id === "train")?.status).not.toBe("completed");
+    });
+  });
+
+  /**
+   * 阶段归属只能来自事件自带的 stage，不能从文本猜。下面三段夹具都取自真实会话的持久化
+   * 事件（`/api/sessions/{id}/events`），形状原样保留：每个 stage runner 都以一对
+   * `tool_call_started` / `tool_call_finished` 包裹整个回合，`tool` 写死为
+   * `agent_orchestrator`——那不是工具名，也匹配不到任何阶段正则。此前这类事件会回退到
+   * `defaultStage`，于是 ML 模式下每次非训练意图的对话都把「训练」标成 completed。
+   */
+  describe("stage attribution", () => {
+    const wrapperStart: AgentStreamEvent = {
+      type: "tool_call_started",
+      call_id: "turn-1",
+      tool: "agent_orchestrator",
+      args: { intent: "configure_learning" },
+    };
+    const wrapperFinish: AgentStreamEvent = {
+      type: "tool_call_finished",
+      call_id: "turn-1",
+      status: "success",
+      result_ref: "session-1",
+    };
+
+    it("does not let the turn wrapper complete a stage that never ran", () => {
+      const events: AgentStreamEvent[] = [
+        wrapperStart,
+        { type: "stage_started", task_id: "task-1", stage: "learn", label: "Configuring learned-rule review" },
+        { type: "component_requested", task_id: "task-1", stage: "learn", component: "lesson_review" },
+        wrapperFinish,
+        { type: "task_progress", task_id: "task-1", progress: 1, label: "Learning context ready" },
+      ];
+
+      const state = deriveWorkflowState(events, "machine-learning", "data/churn.csv");
+
+      expect(state.stages.find((item) => item.id === "train")?.status, "训练从未运行，不应报成 completed").not.toBe(
+        "completed",
+      );
+      expect(state.currentStage.id).toBe("learn");
+    });
+
+    it("ignores a turn-level progress label that names no stage", () => {
+      // 概览分析路径的真实收尾：包裹事件 + 一个只表示"这一轮结束了"的 Complete。
+      const events: AgentStreamEvent[] = [
+        { type: "tool_call_started", call_id: "turn-2", tool: "profile_dataset", args: {} },
+        { type: "tool_call_finished", call_id: "turn-2", status: "success" },
+        { type: "task_progress", task_id: "task-1", progress: 1, label: "Complete" },
+      ];
+
+      const state = deriveWorkflowState(events, "machine-learning", "data/churn.csv");
+
+      expect(state.stages.find((item) => item.id === "train")?.status, "Complete 不是训练完成").not.toBe("completed");
+    });
+
+    it("still lets a tool event that carries its own stage drive the strip", () => {
+      // 反向护栏：修复是"不再猜"，不是"不再更新"。`tool_started` 带准确 stage，必须照旧生效。
+      const events: AgentStreamEvent[] = [
+        wrapperStart,
+        { type: "tool_started", call_id: "tool-1", tool: "data_quality_profile", stage: "profile" },
+        { type: "tool_call_finished", call_id: "tool-1", status: "success", result_ref: "results/profile.json" },
+        wrapperFinish,
+      ];
+
+      const state = deriveWorkflowState(events, "machine-learning", "data/churn.csv");
+
+      expect(state.stages.find((item) => item.id === "profile")?.status).toBe("completed");
+      expect(state.stages.find((item) => item.id === "train")?.status).not.toBe("completed");
+    });
+
+    /**
+     * 后端进度事件不带 stage，前端只能从 label 认。这张表照抄后端实际发射的字面量
+     * （`grep '"label"' backend/app/services/agent_orchestrator`），逐条固定它落到哪个
+     * 阶段——逐个单词地补正则只会补到下一次踩雷为止，这里要守的是整类。
+     *
+     * 收录时踩到的坑：`ready` 含子串 `read`，被 ingest 行兜底；所以任何认不出阶段的
+     * label 都会静默记到「接入」上。"Evaluation" / "Diagnosis" 是名词形式，动词写法的
+     * 正则匹配不到，正是这样被吞掉的。
+     */
+    const progressLabelStages: Array<[string, WorkflowStageId | null]> = [
+      ["Dataset ingest context ready", "ingest"],
+      ["Profile context ready", "profile"],
+      ["Cleaning review ready", "clean"],
+      ["Transform approval ready", "transform"],
+      ["Waiting for preprocessing approval", "transform"],
+      ["Preprocessing execution failed", "transform"],
+      ["Prepared dataset for modeling", "train"],
+      ["Training configuration ready", "train"],
+      ["Evaluation context ready", "evaluate"],
+      ["Diagnosis context ready", "diagnose"],
+      ["Iteration proposal ready", "iterate"],
+      ["Export context ready", "export"],
+      ["Learning context ready", "learn"],
+      // 只表示"这一轮结束了"，不指向任何阶段——不能落到 defaultStage 上。
+      ["Complete", null],
+      ["No saved failed task state", null],
+      ["Waiting for experiment run selection", null],
+    ];
+
+    it.each(progressLabelStages)("attributes the progress label %o to the right stage", (label, expected) => {
+      const events: AgentStreamEvent[] = [{ type: "task_progress", task_id: "task-1", progress: 1, label }];
+
+      const state = deriveWorkflowState(events, "analysis", "data/churn.csv");
+      const completed = state.stages.filter((item) => item.status === "completed").map((item) => item.id);
+
+      expect(completed).toEqual(expected ? [expected] : []);
     });
   });
 

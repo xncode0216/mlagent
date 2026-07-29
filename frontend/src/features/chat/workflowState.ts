@@ -80,16 +80,22 @@ const COMPONENT_LABELS: Record<AgentComponentKind, string> = {
   lesson_review: "经验审核",
 };
 
+// 顺序是有意义的：先匹配到的胜出。`sklearn` 同时含 "learn"，靠 train 行排在 learn 行之前
+// 才归到训练；同理 ingest 行的 `read` 会命中 "ready"，所以它必须留在最后兜底。
 const STAGE_TOOL_PATTERNS: Array<[WorkflowStageId, RegExp]> = [
   ["transform", /preprocess|transform|feature|encode|impute|scale/i],
   ["profile", /profile|quality|describe|correlation|missing/i],
   ["clean", /clean|dedupe|normalize|repair/i],
   ["train", /train|baseline|sklearn|model|classifier|regressor/i],
-  ["evaluate", /evaluate|metric|report|compare|importance|coefficient/i],
-  ["diagnose", /diagnose|prediction|sample|error|confusion|slice/i],
+  // 用词干 `evaluat` / `diagnos`：后端进度事件写的是名词形式（"Evaluation context ready"、
+  // "Diagnosis context ready"），只匹配动词形式会漏过去，接着被 ingest 行的 `read` 捞走。
+  ["evaluate", /evaluat|metric|report|compare|importance|coefficient/i],
+  ["diagnose", /diagnos|prediction|sample|error|confusion|slice/i],
   ["iterate", /iterate|iteration|retrain|rerun|follow-up|improve/i],
   ["export", /handoff|export|download|package/i],
-  ["learn", /lesson|rule|evolution|knowledge|adopt/i],
+  // `learn` 此前不在表里，于是 "Learning context ready" 落到 ingest 行的 `read`（"ready"
+  // 的子串），经验阶段的进度被记到摄取阶段上。
+  ["learn", /lesson|rule|learn|evolution|knowledge|adopt/i],
   ["ingest", /load|read|upload|dataset|file/i],
 ];
 
@@ -116,11 +122,16 @@ function textFromMetadata(metadata: Record<string, unknown>) {
     .join(" ");
 }
 
-function inferStageFromText(text: string, fallback: WorkflowStageId = "ingest"): WorkflowStageId {
+/** 文本里认不出阶段时返回 null，让调用方自己决定是兜底还是干脆不动阶段条。 */
+function matchStageFromText(text: string): WorkflowStageId | null {
   for (const [stage, pattern] of STAGE_TOOL_PATTERNS) {
     if (pattern.test(text)) return stage;
   }
-  return fallback;
+  return null;
+}
+
+function inferStageFromText(text: string, fallback: WorkflowStageId = "ingest"): WorkflowStageId {
+  return matchStageFromText(text) ?? fallback;
 }
 
 function artifactText(artifact: Artifact) {
@@ -320,14 +331,23 @@ export function deriveWorkflowState(
 
   for (const event of events) {
     if (event.type === "tool_call_started" || event.type === "tool_started") {
-      const stage = event.type === "tool_started" && event.stage ? event.stage : inferStageFromText(event.tool, defaultStage);
-      callStages.set(event.call_id, stage);
-      setStage(stages, stage, "active", `执行中：${event.tool}`);
+      // 只认事件自带的 stage。`tool_call_started` 是"编排器处理这一回合"的外层包裹而不是
+      // 一次工具调用——14 个发射点里 13 个的 tool 都是 `agent_orchestrator`，它匹配不到
+      // STAGE_TOOL_PATTERNS 的任何一条，从工具名猜阶段必然回退到 defaultStage 且必错。
+      // 包裹事件仍然进日志面板与工具活动条，只是不再驱动阶段条。
+      if (event.type !== "tool_started" || !event.stage) continue;
+      callStages.set(event.call_id, event.stage);
+      setStage(stages, event.stage, "active", `执行中：${event.tool}`);
       continue;
     }
 
     if (event.type === "tool_call_finished") {
-      const stage = callStages.get(event.call_id) ?? inferStageFromText(event.result_ref ?? event.error ?? "", defaultStage);
+      // 开始时没登记 stage 的调用（即包裹事件）不动阶段条。此前这里同样回退到
+      // defaultStage，于是包裹事件的结束把一个从未运行的阶段标成 completed：ML 模式下
+      // 每次非训练意图的对话都会把「训练」显示成成功绿。失败仍由随后的 `error` /
+      // `step_failed` 事件呈现，它们都带准确的 stage。
+      const stage = callStages.get(event.call_id);
+      if (!stage) continue;
       setStage(stages, stage, event.status === "success" ? "completed" : "failed", event.error ?? event.result_ref ?? event.status);
       continue;
     }
@@ -451,7 +471,10 @@ export function deriveWorkflowState(
     }
 
     if (event.type === "task_progress") {
-      const stage = inferStageFromText(event.label, defaultStage);
+      // 认不出阶段的进度不动阶段条。回合收尾的 `Complete` 讲的是"这一轮结束了"，
+      // 兜底到 defaultStage 会把它读成"该阶段完成"——ML 模式下即「训练」变成功绿。
+      const stage = matchStageFromText(event.label);
+      if (!stage) continue;
       if (findStage(stages, stage).status === "failed" && event.progress < 1) {
         continue;
       }

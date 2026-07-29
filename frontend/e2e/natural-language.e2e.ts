@@ -121,9 +121,12 @@ test("自然语言可驱动从原始数据到经验沉淀的完整工作流", as
     await expect(card(page, "error_analysis")).toBeVisible();
     await expect(card(page, "prediction_samples")).toBeVisible();
 
-    // 6. 重试：没有保存的失败状态时必须如实说明，而不是假装恢复了什么
+    // 6. 重试：没有保存的失败状态时必须如实说明，而不是假装恢复了什么。
+    // 判据落在助手回复上：这条消息才是"如实说明"本身。此前断言的是进度事件写进阶段条的
+    // detail，而那条进度不带 stage，被兜底写到了「接入」——用不相关阶段承载这句话是巧合。
     await ask(page, "retry last failed step");
-    await expect(page.getByText("No saved failed task state").first()).toBeVisible();
+    await expect(page.getByText("did not find a saved failed task state").first()).toBeVisible();
+    await expect(card(page, "task_state_inspector")).toHaveCount(0);
 
     // 6. 导出交接包
     await ask(page, "export the final report and handoff bundle");
