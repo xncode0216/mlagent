@@ -662,7 +662,15 @@ export function AgentWorkspace({
           tabIndex={0}
         >
           {workflow.stages.map((stage, index) => (
-            <div className={`workflow-stage ${stage.status}`} data-workflow-stage={stage.id} key={stage.id} role="listitem">
+            /* status 同时出现在 class 与 data 属性上：class 供样式，data 供断言。
+               只靠 class 的话测试得解析类名字符串，加一个修饰类就会误判。 */
+            <div
+              className={`workflow-stage ${stage.status}`}
+              data-workflow-stage={stage.id}
+              data-workflow-status={stage.status}
+              key={stage.id}
+              role="listitem"
+            >
               <span className="workflow-stage-index">{index + 1}</span>
               <div>
                 <strong>{stage.label}</strong>
