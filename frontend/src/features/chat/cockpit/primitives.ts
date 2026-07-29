@@ -73,15 +73,19 @@ export function buildFeatureSelectionControls(
 export function buildTargetColumnControls(
   candidates: string[],
   currentTarget: string | undefined,
+  // 计划卡片与训练卡片用同一个选择器但后果不同（重算整份计划 vs 切换本次训练的目标列），
+  // 因此各自带一个 id：`runCockpitControl` 靠它分派。
+  options: { id?: "target_column" | "plan_target_column"; description?: string } = {},
 ): CockpitComponentControl[] {
   if (candidates.length === 0) return [];
   const values = [...new Set([...(currentTarget ? [currentTarget] : []), ...candidates])];
   return [
     {
-      id: "target_column",
+      id: options.id ?? "target_column",
       kind: "select",
       label: "目标列",
-      description: "选择本次训练要预测的列。候选来自数据画像的目标列评分。",
+      description:
+        options.description ?? "选择本次训练要预测的列。候选来自数据画像的目标列评分。",
       value: currentTarget ?? "",
       options: values.map((value) => ({ value, label: value })),
     },

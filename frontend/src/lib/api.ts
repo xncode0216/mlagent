@@ -586,6 +586,8 @@ export async function generatePreprocessingPlan(
   sessionId = "manual-analysis",
   // 省略时沿用后端的自动质量丢弃规则；给定时由调用方决定参与训练的特征。
   selectedFeatures?: string[],
+  // 省略时沿用后端的自动推断；给定则整份计划围绕该目标列重算。
+  targetColumn?: string,
 ): Promise<PreprocessingPlanResult> {
   return request<PreprocessingPlanResult>(`/api/projects/${projectId}/analysis/preprocess-plan`, {
     method: "POST",
@@ -594,6 +596,7 @@ export async function generatePreprocessingPlan(
       dataset_path: datasetPath,
       session_id: sessionId,
       ...(selectedFeatures ? { selected_features: selectedFeatures } : {}),
+      ...(targetColumn ? { target_column: targetColumn } : {}),
     }),
   });
 }

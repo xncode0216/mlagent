@@ -70,6 +70,7 @@ type AgentWorkspaceProps = {
   onSelectExperimentRun?: (experimentId: string) => void;
   onSelectFile?: (path: string) => void;
   onSelectTargetColumn?: (column: string) => void;
+  onSelectPlanTargetColumn?: (column: string) => Promise<void> | void;
   onTrainSklearn?: (targetColumn: string, preprocessingPlanPath?: string | null, datasetPath?: string) => Promise<void>;
   sendMessage: (
     content: string,
@@ -292,6 +293,7 @@ export function AgentWorkspace({
   onSelectExperimentRun,
   onSelectFile,
   onSelectTargetColumn,
+  onSelectPlanTargetColumn,
   onTrainSklearn,
   sendMessage,
 }: AgentWorkspaceProps) {
@@ -575,12 +577,25 @@ export function AgentWorkspace({
     }
   }
 
-  function runCockpitControl(control: CockpitComponentControl, value: string) {
+  async function runCockpitControl(control: CockpitComponentControl, value: string) {
     if (control.kind !== "select" || !value || value === control.value) return;
     switch (control.id) {
       case "target_column":
         onSelectTargetColumn?.(value);
         setActionFeedback({ kind: "success", message: `目标列已切换为 ${value}。` });
+        break;
+      case "plan_target_column":
+        // 计划围绕目标列算出丢弃列、特征列与管道脚本，所以只能重算整份计划，
+        // 不能在计划之外改一个字段——那会让计划与它的派生产物自相矛盾。
+        try {
+          await onSelectPlanTargetColumn?.(value);
+          setActionFeedback({ kind: "success", message: `已按目标列 ${value} 重新生成计划。` });
+        } catch (error) {
+          setActionFeedback({
+            kind: "error",
+            message: error instanceof Error ? error.message : `按目标列 ${value} 重新生成计划失败。`,
+          });
+        }
         break;
     }
   }

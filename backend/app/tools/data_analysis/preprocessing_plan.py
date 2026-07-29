@@ -135,6 +135,7 @@ def preprocessing_plan(
     csv_path: Path,
     dataset_path: str | None = None,
     selected_features: list[str] | None = None,
+    target_column: str | None = None,
 ) -> dict[str, Any]:
     """构建可复现的预处理计划。
 
@@ -142,6 +143,11 @@ def preprocessing_plan(
     以 ``deselected`` 理由进入 drop_columns，自动质量丢弃规则不再适用于选中的列；
     未给定时保持原有的自动丢弃行为。特征选择必须经由本函数落到计划里，
     才能让 drop/steps/pipeline_script 等派生字段保持一致。
+
+    ``target_column`` 同理：目标列决定了哪些列进 drop、哪些进特征、pipeline_script
+    怎么写，所以纠正它必须重算整份计划，不能在计划外面改一个字段。省略时沿用
+    ``_best_target`` 的推断——那只是启发式（名称提示 + 基数 + 末列位置），猜错时
+    调用方需要有纠正手段。
     """
     profile = data_quality_profile(csv_path)
     row_count = int(profile.get("row_count") or 0)
@@ -150,7 +156,11 @@ def preprocessing_plan(
         for column in profile.get("columns", [])
         if isinstance(column, dict) and isinstance(column.get("name"), str)
     ]
-    target_column = _best_target(profile)
+    if target_column is not None:
+        if target_column not in {column["name"] for column in columns}:
+            raise ValueError(f"Target column {target_column!r} is not in the dataset")
+    else:
+        target_column = _best_target(profile)
     if selected_features is None:
         drop_reasons = {
             column["name"]: reason
