@@ -1407,3 +1407,12 @@
 - **负向验证**：回退修复后，「无预处理计划」用例报 `null` 的 NameError；「目标列不存在」用例报的也是同一个 NameError 而不是 `Target column was not found`——后者正好证明了"报错与真实原因无关"这一条。
 - **门禁**：后端 `255 passed, 3 skipped`、ruff 通过；未触碰前端。
 - **同一轮实测里另外确认的两件事，都另开片**：① 前端把偏好里的默认目标列（`appPreferences.ts` 写死 `"churn"`）当作每回合的显式选择随消息发出，而编排器把它排在计划推断之上（`agent_orchestrator_service.py:545`）——实测：数据集列为 `age/monthly_spend/support_tickets/converted`，计划正确推断出 `converted`，训练配置卡片拿到的却是 `churn`；② 训练接口把原始 traceback 泄漏给客户端，且不校验目标列是否存在。
+## 2026-07-29 计划成为训练目标列的权威来源
+
+- **缺陷**：前端把设置面板里的「默认目标列」（`appPreferences.ts` 写死 `churn`）当作每条消息的固定载荷发出（`useAgentStream.ts:33`），而编排器把它排在计划推断之上（`agent_orchestrator_service.py:545`）。它表达的是**偏好**而不是本回合的**选择**，于是数据集只要不叫 churn，训练配置就会拿到一个数据集里根本不存在的列。
+- **实测**：数据集列 `age/monthly_spend/support_tickets/converted`，计划正确推断出 `converted`，训练配置卡片拿到的却是 `churn`。修复后两者一致。
+- **为什么"计划优先"是对的，而不是随便挑一个顺序**：计划的 drop_columns / feature_columns / steps 全都是围绕它自己那个目标列算出来的，换一个目标列这份计划就自相矛盾。训练脚本本来就会以 `Preprocessing plan target column does not match the requested target` 拒绝——**旧优先级实际上是在制造这个错误**。这条依据是从生成的训练脚本里读出来的，不是我拍的顺序。
+- **新顺序**：计划 > context（且必须真的是数据集里的一列）> 推断。加存在性校验的理由：用一个不存在的列训练必然失败，接受这种输入只是把失败推迟到内核里。
+- **负向验证**：换回旧优先级后新增的 2 项测试都失败。
+- **门禁**：后端 `254 passed, 3 skipped`、ruff 通过；未触碰前端。
+- **仍未做的一半**：用户依然无法在计划阶段挑目标列——推断错了就没有纠正手段（「修订计划」只是拒绝这一版让 agent 重出，参数不变、结果相同）。那是 M5 的正题，下一片做。
