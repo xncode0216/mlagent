@@ -9,6 +9,7 @@ import { createQueryClient } from "../../lib/queryClient";
 import {
   executePreprocessingPlan,
   generatePreprocessingPlan,
+  previewPreprocessingPlan,
   type AgentSession,
   type Project,
 } from "../../lib/api";
@@ -21,6 +22,7 @@ vi.mock("../../lib/api", async (importOriginal) => {
     ...actual,
     generatePreprocessingPlan: vi.fn(),
     executePreprocessingPlan: vi.fn(),
+    previewPreprocessingPlan: vi.fn(),
   };
 });
 
@@ -114,6 +116,25 @@ describe("生成预处理计划", () => {
       undefined,
       undefined,
     );
+  });
+
+  it("预览只调预览接口，不写数据集也不执行计划", async () => {
+    vi.mocked(previewPreprocessingPlan).mockResolvedValue({
+      preview: { preview: true },
+      preview_artifact: artifact("results/s1/preprocessing_transform_preview.json"),
+    } as never);
+    const { result } = renderAnalysisActions();
+
+    await act(() => result.current.handlePreviewPreprocessingPlan("results/s1/preprocessing_plan.json"));
+
+    expect(previewPreprocessingPlan).toHaveBeenCalledWith(
+      "project-1",
+      "results/s1/preprocessing_plan.json",
+      "session-1",
+      "data/churn.csv",
+    );
+    // 预览是"看清楚"，不是"顺手执行"——审批检查点的意义就在这一步不能被绕过
+    expect(executePreprocessingPlan).not.toHaveBeenCalled();
   });
 
   it("重算计划时把显式目标列透传给后端", async () => {

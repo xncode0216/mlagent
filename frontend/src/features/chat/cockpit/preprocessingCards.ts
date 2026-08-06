@@ -121,6 +121,12 @@ export function buildPreprocessingCards(ctx: CardBuilderContext): CockpitCompone
             ),
         ...(isPendingApproval
           ? [
+              // 批准是不可逆的一步（会写出变换后的数据集），所以先给一条"看清楚"的路径。
+              action("preview_preprocessing_plan", "预览变换", {
+                disabledReason: projectDisabled ?? (planPath ? undefined : "没有可用的预处理计划产物。"),
+                payload: { preprocessingPlanPath: planPath },
+                tone: "secondary" as const,
+              }),
               action("revise_preprocessing_plan", "修订计划", {
                 disabledReason: projectDisabled ?? (planPath ? undefined : "没有可用的预处理计划产物。"),
                 payload: { approvalId: input.workflow.approval?.id, preprocessingPlanPath: planPath },

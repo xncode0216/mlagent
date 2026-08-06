@@ -1773,6 +1773,22 @@ describe("cockpit preprocessing plan target selection", () => {
     });
   });
 
+  it("offers a preview before the irreversible approve step", () => {
+    // 批准会写出变换后的数据集，是一步不可逆的动作。此前要看清楚会发生什么，
+    // 只能先批准再执行——预览把这一步挪到批准之前。
+    const card = planCardFor(planApproval);
+
+    expect(card?.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "preview_preprocessing_plan",
+          label: "预览变换",
+          payload: { preprocessingPlanPath: "results/session-1/preprocessing_plan.json" },
+        }),
+      ]),
+    );
+  });
+
   it("does not offer the selector once the checkpoint is resolved", () => {
     // 变换已执行后再改目标列毫无意义：这份计划已经产出了数据集，改它不会回头重算
     const card = planCardFor([

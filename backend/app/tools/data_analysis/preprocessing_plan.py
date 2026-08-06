@@ -108,13 +108,17 @@ def _render_pipeline_script(
     numeric_steps = [f"        ('imputer', {_NUMERIC_IMPUTER_SNIPPETS[strategies.numeric_imputer]}),"]
     if scaler_snippet is not None:
         numeric_steps.append(f"        ('scaler', {scaler_snippet}),")
+    # 只导入真正用到的缩放器：脚本是交给用户的产物，留一个用不上的 import 是脏活。
+    preprocessing_imports = ", ".join(
+        sorted({"OneHotEncoder", *({scaler_snippet.removesuffix("()")} if scaler_snippet else set())})
+    )
     return "\n".join(
         [
             "import pandas as pd",
             "from sklearn.compose import ColumnTransformer",
             "from sklearn.impute import SimpleImputer",
             "from sklearn.pipeline import Pipeline",
-            "from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler",
+            f"from sklearn.preprocessing import {preprocessing_imports}",
             "",
             f"dataset_path = {dataset_path!r}",
             f"output_path = {output_path!r}",

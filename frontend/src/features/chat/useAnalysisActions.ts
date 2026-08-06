@@ -9,6 +9,7 @@ import {
   generateAnalysisReport,
   generateDataQualityProfile,
   generatePreprocessingPlan,
+  previewPreprocessingPlan,
   handoffDatasetToMl,
   type AgentSession,
   type Project,
@@ -50,6 +51,7 @@ interface AnalysisActionsParams {
 interface AnalysisActions {
   handleGenerateReport: () => Promise<void>;
   handleGenerateProfile: () => Promise<void>;
+  handlePreviewPreprocessingPlan: (preprocessingPlanPath?: string | null) => Promise<void>;
   handleGeneratePreprocessingPlan: (
     selectedFeatures?: string[],
     targetColumn?: string,
@@ -253,6 +255,25 @@ export function useAnalysisActions({
     setActiveFile(result.plan_artifact.path);
   }
 
+  /**
+   * 只算不写：把「会变成什么样」摆到审批之前。批准会写出变换后的数据集，是一步不可逆
+   * 的动作，此前要看清楚只能先批准再执行。预览产物直接设为活跃文件，右侧面板按形状
+   * 认出它并渲染成列对照。
+   */
+  async function handlePreviewPreprocessingPlan(preprocessingPlanPathOverride?: string | null) {
+    const planPath = preprocessingPlanPathOverride ?? selectedPreprocessingPlanPath;
+    if (!project || !planPath) return;
+    const sessionId = activeSession?.id ?? "manual-analysis";
+    const datasetPath = isLikelyDatasetPath(activeFile) ? activeFile : undefined;
+    const result = await previewPreprocessingPlan(project.id, planPath, sessionId, datasetPath);
+    const previewFolder = parentPath(result.preview_artifact.path);
+    setExpandedFolders(
+      Array.from(new Set([...expandedFolders, "results", previewFolder].filter(Boolean))),
+    );
+    await queryClient.invalidateQueries({ queryKey: filesQueryKeyRoot(project.id) });
+    setActiveFile(result.preview_artifact.path);
+  }
+
   async function handleExecutePreprocessingPlan(preprocessingPlanPathOverride?: string | null) {
     const planPath = preprocessingPlanPathOverride ?? selectedPreprocessingPlanPath;
     if (!project || !planPath) return;
@@ -416,6 +437,7 @@ export function useAnalysisActions({
     handleGenerateReport,
     handleGenerateProfile,
     handleGeneratePreprocessingPlan,
+    handlePreviewPreprocessingPlan,
     handleExecutePreprocessingPlan,
     handleRespondToApproval,
     handleResumeStep,
